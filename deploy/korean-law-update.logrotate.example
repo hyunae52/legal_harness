@@ -1,0 +1,11 @@
+# /etc/logrotate.d/legal-harness-mcp — adjust user/group/path at deployment.
+/opt/legal_harness/.runtime/mcp-update.log {
+    weekly
+    maxsize 10M
+    rotate 4
+    compress
+    missingok
+    notifempty
+    su legalharness legalharness
+    create 0640 legalharness legalharness
+}

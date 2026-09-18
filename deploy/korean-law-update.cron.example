@@ -1,0 +1,7 @@
+# /etc/cron.d/legal-harness-mcp — install during Linux server deployment.
+# Replace legalharness and /opt/legal_harness with the deployment user/path.
+# This example assumes the server's cron timezone is UTC: 18:30 = 03:30 KST.
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+MAILTO=""
+30 18 * * * legalharness /bin/bash /opt/legal_harness/scripts/update-korean-law.sh >> /opt/legal_harness/.runtime/mcp-update.log 2>&1

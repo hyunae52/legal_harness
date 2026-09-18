@@ -1,0 +1,73 @@
+# fail-cases.yaml
+# Hermes 에이전트의 실패 사례(FC-01 ~ FC-10)를 기반으로 작성된 구조화된 Quality Gate 데이터
+
+gates:
+  - id: QG-COST-01
+    name: "재산분할 취득세 취득원가 중복/오류 방지"
+    source_case: "FC-01"
+    trigger_condition: "취득원인 == '이혼 재산분할' AND '취득세' 언급됨"
+    fail_if: "재산분할 시점의 취득세를 양도소득세 새 취득원가에 자동 가산함"
+    correction_prompt: "재산분할 취득분은 전 배우자의 당초 취득시기/가액을 승계합니다. 재산분할 시점에 새로 낸 취득세는 취득원가에서 제외하고 재계산하세요."
+
+  - id: QG-TIME-03
+    name: "부당행위계산부인 시점 분리"
+    source_case: "FC-02"
+    trigger_condition: "주제 == '부당행위계산부인' AND '특수관계인'"
+    fail_if: "부당행위 해당성 판단시점과 법정 평가기간(시가)을 동일한 날짜(잔금일 또는 계약일)로 통일함"
+    correction_prompt: "부당행위 해당성은 '계약일', 시가자료 평가기간은 '양도일 전후 3개월'로 기준시점을 분리하여 다시 작성하세요."
+
+  - id: QG-EXCEPTION-02
+    name: "거주요건 별도 판정 (직전거주주택)"
+    source_case: "FC-03"
+    trigger_condition: "주제 == '직전거주주택보유주택'"
+    fail_if: "조문 명칭('거주주택')만 보고 거주하지 않은 주택의 특례 적용을 전면 부정함"
+    correction_prompt: "해당성과 거주요건을 분리하십시오. 기재부/국세청 해석례(예: 재산세제과-1081)를 검색하여 재판단하세요."
+
+  - id: QG-VALUATION-01
+    name: "개인-법인 간 거래 특칙"
+    source_case: "FC-04"
+    trigger_condition: "거래당사자 중 '법인' 포함 AND '부당행위계산' 또는 '감정가액'"
+    fail_if: "상증세법 평가규정(10억 초과 2감정)만 적용하고 법인세법 시행령 제89조 특칙을 누락함"
+    correction_prompt: "법인세법 시행령 제89조 제2항 제1호를 준용하여 감정가액 1곳도 가능한지 다시 판단하세요."
+
+  - id: QG-PRECEDENT-03
+    name: "상속재산 대상분할 정산금 재원 확인"
+    source_case: "FC-05"
+    trigger_condition: "주제 == '상속재산 대상분할' AND '정산금 지급'"
+    fail_if: "정산금 재원을 확인하지 않고 민법 소급효만으로 '양도 아님'으로 확정함"
+    correction_prompt: "정산금 재원이 고유자금인지 상속재산인지 확인하고, 국세청 예규와 조세판결(과세 입장)을 병렬 제시하세요."
+
+  - id: QG-FACT-02
+    name: "추계신고 경정청구 납세자 일반화 방지"
+    source_case: "FC-06"
+    trigger_condition: "주제 == '추계신고' AND '장부 경정청구'"
+    fail_if: "납세자 유형(간편장부/복식부기)을 구분하지 않고 경정청구가 가능하다고 일반화함"
+    correction_prompt: "납세자가 간편장부대상자인지 복식부기의무자인지 구분하여 결론을 다시 작성하세요."
+
+  - id: QG-TIME-02
+    name: "과거 예규 요건 현행 적용 방지 (Version Drift)"
+    source_case: "FC-07"
+    trigger_condition: "과거 예규 인용 AND '보유' 또는 '거주' 요건 명시"
+    fail_if: "과거 예규 작성 당시의 숫자(예: 3년 보유)를 현행 사안에 그대로 복사함"
+    correction_prompt: "인용된 예규 당시의 조문과 현행 조문(예: 2년 보유)을 비교하고, 부칙 적용례에 맞춰 현행 요건으로 수정하세요."
+
+  - id: QG-COST-02
+    name: "타인 원가 합산 방지"
+    source_case: "FC-08"
+    trigger_condition: "소유자 2인 이상 AND 종전 취득원가 안분"
+    fail_if: "서로 다른 소유자의 취득원가를 합산한 뒤 권리가액 비율로 재분배함"
+    correction_prompt: "각 소유자(owner_id)별로 독립된 취득원가 버킷을 생성하여 계산하고 합산을 금지하세요."
+
+  - id: QG-COST-03
+    name: "공동부담 분담금 몰아주기 방지"
+    source_case: "FC-09"
+    trigger_condition: "추가분담금/청산금 존재 AND 소유자 2인 이상"
+    fail_if: "자산 귀속만 보고 특정 소유자의 원가에 분담금 전액을 가산함"
+    correction_prompt: "실제 부담자와 부담 비율을 확인하여 공동부담액을 분할 가산하세요."
+
+  - id: QG-MATH-01
+    name: "법정 안분기준 임의 교체 방지"
+    source_case: "FC-10"
+    trigger_condition: "안분 계산 (종전권리가액, 신축주택가액 존재)"
+    fail_if: "법정 안분기준을 '시가'나 '경제적 지분'으로 임의 대체하여 계산함"
+    correction_prompt: "직관적 경제 지분이 아닌 법정 안분산식에 맞춰 변수(종전권리가액, 분담금 등)를 엄격히 적용하세요."

@@ -1,0 +1,83 @@
+# pipelines.yaml
+# WP-01, WP-02, WP-03 기반 파이프라인 정의
+
+pipelines:
+  - id: WP-01
+    name: "현행법령 기본 파이프라인"
+    condition: "질문의 시점이 현재 또는 미래인 경우 (신고 기준, 현재 비과세 요건 등)"
+    steps:
+      - step_number: 1
+        action: "extract_facts"
+        description: "사실관계, 쟁점, 기준일 추출"
+      - step_number: 2
+        action: "search_law"
+        description: "메인 법령 검색"
+      - step_number: 3
+        action: "get_law_text"
+        params: { "efYd": null }
+        description: "조문 확인 (efYd 미지정)"
+      - step_number: 4
+        action: "recursive_lookup"
+        description: "다만, 각호, 대통령령으로 정하는, 준용조문 추적"
+      - step_number: 5
+        action: "get_annexes"
+        description: "금액/요건이 별표에 있는 경우 병합"
+      - step_number: 6
+        action: "draft_answer"
+        description: "답변 초안 작성"
+      - step_number: 7
+        action: "verify_citations"
+        description: "조문 인용 실존 여부 최종 검증"
+
+  - id: WP-02
+    name: "과거 사건·개정법 Time-travel 파이프라인"
+    condition: "계약일/취득일/양도일이 명시된 과거 사건인 경우"
+    steps:
+      - step_number: 1
+        action: "confirm_date"
+        description: "사건 기준일 확정"
+      - step_number: 2
+        action: "search_law"
+        description: "메인 법령 검색"
+      - step_number: 3
+        action: "applicable_law"
+        description: "기준일에 적용되는 법령 버전 확인"
+      - step_number: 4
+        action: "get_law_text"
+        params: { "efYd": "extracted_date" }
+        description: "당시 시행본 조문 확인"
+      - step_number: 5
+        action: "check_addenda"
+        description: "개정법 부칙, 적용례, 경과조치 필수 확인"
+      - step_number: 6
+        action: "compare_current"
+        description: "현행본과 신구대조"
+      - step_number: 7
+        action: "search_decisions_past"
+        description: "당시 시점의 예규/판례 검색"
+      - step_number: 8
+        action: "verify_citations"
+        description: "검증 및 초안 작성"
+
+  - id: WP-03
+    name: "예외·특례·판례 충돌 파이프라인"
+    condition: "일반규정과 특례가 혼재하거나 예규/판례의 대립이 예상되는 경우"
+    steps:
+      - step_number: 1
+        action: "list_tracks"
+        description: "적용 가능한 트랙 후보 모두 열거"
+      - step_number: 2
+        action: "search_law"
+        description: "본문, 단서, 준용조문 확보"
+      - step_number: 3
+        action: "fetch_rulings"
+        description: "search_decisions(국세청 질의회신 등) 호출. 미지원 시 insane-search 연동하여 TXSI 직접 크롤링"
+      - step_number: 4
+        action: "parse_rulings"
+        description: "사실관계, 질문, 회신 분리 추출"
+      - step_number: 5
+        action: "search_tribunal"
+        description: "조세심판원/법원 판례(심급/확정 여부 포함) 교차 검색"
+      - step_number: 6
+        action: "present_conflicts"
+        description: "주류 집행입장과 법리적 반론 병렬 제시"
