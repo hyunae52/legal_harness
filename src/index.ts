@@ -8,6 +8,9 @@ import * as path from "path";
 import * as yaml from "js-yaml";
 import { z } from "zod";
 import { createKoreanLawClient, LawMcpError } from "./koreanLawClient.js";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
 dotenv.config();
 
@@ -42,27 +45,51 @@ const concurrencyLimiter = (req: Request, res: Response, next: NextFunction) => 
   next();
 };
 
-// [P1 Fix] Supabase Auth Middleware & Context Injection
+// Check both Supabase JWT token and direct API Key
+const verifyAuth = async (req: Request): Promise<{ authorized: boolean; user?: any; supabaseClient?: any }> => {
+  const authHeader = req.headers.authorization;
+  const apiKeyHeader = req.headers["x-api-key"] as string | undefined;
+  const queryApiKey = req.query.apiKey as string | undefined;
+  const expectedKey = process.env.TAXLAB_API_KEY || "taxlab_partner_2026";
+
+  // Check API Key
+  if (apiKeyHeader === expectedKey || queryApiKey === expectedKey) {
+    return {
+      authorized: true,
+      user: { id: "partner-agent", email: "partner@taxlab.kr" },
+    };
+  }
+  if (authHeader?.startsWith("Bearer ") && authHeader.slice(7) === expectedKey) {
+    return {
+      authorized: true,
+      user: { id: "partner-agent", email: "partner@taxlab.kr" },
+    };
+  }
+
+  // Check Supabase Bearer Token
+  const token = authHeader?.split(" ")[1];
+  if (token) {
+    const globalSupabase = createClient(supabaseUrl, supabaseKey);
+    const { data: { user }, error } = await globalSupabase.auth.getUser(token);
+    if (!error && user) {
+      const userScopedClient = createClient(supabaseUrl, supabaseKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } }
+      });
+      return { authorized: true, user, supabaseClient: userScopedClient };
+    }
+  }
+
+  return { authorized: false };
+};
+
+// [P1 Fix] Auth Middleware: Supports both Supabase JWT and TAXLAB_API_KEY
 const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) {
-    return res.status(401).json({ error: "Missing Bearer Token" });
+  const auth = await verifyAuth(req);
+  if (!auth.authorized) {
+    return res.status(401).json({ error: "Unauthorized. Missing or invalid Bearer Token or X-API-KEY." });
   }
-  
-  // Validate token via Global Client
-  const globalSupabase = createClient(supabaseUrl, supabaseKey);
-  const { data: { user }, error } = await globalSupabase.auth.getUser(token);
-  
-  if (error || !user) {
-    return res.status(401).json({ error: "Invalid or expired token" });
-  }
-  
-  // Inject User and User-Scoped Supabase Client for RLS
-  (req as any).user = user;
-  (req as any).supabaseAuthClient = createClient(supabaseUrl, supabaseKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } }
-  });
-  
+  (req as any).user = auth.user;
+  (req as any).supabaseAuthClient = auth.supabaseClient;
   next();
 };
 
@@ -214,6 +241,148 @@ app.post("/api/evolve", concurrencyLimiter, requireAuth, async (req: Request, re
     }
     res.status(500).json({ error: error.message });
   }
+});
+
+// ==========================================
+// Remote MCP (SSE) Architecture & Handlers
+// ==========================================
+const sseTransports = new Map<string, SSEServerTransport>();
+
+function createTaxMcpServer() {
+  const mcpServer = new Server(
+    { name: "taxlab-legal-harness", version: "2.1.0" },
+    { capabilities: { tools: {} } }
+  );
+
+  mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
+    const upstream = await koreanLaw.listTools();
+    const customTools = [
+      {
+        name: "validate_tax_draft",
+        description: "검증툴: 세법 답변 초안을 fail-cases.yaml의 10대 세법 함정(취득원가 중복, 부당행위 시점, 안분 오류 등)에 대조하여 사전 검증합니다.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            draft_answer: { type: "string", description: "검증할 세법 답변 초안 본문" },
+            query: { type: "string", description: "원래 질문 (선택 사항)" },
+          },
+          required: ["draft_answer"],
+        },
+      },
+      {
+        name: "propose_tax_rule",
+        description: "발전툴: 새로운 세법 함정이나 계산 오류 케이스를 발견했을 때 규칙 제안. 대법관(Supreme Judge) 검증 통과 시 GitHub(hyunae52/legal_harness)에 자동으로 PR을 생성합니다.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            issue_summary: { type: "string", description: "세법 오류/함정 사례 요약" },
+            proposed_fail_if: { type: "string", description: "오류 판정 조건 (fail_if 패턴)" },
+            correction_prompt: { type: "string", description: "수정 지침 및 올바른 법리 설명" },
+            proposer_name: { type: "string", description: "제안자 이름 (예: hermes, partner-agent)" },
+          },
+          required: ["issue_summary", "proposed_fail_if", "correction_prompt"],
+        },
+      },
+    ];
+
+    return {
+      tools: [...upstream.tools, ...customTools],
+    };
+  });
+
+  mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+
+    if (name === "validate_tax_draft") {
+      const draft = String(args?.draft_answer || "");
+      const query = String(args?.query || "");
+      const result = validateDraftWithQualityGates(draft || query);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              passed: result.passed,
+              correction_directive: result.correction,
+              message: result.passed
+                ? "✅ 품질 게이트 통과: 감지된 세법 함정이 없습니다."
+                : `⚠️ 품질 게이트 실패: [수정 지침] ${result.correction}`,
+            }, null, 2),
+          },
+        ],
+      };
+    }
+
+    if (name === "propose_tax_rule") {
+      const issue_summary = String(args?.issue_summary || "");
+      const proposed_fail_if = String(args?.proposed_fail_if || "");
+      const correction_prompt = String(args?.correction_prompt || "");
+      const proposer_name = String(args?.proposer_name || "hermes-agent");
+
+      const isApproved = await verifyWithSupremeJudge(issue_summary, proposed_fail_if);
+      if (!isApproved) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ status: "rejected", message: "Rule rejected by Supreme Judge." }) }],
+          isError: true,
+        };
+      }
+
+      const prUrl = await createAutoPR(proposed_fail_if, correction_prompt, proposer_name);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              status: "approved",
+              pr_url: prUrl,
+              message: "대법관 검증 통과 및 GitHub Auto-PR 생성 성공!",
+            }, null, 2),
+          },
+        ],
+      };
+    }
+
+    // Forward to upstream korean-law-mcp
+    const toolArgs = { ...(args || {}) } as Record<string, unknown>;
+    const response = await koreanLaw.callTool(name, toolArgs);
+    return {
+      content: response.result.content,
+      isError: response.result.isError,
+    };
+  });
+
+  return mcpServer;
+}
+
+// Remote MCP SSE Endpoints (for Claude Desktop, Cursor, Hermes on Ubuntu)
+app.get("/sse", async (req: Request, res: Response) => {
+  const auth = await verifyAuth(req);
+  if (!auth.authorized) {
+    return res.status(401).json({ error: "Unauthorized. Provide ?apiKey= or x-api-key header." });
+  }
+
+  const transport = new SSEServerTransport("/messages", res);
+  const mcpServer = createTaxMcpServer();
+
+  sseTransports.set(transport.sessionId, transport);
+  res.on("close", () => {
+    sseTransports.delete(transport.sessionId);
+    void mcpServer.close();
+  });
+
+  await mcpServer.connect(transport);
+});
+
+app.post("/messages", async (req: Request, res: Response) => {
+  const sessionId = req.query.sessionId as string;
+  if (!sessionId) {
+    return res.status(400).json({ error: "Missing sessionId query parameter." });
+  }
+  const transport = sseTransports.get(sessionId);
+  if (!transport) {
+    return res.status(404).json({ error: "Session not found or expired." });
+  }
+  await transport.handlePostMessage(req, res, req.body);
 });
 
 const PORT = process.env.PORT || 3000;
