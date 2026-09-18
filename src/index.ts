@@ -93,8 +93,35 @@ const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
   next();
 };
 
-// [P1 Fix] YAML Validation Pipeline
-const validateDraftWithQualityGates = (draftAnswer: string) => {
+// [P1 Fix] YAML Validation Pipeline with Negation & Bypass Support
+export interface GateValidationOptions {
+  skipGates?: string[];
+  mode?: "strict" | "warn";
+  force?: boolean;
+}
+
+export interface GateValidationResult {
+  passed: boolean;
+  blocked: boolean;
+  triggered_gate?: string;
+  correction?: string | null;
+  warnings?: Array<{ id: string; name: string; correction: string }>;
+}
+
+const isNegatedStatement = (text: string, keyword: string): boolean => {
+  const index = text.indexOf(keyword);
+  if (index === -1) return false;
+  const followingText = text.slice(index + keyword.length, index + keyword.length + 45);
+  const precedingText = text.slice(Math.max(0, index - 25), index);
+  const negationPattern = /(안\s*되|않|금지|불가|배제|제외|아닙|아님|해서는\s*안|하면\s*안|할\s*수\s*없|오류|잘못|주의|피해야|분리)/i;
+  const precedingNegation = /(금지|불가|제외|배제|하면\s*안)/i;
+  return negationPattern.test(followingText) || precedingNegation.test(precedingText);
+};
+
+const validateDraftWithQualityGates = (
+  draftAnswer: string,
+  options?: GateValidationOptions
+): GateValidationResult => {
   try {
     const filePath = path.join(process.cwd(), "fail-cases.yaml");
     if (!fs.existsSync(filePath)) {
@@ -108,8 +135,15 @@ const validateDraftWithQualityGates = (draftAnswer: string) => {
       throw new Error("Invalid format in fail-cases.yaml");
     }
 
+    const skipSet = new Set(options?.skipGates || []);
+    const warnings: Array<{ id: string; name: string; correction: string }> = [];
+
     // Evaluate Gates dynamically
     for (const gate of parsed.gates) {
+      if (skipSet.has(gate.id)) {
+        continue; // Skip bypassed gate (False Positive Escape Hatch)
+      }
+
       const triggerMatches = [...(gate.trigger_condition.matchAll(/'([^']+)'/g) || [])];
       const triggerKeywords = triggerMatches.map(m => m[1]);
       
@@ -118,22 +152,44 @@ const validateDraftWithQualityGates = (draftAnswer: string) => {
       if (isTriggered) {
         let isFailed = false;
         
-        // Relaxed match for test flexibility
+        // Relaxed match for test flexibility with Context-aware Negation Guard
         if (gate.id === "QG-TIME-03" && (draftAnswer.includes("계약일") || draftAnswer.includes("잔금일")) && draftAnswer.includes("통일")) {
-          isFailed = true;
+          if (!isNegatedStatement(draftAnswer, "통일")) {
+            isFailed = true;
+          }
         } else if (gate.id === "QG-COST-01" && draftAnswer.includes("자동 가산")) {
-          isFailed = true;
+          if (!isNegatedStatement(draftAnswer, "자동 가산")) {
+            isFailed = true;
+          }
         } else if (draftAnswer.includes("오류") || draftAnswer.includes("무조건")) {
-          isFailed = true;
+          if (!isNegatedStatement(draftAnswer, "무조건") && !isNegatedStatement(draftAnswer, "오류")) {
+            isFailed = true;
+          }
         }
 
         if (isFailed) {
-          return { passed: false, correction: gate.correction_prompt };
+          warnings.push({ id: gate.id, name: gate.name, correction: gate.correction_prompt });
+          const isWarnOnly = options?.mode === "warn" || options?.force === true;
+          if (!isWarnOnly) {
+            return {
+              passed: false,
+              blocked: true,
+              triggered_gate: gate.id,
+              correction: gate.correction_prompt,
+              warnings,
+            };
+          }
         }
       }
     }
     
-    return { passed: true, correction: null };
+    return {
+      passed: warnings.length === 0,
+      blocked: false,
+      triggered_gate: warnings[0]?.id,
+      correction: warnings[0]?.correction ?? null,
+      warnings,
+    };
   } catch (e: any) {
     throw new Error(`YAML Quality Gate Evaluation Failed: ${e.message}`);
   }
@@ -149,6 +205,9 @@ const AnalyzeRequestSchema = z.object({
   tool: z.string().regex(/^[a-zA-Z0-9_-]+$/).max(128).default("legal_research"),
   arguments: z.record(z.unknown()).default({}),
   draft_answer: z.string().trim().min(1).max(50_000).optional(),
+  skip_gates: z.array(z.string()).max(50).optional(),
+  mode: z.enum(["strict", "warn"]).default("strict"),
+  force: z.boolean().default(false),
 }).strict();
 
 const EvolveRequestSchema = z.object({
@@ -178,15 +237,22 @@ app.get("/api/tools", concurrencyLimiter, requireAuth, async (_req: Request, res
 app.post("/api/analyze", concurrencyLimiter, requireAuth, async (req: Request, res: Response) => {
   try {
     const validatedData = AnalyzeRequestSchema.parse(req.body);
-    const { query, tool, arguments: args, draft_answer } = validatedData;
+    const { query, tool, arguments: args, draft_answer, skip_gates, mode, force } = validatedData;
 
     // Preserve the legacy query gate; callers can explicitly submit their draft.
-    // This checks supplied text, not the truth/freshness of retrieved sources.
-    const validationResult = validateDraftWithQualityGates(draft_answer ?? query);
-    if (!validationResult.passed) {
+    // Enhanced with False-Positive bypass (skip_gates) and soft warning modes.
+    const validationResult = validateDraftWithQualityGates(draft_answer ?? query, {
+      skipGates: skip_gates,
+      mode,
+      force,
+    });
+
+    if (validationResult.blocked) {
        return res.status(400).json({ 
          error: "Quality Gate Failed", 
-         correction_prompt: validationResult.correction 
+         gate_id: validationResult.triggered_gate,
+         correction_prompt: validationResult.correction,
+         warnings: validationResult.warnings ?? [],
        });
     }
 
@@ -195,7 +261,16 @@ app.post("/api/analyze", concurrencyLimiter, requireAuth, async (req: Request, r
       toolArgs.query = query;
     }
     const data = await koreanLaw.callTool(tool, toolArgs);
-    res.json({ status: "success", data, quality_gate: { passed: true, checked: draft_answer ? "draft_answer" : "query" } });
+    res.json({ 
+      status: "success", 
+      data, 
+      quality_gate: { 
+        passed: validationResult.passed, 
+        blocked: false,
+        warnings: validationResult.warnings ?? [],
+        checked: draft_answer ? "draft_answer" : "query" 
+      } 
+    });
   } catch (error) {
     respondWithAnalyzeError(res, error);
   }
@@ -259,12 +334,26 @@ function createTaxMcpServer() {
     const customTools = [
       {
         name: "validate_tax_draft",
-        description: "검증툴: 세법 답변 초안을 fail-cases.yaml의 10대 세법 함정(취득원가 중복, 부당행위 시점, 안분 오류 등)에 대조하여 사전 검증합니다.",
+        description: "검증툴: 세법 답변 초안을 fail-cases.yaml의 10대 세법 함정에 대조하여 사전 검증합니다. 오탐 방지용 바이패스(skip_gates) 및 경고 모드를 지원합니다.",
         inputSchema: {
           type: "object",
           properties: {
             draft_answer: { type: "string", description: "검증할 세법 답변 초안 본문" },
             query: { type: "string", description: "원래 질문 (선택 사항)" },
+            skip_gates: {
+              type: "array",
+              items: { type: "string" },
+              description: "오탐(False Positive) 방지: 건너뛸 게이트 ID 목록 (예: ['QG-COST-01'])",
+            },
+            mode: {
+              type: "string",
+              enum: ["strict", "warn"],
+              description: "strict: 실패 시 차단, warn: 실패하더라도 차단하지 않고 경고 반환",
+            },
+            force: {
+              type: "boolean",
+              description: "true일 경우 게이트 통과를 강제하고 경고만 메타데이터로 남김",
+            },
           },
           required: ["draft_answer"],
         },
@@ -296,17 +385,26 @@ function createTaxMcpServer() {
     if (name === "validate_tax_draft") {
       const draft = String(args?.draft_answer || "");
       const query = String(args?.query || "");
-      const result = validateDraftWithQualityGates(draft || query);
+      const skipGates = Array.isArray(args?.skip_gates) ? (args?.skip_gates as string[]) : undefined;
+      const mode = args?.mode === "warn" ? "warn" : "strict";
+      const force = Boolean(args?.force);
+
+      const result = validateDraftWithQualityGates(draft || query, { skipGates, mode, force });
       return {
         content: [
           {
             type: "text",
             text: JSON.stringify({
               passed: result.passed,
-              correction_directive: result.correction,
+              blocked: result.blocked,
+              triggered_gate: result.triggered_gate ?? null,
+              correction_directive: result.correction ?? null,
+              warnings: result.warnings ?? [],
               message: result.passed
                 ? "✅ 품질 게이트 통과: 감지된 세법 함정이 없습니다."
-                : `⚠️ 품질 게이트 실패: [수정 지침] ${result.correction}`,
+                : result.blocked
+                ? `⚠️ 품질 게이트 실패: [수정 지침] ${result.correction}`
+                : `ℹ️ 품질 게이트 경고(우회됨): [지침] ${result.correction}`,
             }, null, 2),
           },
         ],
