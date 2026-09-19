@@ -1,131 +1,38 @@
-import { Octokit } from "@octokit/rest";
-import dotenv from "dotenv";
-import * as yaml from "js-yaml";
+import {Octokit} from '@octokit/rest';
+import {validatePublicPatch,type Patch,type EvolutionJob} from './evolution.js';
+import {digest,ServiceError} from './contracts.js';
+import {z} from 'zod';
 
-dotenv.config();
-
-export interface AutoPROptions {
-  owner?: string;
-  repo?: string;
-  baseBranch?: string;
-}
-
-export async function createAutoPR(
-  proposedFailIf: string,
-  correctionPrompt: string,
-  proposerId: string,
-  options?: AutoPROptions
-): Promise<string> {
-  const token = process.env.GITHUB_TOKEN;
-  const owner = options?.owner || process.env.GITHUB_OWNER || "simdorei";
-  const repo = options?.repo || process.env.GITHUB_REPO || "legal_harness";
-  const baseBranch = options?.baseBranch || process.env.GITHUB_BASE_BRANCH || "main";
-
-  if (!token) {
-    console.warn("⚠️  [GitOps] GITHUB_TOKEN is not set. Falling back to mock PR URL for testing.");
-    return `https://github.com/${owner}/${repo}/pull/mock-${Date.now()}`;
+export interface GitOpsOptions {token:string;owner:string;repo:string;baseBranch:string}
+// Only a trusted coordinator supplies this port. It records an outbox intent
+// before entering this function, and marks any thrown/unknown result ambiguous.
+export async function publishReviewedPatch(options:GitOpsOptions,job:EvolutionJob,input:Patch,reviewedHead:string,client?:Octokit) {
+  if(!options.token) throw new ServiceError(503,'GITHUB_NOT_CONFIGURED');
+  const patch=validatePublicPatch(input);
+  z.string().uuid().parse(job.id);z.string().regex(/^[a-f0-9]{40}$/).parse(job.base_sha);
+  z.string().regex(/^[a-f0-9]{40}$/).parse(reviewedHead);
+  const octokit=client??new Octokit({auth:options.token,request:{timeout:15000}});
+  const {owner,repo}=options,branch=`auto-fix-${job.id}`;
+  const existing=await octokit.rest.pulls.list({owner,repo,head:`${owner}:${branch}`,state:'all',per_page:100});
+  if(existing.data.length>1)throw new ServiceError(409,'AMBIGUOUS_PR');
+  const prior=existing.data[0];
+  if(prior && (prior.head.sha!==reviewedHead || prior.base.ref!==options.baseBranch || prior.state!=='open' || prior.merged_at))throw new ServiceError(409,'PR_HEAD_OR_STATE_CHANGED');
+  // The tested immutable commit must already exist from the isolated staging
+  // workflow. Publishing must never create a different, untested commit.
+  const ref=await octokit.rest.git.getRef({owner,repo,ref:`heads/${branch}`});
+  if(ref.data.object.sha!==reviewedHead)throw new ServiceError(409,'REVIEWED_HEAD_MISMATCH');
+  const comparison=await octokit.rest.repos.compareCommits({owner,repo,base:job.base_sha,head:reviewedHead});
+  const files=comparison.data.files??[];
+  if(files.length!==patch.files.length||comparison.data.total_commits!==1)throw new ServiceError(409,'PATCH_COMPARISON_MISMATCH');
+  for(const file of patch.files) {
+    if(!files.some(f=>f.filename===file.path && ['added','modified'].includes(f.status)))throw new ServiceError(409,'PATCH_COMPARISON_MISMATCH');
+    const blob=await octokit.rest.repos.getContent({owner,repo,path:file.path,ref:reviewedHead});
+    if(Array.isArray(blob.data)||!('content' in blob.data)||Buffer.from(blob.data.content,'base64').toString('utf8')!==file.content)throw new ServiceError(409,'PATCH_CONTENT_MISMATCH');
   }
-
-  const octokit = new Octokit({ auth: token });
-  const timestamp = Date.now();
-  const branchName = `auto-evolve-${timestamp}`;
-  const ruleId = `QG-AUTO-${timestamp}`;
-
-  console.error(`🚀 [GitOps] Creating branch '${branchName}' from '${baseBranch}' on ${owner}/${repo}...`);
-
-  // 1. Get SHA of the base branch
-  const { data: baseRef } = await octokit.rest.repos.getBranch({
-    owner,
-    repo,
-    branch: baseBranch,
-  });
-  const baseSha = baseRef.commit.sha;
-
-  // 2. Create new branch ref
-  await octokit.rest.git.createRef({
-    owner,
-    repo,
-    ref: `refs/heads/${branchName}`,
-    sha: baseSha,
-  });
-
-  // 3. Get existing fail-cases.yaml
-  let fileSha: string | undefined;
-  let currentContent = "";
+  if(prior)return {status:'published' as const,url:prior.html_url};
   try {
-    const { data: fileData } = await octokit.rest.repos.getContent({
-      owner,
-      repo,
-      path: "fail-cases.yaml",
-      ref: branchName,
-    });
-
-    if ("content" in fileData && !Array.isArray(fileData)) {
-      fileSha = fileData.sha;
-      currentContent = Buffer.from(fileData.content, "base64").toString("utf-8");
-    }
-  } catch (err: any) {
-    if (err.status !== 404) throw err;
-  }
-
-  // 4. Append new rule to YAML structure
-  let parsedYaml: any = { gates: [] };
-  if (currentContent.trim()) {
-    try {
-      const loaded: any = yaml.load(currentContent);
-      if (loaded && Array.isArray(loaded.gates)) {
-        parsedYaml = loaded;
-      }
-    } catch (e) {
-      console.error("Failed to parse existing YAML, initializing fresh structure.");
-    }
-  }
-
-  const newGate = {
-    id: ruleId,
-    name: `Crowdsourced Rule by ${proposerId}`,
-    source_case: `EVOLVE-${timestamp}`,
-    trigger_condition: `주제 == '자동제안' AND '${proposerId}'`,
-    fail_if: proposedFailIf,
-    correction_prompt: correctionPrompt,
-  };
-
-  parsedYaml.gates.push(newGate);
-  const updatedYamlContent = yaml.dump(parsedYaml, { indent: 2, lineWidth: -1 });
-
-  // 5. Commit updated fail-cases.yaml to new branch
-  await octokit.rest.repos.createOrUpdateFileContents({
-    owner,
-    repo,
-    path: "fail-cases.yaml",
-    message: `feat(harness): auto-propose rule ${ruleId} by ${proposerId}`,
-    content: Buffer.from(updatedYamlContent).toString("base64"),
-    sha: fileSha,
-    branch: branchName,
-  });
-
-  // 6. Create Pull Request
-  const prTitle = `[Auto-Evolve] Rule Proposal ${ruleId} (${proposerId})`;
-  const prBody = `### 🤖 Autonomous Quality Gate Proposal
-- **Proposer:** \`${proposerId}\`
-- **Rule ID:** \`${ruleId}\`
-- **Violated Pattern (fail_if):**
-  > ${proposedFailIf}
-- **Correction Directive:**
-  > ${correctionPrompt}
-
----
-*Generated by K-Tax Agent Supreme Judge Pipeline. Please review and merge to activate this rule.*`;
-
-  const { data: pr } = await octokit.rest.pulls.create({
-    owner,
-    repo,
-    title: prTitle,
-    head: branchName,
-    base: baseBranch,
-    body: prBody,
-  });
-
-  console.error(`✅ [GitOps] Successfully opened PR: ${pr.html_url}`);
-  return pr.html_url;
+    const pr=await octokit.rest.pulls.create({owner,repo,head:branch,base:options.baseBranch,draft:true,
+      title:`[Auto-Fix] ${job.id}`,body:`Synthetic failure patch.\n\nBase: ${job.base_sha}\nHead: ${reviewedHead}\nExecution: ${job.execution_hash}\nPatch: ${digest(patch)}\n\nIndependent evidence is recorded by the coordinator. Final human batch review is required.`});
+    return {status:'published' as const,url:pr.data.html_url};
+  } catch {return {status:'unknown' as const};}
 }

@@ -1,0 +1,19 @@
+[Unit]
+Description=Legal Harness HTTPS tunnel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=legalharness
+ExecStart=/usr/bin/cloudflared --config /etc/cloudflared/legal-harness.yml tunnel run
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/etc/cloudflared
+
+[Install]
+WantedBy=multi-user.target

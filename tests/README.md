@@ -1,44 +1,26 @@
-# Backend review gate
+# Review gate
 
-Run `npm run review` from the repository root after installing dependencies.
-Use Node.js 22 or newer. The gate first compiles the project to `dist`, then
-executes the current `src/index.ts` route implementation in isolated fixtures
-with a real Express server bound to loopback, and tests the compiled MCP client.
+Run `npm run review` after changes. This compiles TypeScript, then executes the
+native ESM tests serially across files to avoid multiple upstream startup races
+on small machines. Tests still exercise concurrent requests explicitly.
 
-Supabase uses the real JavaScript client with a fake HTTP transport. Test tokens
-and user identifiers are synthetic. Environment files are not loaded. The judge
-and GitHub adapters are stubs, so the tests do not create PRs, access a remote
-database, call a model, or spend scraping credits.
+The suite covers authentication/session binding, input contracts, disconnected
+caller capacity, complete upstream results, uncertainty-aware gates, source
+refresh deadlines, PostgreSQL roles/RLS/atomic intake, fencing, update candidate
+selection and rollback, independent-review failure handling and release identity.
 
-`mcp-client.test.mjs` runs real stdio JSON-RPC child processes: handshake,
-pagination, shared connections, result fidelity, timeouts, crash recovery,
-capacity, environment isolation and shutdown. It also starts the installed
-official korean-law-mcp package and lists its tools without calling legal APIs.
-`supabase-schema.test.mjs` executes the migration in local PostgreSQL (PGlite),
-emulating Supabase auth roles and auth.uid() to test triggers, RLS and grants.
-`review-regressions.test.mjs` additionally checks HTTP routing, tool errors and
-caller-supplied draft validation. The original nine behavior checks remain.
+`npm run review:package` separately packs and installs the artifact into a new
+empty prefix, then uses real SDK stdio/SSE transports against a local fixture.
+It writes the artifact digest and evidence beneath ignored `.runtime/`.
 
-`mcp-update.test.mjs` tests bootstrap, version comparison, activation ordering,
-failed install/verification, rollback, interrupted-update recovery and release
-retention with filesystem artifacts. npm installation, PM2 restarts and HTTP
-health checks are injected offline operations. Release-file selection/version
-matching also runs against a real MCP child in `mcp-client.test.mjs`. These tests
-do not install cron or restart any live deployment.
+Injected model, GitHub, runner, clock and upstream responses are deterministic
+fixtures, not evidence of external AI approval or production deployment. Default
+tests make no law API calls, create no PR, and do not change the live database.
+Explicit live public-law check: `node scripts/source-smoke.mjs --live` after build.
 
-The checks cover authentication rejection, concurrency accounting and admission,
-missing quality-gate configuration, database authorization headers, returned DB
-errors, and required query input. Native ESM import linking is checked separately
-from the CommonJS route fixture. A focused correction-routing case also checks
-that a timing-rule violation does not return another rule's correction text.
-The real installed `js-yaml` and Zod libraries are used by the route fixtures.
-A failing assertion is a failed backend
-contract, not an expected successful test outcome. Fix the application before
-claiming the gate passes; do not turn failures into skips or change assertions
-to accept the current broken behavior.
-
-This gate does not certify the legal correctness of `fail-cases.yaml`, live
-law API credentials/data, the caller-facing MCP server transport, real AI
-review, PR creation, or a deployed Supabase RLS policy.
-The VM fixture is a test adapter, not a security sandbox. If the application
-entrypoint is refactored, update the adapter while preserving the behavior checks.
+The proposed CI uses an ephemeral GitHub-hosted runner with no production secrets.
+It is stored in `deploy/review.workflow.yml.example`; publishing an executable
+workflow was blocked by the current token's missing workflow scope. Linux CI
+has NOT run. Once separately installed by the operator, it remains an
+ordinary regression gate; the independent maintenance worker remains disabled
+until its isolation and trusted evidence adapters are implemented and verified.

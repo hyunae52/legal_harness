@@ -46,12 +46,61 @@ test('tool errors and invalid arguments remain failures without breaking a healt
 
 test('tool timeout retires the old child and the next request reconnects', async t => {
   const client = fixture(t, { requestTimeoutMs: 100 });
+  await client.listTools();
   const first = await client.callTool('search_law', { query: 'ok' });
   const oldPid = first.result.structuredContent.pid;
   await assert.rejects(client.callTool('search_law', { query: '__hang__' }), error => error.status === 504);
   assert.throws(() => process.kill(oldPid, 0), { code: 'ESRCH' });
+  await client.listTools();
   const next = await client.callTool('search_law', { query: 'ok' });
   assert.notEqual(next.result.structuredContent.pid, oldPid);
+});
+test('cold child connection consumes the total retrieval budget; warm calls retain the remaining budget',async t=>{
+  const options=koreanLawOptionsFromEnv({LAW_OC:'fixture',KOREAN_LAW_MCP_COMMAND:process.execPath,KOREAN_LAW_MCP_ARGS:JSON.stringify([fixturePath,'--start-delay=600'])});
+  const client=fixture(t,{...options,requestTimeoutMs:2000,connectTimeoutMs:2000});
+  const started=Date.now();
+  await assert.rejects(client.callTool('search_law',{query:'__budget_slow__'}),e=>e.code==='MCP_TIMEOUT');
+  assert.ok(Date.now()-started<6500,'slot includes bounded child cleanup');
+  await client.listTools();assert.equal((await client.callTool('search_law',{query:'__budget_slow__'})).kind,'retrieval');
+  assert.throws(()=>koreanLawOptionsFromEnv({KOREAN_LAW_MCP_TIMEOUT_MS:'45001'}));
+});
+test('expiration while waiting for retirement retains capacity and cannot spawn an orphan child',async t=>{
+  const directory=await mkdtemp(join(tmpdir(),'legal-harness-retirement-'));
+  const log=join(directory,'lifecycle.log');await writeFile(log,'');
+  const options=koreanLawOptionsFromEnv({LAW_OC:'fixture',KOREAN_LAW_MCP_COMMAND:process.execPath,KOREAN_LAW_MCP_ARGS:JSON.stringify([fixturePath,'--linger-after-eof','--lifecycle-log='+log])});
+  const client=fixture(t,{...options,requestTimeoutMs:100,maxConcurrentCalls:2});
+  t.after(async()=>{const target=await realpath(directory);assert.equal(dirname(target),await realpath(tmpdir()));assert.ok(basename(target).startsWith('legal-harness-retirement-'));await rm(target,{recursive:true,force:true});});
+  await client.listTools();
+  const first=assert.rejects(client.callTool('search_law',{query:'__hang__'}),e=>e.code==='MCP_TIMEOUT');
+  const until=Date.now()+4000;
+  while(!(await readFile(log,'utf8')).includes('eof:')) {assert.ok(Date.now()<until,'child entered actual SDK shutdown');await new Promise(r=>setTimeout(r,20));}
+  let secondSettled=false;
+  const second=assert.rejects(client.callTool('search_law',{query:'ok'}),e=>e.code==='MCP_TIMEOUT').finally(()=>{secondSettled=true;});
+  try {
+    await new Promise(r=>setTimeout(r,250));
+    assert.equal(secondSettled,false,'the expired waiter still owns its slot until cleanup completes');
+    await assert.rejects(client.callTool('search_law',{query:'excess'}),e=>e.code==='MCP_AT_CAPACITY');
+  } finally {await Promise.all([first,second]);}
+  await new Promise(r=>setTimeout(r,250));
+  assert.equal((await readFile(log,'utf8')).match(/^start:/gm)?.length,1,'no child starts without a new live request');
+  await client.listTools();assert.equal((await client.callTool('search_law',{query:'ok'})).kind,'retrieval');
+  assert.equal((await readFile(log,'utf8')).match(/^start:/gm)?.length,2);
+});
+test('an expired acquisition cannot retire another request that is still starting within its deadline',async t=>{
+  const client=fixture(t,{requestTimeoutMs:3000});
+  let finishRetirement;
+  // Control only the prior retirement boundary. The new child still uses the
+  // real SDK/stdio fixture, and both calls execute the production client code.
+  client.retiring=new Promise(resolve=>{finishRetirement=resolve;});
+  const expired=assert.rejects(client.callTool('search_law',{query:'expired'}),error=>error.code==='MCP_TIMEOUT');
+  await new Promise(resolve=>setTimeout(resolve,2100));
+  const live=client.callTool('search_law',{query:'live'});
+  // Delay timer callbacks so retirement microtasks run with E expired and N
+  // still valid. This reproduces the reported event-loop ordering explicitly.
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,1100);
+  finishRetirement();
+  const [,result]=await Promise.all([expired,live]);
+  assert.equal(result.kind,'retrieval');assert.equal(result.result.structuredContent.args.query,'live');
 });
 
 test('a crashed child is reported as failure and does not poison later requests', async t => {

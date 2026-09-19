@@ -1,0 +1,17 @@
+{
+  "id": "QG-FACT-02",
+  "case_id": "FC-06",
+  "name": "납세자 유형",
+  "cues": [
+    "추계신고",
+    "장부 경정청구"
+  ],
+  "required_facts": [
+    "taxpayer_category",
+    "tax_period",
+    "filing_history"
+  ],
+  "guidance": "납세자 유형별 요건을 구분하고 신고 이력을 확인하세요.",
+  "legal_status": "research_required",
+  "version": 1
+}

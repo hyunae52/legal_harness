@@ -1,0 +1,17 @@
+{
+  "id": "QG-TIME-03",
+  "case_id": "FC-02",
+  "name": "판단 시점 분리",
+  "cues": [
+    "부당행위",
+    "특수관계"
+  ],
+  "required_facts": [
+    "contract_date",
+    "transfer_date",
+    "valuation_period"
+  ],
+  "guidance": "해당성 판단일과 평가기간의 법적 근거를 각각 확인하세요.",
+  "legal_status": "research_required",
+  "version": 1
+}

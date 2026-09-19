@@ -26,6 +26,7 @@ async function fixture(t) {
       if (f.failInstall) throw new Error('Fixture install failure');
       await writeFile(join(packageRoot, 'package.json'), JSON.stringify({ name: 'korean-law-mcp', version: f.installedVersion ?? version }));
       await writeFile(join(packageRoot, 'build', 'index.js'), '// fixture: never executed');
+      await writeFile(join(directory,'package-lock.json'),JSON.stringify({name:'fixture',version}));
     },
     verify: async file => {
       const release = JSON.parse(await readFile(file, 'utf8'));
@@ -40,6 +41,7 @@ async function fixture(t) {
     },
   };
   f.run = options => updateMcp({ activeFile, ...options }, f.operations);
+  f.activate = async () => {const candidate=await f.run();return f.run({activateHash:candidate.fingerprint});};
   f.initialize = async () => {
     await f.run({ bootstrap: true });
     f.events.length = 0;
@@ -66,14 +68,19 @@ test('cron skips installation and restart when the registry has no newer version
   assert.deepEqual(f.events, []);
 });
 
-test('update validates before atomic activation, checks the restarted version and keeps rollback files', async t => {
+test('cron stages only; approved fingerprint activates atomically and keeps rollback files', async t => {
   const f = await fixture(t);
   await f.initialize();
   const old = await f.active();
   f.expectedOldVersion = old.version;
-  assert.equal((await f.run()).status, 'updated');
+  const candidate=await f.run();
+  assert.equal(candidate.status,'candidate');
+  assert.equal((await f.active()).version,old.version);
+  assert.ok(!f.events.some(e=>e.startsWith('restart:')));
+  assert.equal((await f.run()).fingerprint,candidate.fingerprint,'same candidate is reused');
+  assert.equal((await f.run({activateHash:candidate.fingerprint})).status, 'updated');
   assert.equal((await f.active()).version, '4.14.0');
-  assert.deepEqual(f.events, ['install:4.14.0', 'verify:4.14.0', 'restart:4.14.0', 'health:4.14.0']);
+  assert.deepEqual(f.events, ['install:4.14.0', 'verify:4.14.0', 'verify:4.14.0', 'restart:4.14.0', 'health:4.14.0']);
   assert.deepEqual(JSON.parse(await readFile(join(f.root, 'previous.json'), 'utf8')), old);
   assert.equal((await f.directories()).length, 2);
 });
@@ -95,26 +102,28 @@ test('unhealthy activation restores and verifies the previous release', async t 
   const f = await fixture(t);
   await f.initialize();
   f.failHealth.add('4.14.0');
-  await assert.rejects(f.run(), /health failure/);
+  await assert.rejects(f.activate(), /health failure/);
   assert.equal((await f.active()).version, '4.13.0');
   assert.deepEqual(f.events.slice(-4), ['restart:4.14.0', 'health:4.14.0', 'restart:4.13.0', 'health:4.13.0']);
-  assert.equal((await f.directories()).length, 1);
+  assert.equal((await f.directories()).length, 2);
   await assert.rejects(readFile(join(f.root, 'pending.json')), { code: 'ENOENT' });
 });
 
-test('failed rollback retains a recovery journal and the next cron run repairs the interrupted update', async t => {
+test('failed rollback retains journal; cron never restarts production during recovery', async t => {
   const f = await fixture(t);
   await f.initialize();
   f.failHealth.add('4.14.0').add('4.13.0');
-  await assert.rejects(f.run(), /update and rollback failed/);
+  const candidate=await f.run();
+  await assert.rejects(f.run({activateHash:candidate.fingerprint}), /update and rollback failed/);
   const journal = JSON.parse(await readFile(join(f.root, 'pending.json'), 'utf8'));
   assert.equal(journal.previous.version, '4.13.0');
   f.failHealth.clear();
   f.latest = '4.13.0';
   f.events.length = 0;
-  assert.equal((await f.run()).status, 'unchanged');
-  assert.deepEqual(f.events, ['restart:4.13.0', 'health:4.13.0']);
-  assert.equal((await f.active()).version, '4.13.0');
+  await assert.rejects(f.run(),/explicit operator recovery/);
+  assert.deepEqual(f.events,[]);
+  assert.equal((await f.run({activateHash:candidate.fingerprint})).status, 'updated');
+  assert.equal((await f.active()).version, '4.14.0');
   await assert.rejects(readFile(join(f.root, 'pending.json')), { code: 'ENOENT' });
 });
 
@@ -124,9 +133,9 @@ test('successive updates retain only the active and previous release, leaving un
   const unrelated = join(f.root, 'releases', 'operator-notes');
   await mkdir(unrelated);
   await writeFile(join(unrelated, 'keep.txt'), 'keep');
-  await f.run();
+  await f.activate();
   f.latest = '4.15.0';
-  await f.run();
+  await f.activate();
   const directories = await f.directories();
   assert.equal(directories.filter(name => name.startsWith('release-')).length, 2);
   assert.equal(await readFile(join(unrelated, 'keep.txt'), 'utf8'), 'keep');
@@ -150,4 +159,12 @@ test('cron requires bootstrap, rejects unsupported versions and cannot overwrite
   f.latest = '4.13.0';
   await f.run({ bootstrap: true });
   await assert.rejects(f.run({ bootstrap: true }), /already initialized/);
+});
+test('changed approval hash or installed dependency cannot be activated',async t=>{
+  const f=await fixture(t);await f.initialize();const candidate=await f.run();
+  await assert.rejects(f.run({activateHash:'0'.repeat(64)}),/missing or changed/);
+  const staged=JSON.parse(await readFile(join(f.root,'candidate.json'),'utf8'));
+  await writeFile(join(dirname(staged.release.entrypoint),'dependency.js'),'changed after approval');
+  await assert.rejects(f.run({activateHash:candidate.fingerprint}),/content changed/);
+  assert.equal((await f.active()).version,'4.13.0');assert.ok(!f.events.some(e=>e.startsWith('restart:')));
 });

@@ -1,0 +1,3 @@
+* text=auto eol=lf
+# Immutable review evidence preserves the original source whitespace.
+docs/reviews/*PACKET* -whitespace

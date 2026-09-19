@@ -1,164 +1,106 @@
-# Legal Harness: Express → korean-law-mcp
+# Legal Harness
 
-Express가 공식 `korean-law-mcp` 배포 패키지를 **별도 stdio 자식 프로세스**로 실행하고 MCP Client SDK로 통신한다. 원작자의 파싱·조회 코드는 복사하거나 수정하지 않는다. 기본 설치 버전은 `package-lock.json`으로 고정하며, 서버 배포 시 함께 구성할 cron이 관리하는 별도 설치 경로도 지정할 수 있다.
+사용자의 LLM이 공식 `korean-law-mcp`를 조회하고, 제출한 초안의 확인 범위와 누락 사실을 구분할 수 있게 하는 Express/MCP 서버입니다. upstream은 npm 패키지를 **별도 stdio 자식 프로세스**로 실행합니다. 원본 파싱 코드를 복사하거나 포크하지 않습니다. 일반 조회에는 서버의 LLM 키가 필요 없습니다.
 
-```text
-호출자 / LLM → Express HTTP API → MCP Client → stdio → korean-law-mcp → 법제처
-                         └→ Supabase Auth / 사용자별 DB 접근
-```
+현재 수정본은 **운영 배포 전 검수 대상**입니다. 자동 패치 전체 루프는 아직 활성화하지 않았습니다. [배포 상태 및 남은 조건](docs/DEPLOYMENT_READINESS_2026-09-19.md)을 먼저 확인하세요.
 
-이번 구현은 Express의 **상위 MCP 서버 호출**과 DB 스키마다. Express 자체를 MCP 클라이언트에 등록할 수 있는 표준 MCP 서버 전송 계층은 아직 별도 구현이 필요하다. 일반 조회에 서버 측 LLM API 키는 필요하지 않다.
+게시 패키지의 의존성은 `npm-shrinkwrap.json`으로 고정합니다. 제공 설치기는 tarball 설치 후 앱 디렉터리에서 `npm ci`를 실행해 이 고정을 적용합니다. 의존성을 변경할 때 `package-lock.json`과 함께 갱신해야 하며, package 시험이 두 파일의 일치 및 실제 설치 버전을 확인합니다.
 
-## 설치와 실행
+## 실행과 인증
 
-Node.js 22 이상을 사용한다. 프로젝트 루트에서 실행한다.
-
-서버에는 `.ts` 파일만이 아니라 프로젝트 폴더 전체를 옮긴다. `node_modules/`, `dist/`, `.runtime/`, 실제 `.env`는 제외한다. `src/`, `tests/`, `scripts/`, `deploy/`, `supabase/`, `package.json`, `package-lock.json`, `tsconfig.json`, YAML 파일, `.npmrc`, `ecosystem.config.cjs`는 함께 필요하다. 서버에서 의존성을 설치·빌드하고 `.env`를 새로 설정한다.
-
-upstream의 TS 원본은 따로 복사하지 않는다. 공식 npm 패키지에 포함된 빌드 결과를 별도 프로세스로 실행한다.
+Node.js 22 이상을 사용합니다.
 
 ```sh
-npm ci
-```
-
-`.env.example`을 `.env`로 복사한 뒤 다음 값을 설정한다.
-
-- `SUPABASE_URL`과 `SUPABASE_PUBLISHABLE_KEY` 또는 기존 `SUPABASE_ANON_KEY`
-- 법제처에서 발급한 `LAW_OC` 인증키
-
-`SUPABASE_ANON_KEY` 자리에 service-role/secret 키를 넣지 않는다. `/api/analyze`, `/api/tools`, `/api/evolve` 호출 시에는 Supabase Auth 로그인으로 얻은 사용자 access token을 `Authorization: Bearer <token>`으로 전달한다.
-
-```sh
+npm ci --ignore-scripts --omit=optional
 npm run review
+npm run review:package
+```
+
+`.env.example`을 `.env`로 복사하고 `LAW_OC`, 기존 `TAXLAB_API_KEY`를 설정합니다. 사용자 JWT를 사용할 때는 Supabase URL과 publishable/anon key도 설정합니다. 실패 접수에는 서버 전용 `SUPABASE_SERVICE_ROLE_KEY`와 아래의 추가 migration이 필요합니다. 이 값은 MCP 클라이언트에 전달하지 않습니다.
+
+```sh
 npm start
 ```
 
-`review`는 TypeScript를 빌드하고 기존 회귀 테스트, 실제 stdio 통신, 설치된 공식 패키지의 연결, 로컬 PostgreSQL의 SQL/RLS 테스트를 실행한다. 법제처 호출·GitHub PR 생성·실제 Supabase 변경은 하지 않는다. `.npmrc`는 선택적 OCR/ML·네이티브 의존성과 설치 스크립트를 제외한다. 선택적 기능이 필요한 경우 해당 의존성과 서버 자원을 별도로 구성해야 한다.
+서버는 `127.0.0.1:3000`에만 바인딩합니다. Linux의 cloudflared는 [systemd 예시](deploy/cloudflared.service.example)와 [터널 설정](deploy/cloudflared.yml.example)을 사용합니다. DNS와 터널 연결 확인 후 GCE의 외부 TCP 3000 접근을 차단해야 HTTPS 전환이 완료됩니다. 설정 예시 작성만으로 실제 DNS/방화벽이 변경되지는 않습니다.
 
-## 조회 API
+인증은 `x-api-key` 또는 `Authorization: Bearer` 헤더로 보냅니다. Bearer는 기존 공유 key 또는 Supabase가 확인한 사용자 JWT를 받습니다. URL의 `?apiKey=`는 거부하며 내장 기본 key도 없습니다. 공유 key는 `api:partner` 한 주체이므로 개인별 비공개 기록을 구분하지 않습니다.
 
-`GET /api/tools`는 실행 중인 MCP 서버의 이름·버전과 도구별 입력 JSON Schema를 반환한다. 도구 구현과 스키마의 소유자는 upstream이다.
+## LLM의 MCP 연결
 
-`POST /api/analyze` 기본 요청:
-
-```json
-{ "query": "과세처분 불복 절차" }
-```
-
-기본 도구는 자연어 질문을 받는 `legal_research`다. 단순 법령 검색에는 호출량을 줄일 수 있는 `search_law`를 직접 선택한다.
-
-```json
-{ "query": "소득세법", "tool": "search_law", "arguments": { "display": 5 } }
-```
-
-검색 결과의 식별자로 특정 조문을 조회한다. 아래 식별자는 실제 검색 결과로 교체한다.
-
-```json
-{
-  "query": "소득세법 제88조 원문",
-  "tool": "get_law_text",
-  "arguments": { "mst": "검색에서 받은 법령일련번호", "jo": "제88조" }
-}
-```
-
-`tool`은 `/api/tools`에서 확인한 이름이어야 한다. `arguments`는 해당 upstream 스키마에 맞춘다. `legal_research`, `search_law`, `search_decisions`의 `arguments.query`는 최상위 `query`로 설정된다. 그 밖의 도구에는 `arguments`를 그대로 전달한다. 실행 파일·환경변수 등 프로세스 설정은 HTTP 요청으로 받지 않는다.
-
-응답의 `data.result`에 upstream의 `content`, `structuredContent`, 출처 링크, `_meta`를 보존한다. `data.kind`는 `retrieval`이고 `data.retrieved_at`은 이번 **조회 완료 시각**이다. 이를 법령의 현행성·예규의 적용 가능성 확인 시각으로 해석하면 안 된다. upstream이 제공한 시행일·식별자와 사건 기준일을 호출자가 대조해야 한다. 서버가 답변을 생성하는 기존 mock은 제거했다.
-
-`draft_answer`를 함께 보내면 해당 초안을 기존 YAML 게이트로 검사한다. 생략하면 기존 호환 동작대로 `query`를 검사한다. `quality_gate.passed`는 그 텍스트에 대한 기존 규칙 검사 결과이며, 조회 자료나 최종 법률 판단 전체를 검증했다는 뜻이 아니다.
-
-| 오류 | HTTP 상태 |
-| --- | --- |
-| 요청 형식·도구 이름·도구 인자 오류 | 400 |
-| 인증 실패 | 401 |
-| 동시 처리 한도 초과 | 429 |
-| upstream 도구 오류 또는 연결 끊김 | 502 |
-| 인증키 미설정·프로세스 시작/초기화 실패 | 503 |
-| 도구 호출 시간 초과 | 504 |
-
-MCP의 `isError: true` 응답은 성공으로 바꾸지 않는다. 일부 upstream 도구는 부분 성공·조회 불가 사유를 본문에 표시할 수 있으므로 HTTP 성공만으로 근거 확보 완료를 판단하지 않는다.
-
-## 서버 배포 시 MCP 업데이트 cron 구성
-
-서버를 배포할 때 **MCP 자동 업데이트 스크립트와 cron을 함께 구성한다.** Express와 MCP 설치본, 업데이트 작업은 같은 서버에 둔다. 배포용 파일은 구현되어 있으며, 실제 Linux 서버에 cron을 등록하는 단계는 아직 수행하지 않았다.
-
-- [scripts/update-korean-law.sh](scripts/update-korean-law.sh): Linux 진입점. `flock`으로 중복 실행을 막는다.
-- [scripts/mcp-update.mjs](scripts/mcp-update.mjs): 공식 최신 버전 조회, npm 설치, 회귀 검사, MCP 연결 검사, PM2 재시작 및 상태 확인.
-- [scripts/lib/mcp-update.mjs](scripts/lib/mcp-update.mjs): 버전 전환, 이전 버전 복구, 중단된 작업 복구 및 설치본 정리.
-- [cron 예시](deploy/korean-law-update.cron.example): 하루 한 번 실행할 `/etc/cron.d` 설정.
-- [로그 회전 예시](deploy/korean-law-update.logrotate.example): 업데이트 로그 보관량 제한.
-
-서버 `.env`에 다음 값을 설정한다. 수동 `KOREAN_LAW_MCP_COMMAND`, `KOREAN_LAW_MCP_ARGS`, `KOREAN_LAW_MCP_CWD`와 함께 사용하지 않는다.
-
-```dotenv
-KOREAN_LAW_MCP_RELEASE_FILE=/opt/legal_harness/.runtime/korean-law/active.json
-KOREAN_LAW_UPDATE_HEALTH_URL=http://127.0.0.1:3000/health
-```
-
-최초 배포는 **PM2를 실행할 서비스 계정으로** 프로젝트 루트에서 진행한다. Node/npm이 cron의 `PATH`에서도 검색 가능해야 하며 Linux `flock`(util-linux)이 필요하다. `review`와 PM2를 사용하므로 이 프로젝트는 devDependencies도 설치한다.
+원격 SSE는 `https://law.taxlab.kr/sse`입니다. 헤더 인증을 지원하지 않는 클라이언트에는 로컬 stdio bridge를 사용합니다. **bridge 파일 한 개만 복사하면 의존성이 빠지므로 작동하지 않습니다.** 검수한 npm tarball을 설치해야 합니다.
 
 ```sh
-npm ci
 npm run build
-bash scripts/update-korean-law.sh --bootstrap
-npm run deploy
-npm run smoke:mcp
+npm pack --ignore-scripts
+bash scripts/install-mcp.sh /absolute/path/k-tax-agent-backend-2.2.0.tgz
 ```
 
-`--bootstrap`은 새 설치본을 검증하고 `active.json`을 만들며, 아직 시작하지 않은 Express를 재시작하지 않는다. 이후 cron 예시의 서비스 계정·경로·PATH·서버 시간대를 실제 배포 환경에 맞춘 뒤 `/etc/cron.d/legal-harness-mcp`에 설치한다. 로그 회전 예시는 `/etc/logrotate.d/legal-harness-mcp`에 설치한다. 예시는 **UTC 서버의 18:30 = 한국 시각 다음 날 03:30** 기준이다. 관리자 권한으로 설치하는 설정 파일은 root 소유, 0644 권한으로 둔다. 업데이트 작업은 PM2와 같은 서비스 계정으로 실행한다.
+Windows에서는 `scripts/install-mcp.ps1 -Package C:\Downloads\k-tax-agent-backend-2.2.0.tgz`를 실행합니다. 설치기는 MCP 설정 예시를 출력하며 기존 클라이언트 설정을 덮어쓰지 않습니다. 클라이언트에 `TAXLAB_SERVER_URL=https://law.taxlab.kr`과 기존 key 또는 `TAXLAB_AUTH_TOKEN`을 설정합니다. 설치된 bridge를 `node <bridge-path> --doctor`로 점검할 수 있습니다. 진단은 공개 상태와 인증된 도구 목록만 확인합니다.
 
-수동 갱신 확인도 잠금 진입점으로 실행한다.
+## 조회·검증 계약
 
-```sh
-bash scripts/update-korean-law.sh
+`GET /api/tools`에서 실제 upstream 도구와 입력 스키마를 확인합니다. `POST /api/analyze` 예:
+
+```json
+{"query":"근로기준법","tool":"search_law","arguments":{"display":1}}
 ```
 
-갱신 작업은 다음 순서로 동작한다.
+`legal_research`, `search_law`, `search_decisions`는 `query`를 전달하고 다른 도구는 `arguments`를 그대로 전달합니다. 원본 `content`, `structuredContent`, `_meta`를 보존합니다. 조회 성공은 최종 답변이나 법률 적용의 검수 통과가 아닙니다. `draft_answer`가 없으면 `quality_gate`는 `null`입니다.
 
-1. 공식 npm `latest`와 운영 버전을 비교한다. 같은 버전이거나 더 오래된 버전이면 설치·재시작 없이 끝낸다. 자동 적용 대상은 `숫자.숫자.숫자` 형식의 정식 배포 버전이다.
-2. 새 버전은 `releases/` 아래 별도 디렉터리에 설치한다. 기존 설치본은 덮어쓰지 않는다. 설치 스크립트와 선택적 OCR/ML 의존성은 실행·설치하지 않는다.
-3. `npm run review`와 **새 설치본**의 실제 MCP 초기화·버전·필수 도구 스키마 검사를 통과시킨다. 자동 작업은 법제처 API를 호출하지 않는다.
-4. 복구 기록을 남기고 `active.json`을 원자적으로 교체한다. PM2로 Express를 재시작한다. `/health`의 `mcp_release`가 새 버전인지 확인하고 활성 MCP 실행 파일의 연결도 다시 검사한다.
-5. 실패하면 이전 실행 파일로 되돌리고 재시작·상태 확인을 수행한다. 복구까지 실패하거나 작업이 중간에 종료되면 `pending.json`을 남겨 다음 실행에서 복구를 재시도한다.
-6. 정상 적용 후 현재 버전과 직전 버전만 보관한다. 실패한 설치본은 제거한다. 로그는 cron 출력 파일과 logrotate 설정으로 관리한다.
+MCP `check_legal_sources` 또는 `POST /api/sources/check`:
 
-이미 실행 중인 MCP는 이전 코드를 계속 사용하므로 재시작이 필요하다. `kill_timeout: 15000`은 Express가 HTTP 요청과 자식 프로세스를 정리할 시간을 준다. 전환 전 검사 실패 시 서비스는 기존 버전을 유지한다. 자동 업데이트는 upstream 배포 버전 갱신이며, 우리의 실패 패치를 AI·사람이 검수하는 절차와는 별도다.
-
-`active.json`은 실행 파일 선택 정보다. 법령 자료의 최신성을 나타내지 않는다. `/health.mcp_release` 역시 Express가 읽은 설정 버전이며, 법령 원천 조회 성공을 보증하지 않는다.
-
-cron을 사용하지 않는 로컬 환경에서는 기존 패키지 설치 또는 `.env.example`의 수동 실행 경로 설정을 계속 사용할 수 있다.
-
-## 프로세스와 자원
-
-- Express 프로세스마다 MCP 자식 하나를 필요할 때 시작하고 재사용한다. 여러 요청의 초기화도 하나로 합친다.
-- HTTP 작업 및 MCP 도구 작업은 각각 최대 3개다. HTTP 연결이 먼저 끊겨도 MCP 작업은 완료/시간 초과까지 자체 슬롯을 유지한다.
-- 초기화 기본 10초, 도구 호출 기본 45초다. 시간 초과 시 프로세스를 정리하고 **다음 요청**에서 새로 연결한다. 진행 중이던 다른 요청도 실패할 수 있으며 자동 재실행하지 않는다.
-- 자식에게는 SDK의 기본 OS 환경과 법제처 관련 설정만 넘긴다. Express의 Supabase/GitHub 키, `NODE_OPTIONS`는 전달하지 않는다. 같은 OS 계정의 프로세스 분리이며 보안 샌드박스는 아니다.
-- 추가 MCP 수신 포트는 필요 없다. 서버에서 법제처로 나가는 네트워크 연결은 필요하다. PM2 `instances: 1`을 늘리면 MCP 개수·동시 호출량도 증가한다.
-- PM2의 `max_memory_restart`는 Express 메모리 기준이다. MCP 자식과 OS의 메모리까지 포함한 VM 전체 사용량은 별도로 확인해야 한다.
-- MCP 프로그램 업데이트와 법령·예규의 최신성 확인은 별개다. 버전 추적·사건 시점 대조·후속 해석 확인은 아키텍처 명세의 후속 구현 범위다.
-
-## Supabase 스키마
-
-[`supabase/migrations/202609140001_profiles_evolution_logs.sql`](supabase/migrations/202609140001_profiles_evolution_logs.sql)을 Supabase SQL Editor에서 한 번 실행하거나 Supabase CLI migration으로 적용한다. 해당 public 테이블이 아직 없는 프로젝트용 초기 마이그레이션이다. 기존 동명 테이블이 있으면 스키마 차이를 먼저 맞춰야 한다. 전체 DDL은 트랜잭션으로 실행된다.
-
-- `auth.users`: Supabase Auth가 관리한다. 직접 생성하거나 비밀번호 테이블을 만들지 않는다.
-- `profiles`: 신규 가입 트리거와 기존 사용자 backfill을 제공한다. 사용자는 자기 프로필 조회·표시 이름 수정만 가능하다.
-- `evolution_logs`: `/api/evolve`의 제출자, 문제, 규칙, 교정 문구, PR URL, 검토 상태를 저장한다. 사용자는 자기 기록 조회와 `pending_human_review` 제출만 가능하다.
-- 최종 승인/거절/병합 및 검토자 필드는 신뢰된 검토 처리 계정으로 갱신한다. 일반 사용자 JWT에는 수정·삭제 권한이 없다.
-
-현재 `supremeJudge.ts`의 AI 검수와 `gitOps.ts`의 PR 생성은 여전히 mock이다. 이 SQL의 pending 기록이나 현재 `/api/evolve` 성공 응답을 실제 AI 검수·PR 생성의 증거로 사용하면 안 된다. 이번 작업은 이 두 단계의 실제 구현까지 포함하지 않는다.
-
-## 검증 범위
-
-`npm run review`에서 42개 테스트 통과: 기존 9개, API 연동·버전 표시 6개, 실제 stdio·배포 버전 설정 11개, 업데이트·복구 10개, PostgreSQL 검증 6개(상위 테스트 포함). PostgreSQL 테스트는 PGlite에서 Supabase 역할·`auth.uid()`를 구성해 실행한다. 업데이트 상태 전환 테스트는 설치·PM2·HTTP 작업을 대체해 실행하며, 실제 서버에서 cron·PM2를 구동한 결과를 대신하지 않는다. 실제 stdio 연결은 설치된 공식 패키지로 별도 검증한다.
-
-```sh
-npm run smoke:mcp
-# LAW_OC 설정 후 실제 법제처 검색을 1회 요청하려면:
-npm run smoke:mcp -- --live
+```json
+{"law_name":"근로기준법","law_id":"001872","event_dates":{"contract":"2024-01-01"}}
 ```
 
-기본 smoke는 도구 목록만 확인하고 법제처 API를 호출하지 않는다. `--live`는 `search_law` 도구를 한 번 호출한다. 해당 도구 내부에서 여러 법제처 API 요청이 발생할 수 있다.
+매 확인마다 새 upstream 프로세스로 원문과 역할별 사건일 연혁을 조회합니다. 법령 이름을 대조하고 공포일·시행일·내용 hash와 조회 시각을 반환합니다. 접근 실패 시 24시간 이내 이전 결과를 나이와 함께 표시하며 현재 결과로 바꾸지 않습니다. 전체 확인은 32초, 동시 refresh는 1개입니다. **부칙 해석·예규의 후속 변경·사건 적용 판단은 여전히 `unverified`**입니다. 현재 fallback은 메모리 안에서만 유지됩니다.
 
-참고: [korean-law-mcp 공식 배포 안내](https://github.com/chrisryugj/korean-law-mcp), [MCP SDK v1 문서](https://github.com/modelcontextprotocol/typescript-sdk/tree/v1.x), [Supabase 사용자 데이터](https://supabase.com/docs/guides/auth/managing-user-data), [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security).
+시행일은 `Asia/Seoul`의 날짜로 비교합니다. 연혁 일부가 실패해도 성공한 원문과 다른 역할의 결과를 보존하고, 실패한 연혁의 접근 상태를 따로 반환합니다. 일반 조회의 연결+호출 예산은 최대 45초이며, 자식 정리가 끝날 때까지 슬롯을 유지합니다. bridge는 최대 60초의 응답 여유를 두고 전체 SSE 접속은 별도로 15초에 제한합니다. 예상 도구 오류에는 크기 제한과 비밀값 제거를 거친 진단을 남기며, 일반 서버 예외/stack/stderr는 노출하지 않습니다.
+
+MCP `validate_legal_draft` (`validate_tax_draft` 호환 별칭) 또는 `POST /api/validate`:
+
+```json
+{"draft_answer":"권리가액과 분담금의 안분을 검토한다.","facts":{}}
+```
+
+FC-01~10의 키워드는 필요한 사실을 묻는 데만 사용합니다. 누락은 `needs_info`, 사실을 모두 받더라도 공식 근거를 확정하지 못한 법률 판단은 `unverified`입니다. FC-08~10의 논쟁적인 원가배분 방식을 확정 법리로 넣지 않았습니다. 별도의 `facts.allocation={"total":100,"parts":[40,60]}` 검사는 제출된 수치 합계만 계산합니다.
+
+`assessment_complete`, `scoped_pass`, `coverage`, 초안/사실 hash를 반환합니다. 빈 검사 집합은 `no_coverage`이며 법률 전체의 기존 `passed`는 항상 false입니다. skip/force/warn에는 이유가 필요하고 완료된 실패 결과를 성공으로 바꾸지 않습니다. 답변이 바뀌면 다시 검사해야 합니다. 임의 LLM의 최종 출력을 강제로 통제하는 기능은 없습니다.
+
+## 실패 접수와 Supabase
+
+순서대로 적용할 migration:
+
+1. `supabase/migrations/202609140001_profiles_evolution_logs.sql`: 기존 profiles/과거 기록 및 Auth 트리거.
+2. `supabase/migrations/202609190001_durable_failures.sql`: actor·failure·job·outbox·event, 단일 트랜잭션 접수, 권한 회수, lease/fencing.
+
+Supabase의 `auth.users`는 직접 만들지 않습니다. 기존 `evolution_logs`는 보존하고 신규 직접 INSERT 권한은 닫습니다. 기존 테이블이 있으면 초기 migration을 재실행하지 말고 실제 migration 이력과 구조를 확인하세요. 두 번째 migration은 추가 변경이며 SQL 오류 시 전체 rollback됩니다.
+
+MCP `submit_failure` 또는 `POST /api/failures`는 공개 합성 사례 식별자와 enum만 받습니다. 원본 사건 서술/개인정보는 받지 않습니다.
+
+```json
+{"request_id":"00000000-0000-4000-8000-000000000001","case_id":"FC-09","category":"validation","expected":"needs_info","actual":"passed"}
+```
+
+응답의 `receipt_id`로 `GET /api/failures/:id`를 조회합니다. 동일 actor/ID/내용은 같은 접수로 돌아오고 같은 ID의 다른 내용은 409입니다. DB 실패는 503이며 저장되지 않은 접수를 성공으로 돌려주지 않습니다. 오래된 `/api/evolve`와 `propose_tax_rule`은 410입니다.
+
+`/health.maintenance`는 `intake_only` 또는 `unavailable`입니다. 접수·테스트용 상태 전이 코드가 있어도 실제 AI/runner/coordinator가 연결된 것은 아닙니다. 검수 부재/시간 초과/형식 오류는 승인하지 않습니다. 별도 Pro 검수도 자동 maintenance adapter의 실증과는 구분합니다.
+
+## upstream 업데이트와 배포
+
+서버에서만 `KOREAN_LAW_MCP_RELEASE_FILE`을 설정하고 최초에 `bash scripts/update-korean-law.sh --bootstrap`으로 별도 설치본을 준비합니다. [cron 예시](deploy/korean-law-update.cron.example)를 설정하면 새 버전은 설치·review·MCP schema 확인을 거친 **후보**로 남습니다. cron은 운영 프로세스를 재시작하거나 후보를 활성화하지 않습니다.
+
+사람이 후보 fingerprint를 포함한 검수 묶음을 승인한 후에만 `bash scripts/update-korean-law.sh --activate <approved-sha256>`를 실행합니다. 활성화 전 설치 파일 전체와 lock을 다시 hash하고 재검증합니다. 실패 시 이전 버전으로 복원하며 복원도 실패하면 journal을 보존하고 운영자의 복구가 필요합니다. 첫 bootstrap과 수동 활성화는 운영자 명령이며 자동 사람 승인 확인 기능을 대체하지 않습니다.
+
+`npm run release:verify -- manifest.json artifact.tgz <approval-comment-id>`는 GitHub에서 운영자의 정확한 manifest 승인, B/H/T, merge 부모/tree, 실제 CI job/step, artifact hash를 읽어 대조합니다. **현재는 읽기 전용 식별 검증이며 배포 허가나 배포 실행기가 아닙니다.** DB 복원·실행 환경·staging/rollback 증거가 없으면 운영 배포 준비 완료로 표시하지 않습니다. PR은 모아 최종 사람이 검수하고 merge합니다.
+
+CI 설정안은 [deploy/review.workflow.yml.example](deploy/review.workflow.yml.example)에 있습니다. 현재 GitHub 토큰의 workflow 권한 부족으로 게시가 거부되어 실행 파일로 등록하지 않았고 **Linux CI는 미실행**입니다. 운영자가 검수 후 `.github/workflows/review.yml`로 등록하면 GitHub-hosted Linux에서 읽기 권한으로 테스트하며 production secrets를 전달하지 않습니다. [GitHub workflow 권한 문서](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)를 따릅니다. 일반 CI 통과만으로 독립 AI 승인이나 배포 승인을 만들지 않습니다.
+
+## 검증
+
+`npm run review`는 API/auth/session, 실제 stdio와 설치된 upstream 연결, PGlite SQL/RLS/transaction, 후보 활성화/rollback, 근거 상태, 독립 검수 경계 및 merge 검증을 확인합니다. 주입된 model/runner/GitHub port 테스트는 실서비스 AI 실행 증거가 아닙니다.
+
+`npm run review:package`는 실제 npm tarball을 빈 prefix에 설치하고 stdio→SSE→인증 API, doctor, 포함된 rules를 검사합니다. `node scripts/source-smoke.mjs --live`는 설정된 법제처 인증으로 공개 근로기준법과 사건일 연혁을 실제 조회합니다.
+
+검증하지 않은 범위: Linux 운영 배포, 실제 Supabase migration/복원, 공개 HTTPS와 외부 3000 폐쇄, 격리된 AGY와 hosted patch executor, 무인 self-repair, 사람 승인 후 artifact 활성화/rollback 전체 흐름. 최신 상태는 배포 검수 문서에 기록합니다.
