@@ -26,6 +26,9 @@ const artifact=join(work,packed.filename),prefix=join(work,'clean-prefix');
 await mkdir(prefix);await writeFile(join(prefix,'package.json'),'{"private":true}');
 await command(['install','--prefix',prefix,'--ignore-scripts','--omit=optional','--no-audit','--no-fund',artifact]);
 const installed=join(prefix,'node_modules/k-tax-agent-backend');
+// Local-tarball npm install may ignore a dependency's shrinkwrap metadata.
+// Treat the installed CLI as a locked application root before ever running it.
+await command(['ci','--prefix',installed,'--ignore-scripts','--omit=dev','--omit=optional','--no-audit','--no-fund']);
 const shrinkwrap=JSON.parse(await readFile(join(installed,'npm-shrinkwrap.json'),'utf8'));
 assert.deepEqual(shrinkwrap,JSON.parse(await readFile(join(root,'package-lock.json'),'utf8')));
 const versions={};

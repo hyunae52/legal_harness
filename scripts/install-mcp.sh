@@ -8,6 +8,7 @@ test -f "$artifact"
 node -e "if (Number(process.versions.node.split('.')[0]) < 22) process.exit(1)"
 mkdir -p -- "$destination"
 npm install --prefix "$destination" --ignore-scripts --omit=optional --no-audit --no-fund -- "$artifact"
+npm ci --prefix "$destination/node_modules/k-tax-agent-backend" --ignore-scripts --omit=dev --omit=optional --no-audit --no-fund
 node --input-type=module - "$destination" <<'NODE'
 import {resolve} from 'node:path';
 import {access} from 'node:fs/promises';

@@ -10,6 +10,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Node.js 22 or later is required.' }
 New-Item -ItemType Directory -Path $Destination -Force | Out-Null
 & npm install --prefix $Destination --ignore-scripts --omit=optional --no-audit --no-fund -- $artifact
 if ($LASTEXITCODE -ne 0) { throw 'Package installation failed.' }
+$application = Join-Path $Destination 'node_modules\k-tax-agent-backend'
+& npm ci --prefix $application --ignore-scripts --omit=dev --omit=optional --no-audit --no-fund
+if ($LASTEXITCODE -ne 0) { throw 'Pinned application dependency installation failed.' }
 $bridge = Join-Path $Destination 'node_modules\k-tax-agent-backend\scripts\hermes-mcp-bridge.mjs'
 if (-not (Test-Path -LiteralPath $bridge)) { throw 'Installed bridge is missing.' }
 @{mcpServers=@{'taxlab-legal'=@{command='node';args=@($bridge);env=@{
