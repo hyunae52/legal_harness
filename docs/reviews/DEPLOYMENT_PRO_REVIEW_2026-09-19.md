@@ -63,4 +63,9 @@ Pro는 조회 전용 HTTPS 전환까지 AGY 완성을 기다릴 필요는 없다
 
 A-1 보완 후 `npm run review` 최종 **68/68 통과**(실패·skip 없음). 첫 전체 실행에서는 별개의 기존 upstream 기동 시험이 10초 deadline으로 실패했다. 코드와 제한값을 바꾸지 않고 해당 시험만 다시 실행해 1.7초에 통과했고, 전체 재실행도 68개 모두 통과했다. 이 일시적 실패의 원인을 확정한 것은 아니며 Linux·운영 cold-start 검증은 여전히 필요하다.
 
-코드 commit·최종 artifact를 고정해 A-1만 재검수하고 최종 독립 판정을 아래에 기록한다. 아직 통과 선언이 아니다.
+- 최종 코드 commit: `e7ce0b2214c94dae1f3f2e96281b045635ddb4c5`.
+- [A-1 한정 패킷](DEPLOYMENT_PRO_PACKET_2026-09-20_v4.md), SHA-256 `cbc95e0561fc90684321bb1a95f2a8cac77e5b69d10d93e3dad98798d5a2e94d`.
+- 최종 `npm run review:package`: **6개 검사 통과**. artifact SHA-256 `08fe3e6d24a22d1d68e4db278b29d43d96f627339999a897423114b0a2cf7f61`.
+- [검증 manifest](DEPLOYMENT_VALIDATION_2026-09-20.json)에 코드/패킷/설치 artifact hash, 실행 환경, 68개 회귀시험 및 패키지 검사 결과와 한계를 기록했다.
+
+동일한 Pro 대화에 최종 패킷을 제출했고 응답을 기다린다. 최종 독립 판정은 수신 후 기록하며, 아직 통과 선언이 아니다.

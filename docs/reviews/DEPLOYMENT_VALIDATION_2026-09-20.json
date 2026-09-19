@@ -1,0 +1,54 @@
+{
+  "code_commit": "e7ce0b2214c94dae1f3f2e96281b045635ddb4c5",
+  "environment": {
+    "platform": "win32",
+    "node": "v24.13.1"
+  },
+  "review": {
+    "command": "npm run review",
+    "pass": 68,
+    "fail": 0,
+    "skipped": 0,
+    "cancelled": 0,
+    "todo": 0,
+    "duration_ms": 32242.7682,
+    "executed_by": "implementing_agent",
+    "linux_ci_executed": false,
+    "earlier_transient_failure": "An unchanged upstream startup test hit its 10s timeout; isolated and full reruns passed without modifying code or limits."
+  },
+  "package": {
+    "status": "pass",
+    "artifact": "k-tax-agent-backend-2.2.0.tgz",
+    "sha256": "08fe3e6d24a22d1d68e4db278b29d43d96f627339999a897423114b0a2cf7f61",
+    "files": 30,
+    "checks": [
+      "clean_install",
+      "stdio_sse_authenticated_call",
+      "doctor",
+      "packaged_rules",
+      "published_lock",
+      "installed_dependency_versions"
+    ],
+    "versions": {
+      "@modelcontextprotocol/sdk": "1.30.0",
+      "@octokit/rest": "21.1.1",
+      "@supabase/supabase-js": "2.116.0",
+      "dotenv": "16.6.1",
+      "express": "4.22.2",
+      "js-yaml": "5.4.2",
+      "korean-law-mcp": "4.13.0",
+      "zod": "3.25.76"
+    },
+    "fixture_only": true
+  },
+  "pro_input": {
+    "path": "docs/reviews/DEPLOYMENT_PRO_PACKET_2026-09-20_v4.md",
+    "sha256": "cbc95e0561fc90684321bb1a95f2a8cac77e5b69d10d93e3dad98798d5a2e94d"
+  },
+  "production": {
+    "merged": false,
+    "deployed": false,
+    "database_migration_applied": false,
+    "approval": "hold"
+  }
+}
