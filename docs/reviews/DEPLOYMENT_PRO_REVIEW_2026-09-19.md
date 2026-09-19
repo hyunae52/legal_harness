@@ -49,4 +49,18 @@ Pro는 조회 전용 HTTPS 전환까지 AGY 완성을 기다릴 필요는 없다
 
 ## 3차 한정 검수
 
-A/B 보완 후 로컬 `npm run review`는 **67/67 통과**, 실패·skip 없음. 코드와 새 artifact를 고정해 A/B 해소 및 해당 수정의 회귀만 같은 Pro 대화에 제출한다. 최종 독립 판정은 수신 후 기록한다. 아직 통과 선언이 아니다.
+- 입력 commit: `1fb66e176dba757452899db3fc21a8c5f8ce61dd`.
+- [A/B 보완 6개 파일 패킷](DEPLOYMENT_PRO_PACKET_2026-09-20_v3.md), SHA-256 `9dc805d22c89ccce7a3b702f5473c4e33feb283953d3b3e0b15689c5db301191`.
+- 제출 당시 로컬 `npm run review` 67/67, package 6개 검사 통과. 당시 artifact SHA-256 `9745e8f086a9d7b90e9985772b90952a321e5e0af17a1864f76d578086e96aea`는 아래 추가 보완 전 버전이다.
+- 5분 57초 후 **B 해소, A의 기존 반례 해소 / 경합 P2 A-1 잔여**로 CODE REVISE·운영 HOLD.
+- Pro는 패킷 및 6개 파일 hash 일치를 확인했다. 정화 함수 시험 3개를 직접 실행해 통과했고 추가 타입/혼합 문자열/크기 경계를 확인했다. 전체 npm·실제 SDK 통합시험·tgz 재해시는 직접 실행하지 않았다고 명시했다.
+
+**A-1:** 정리 완료 시 이미 만료된 E의 acquisition은 오류를 던지지만, 아직 유효한 N이 그 사이 새 연결을 만들면 E의 catch가 전역 `this.connection`을 선택해 N의 연결을 종료한다. Pro가 실제 클래스와 합성 SDK/transport로 보조 재현했다.
+
+후속 수정은 연결 확보 전 deadline guard를 `LawMcpError(504, MCP_TIMEOUT)`로 구분하여 전역 연결 정리 경로에 들어가지 않게 하는 것이다. 새 회귀시험은 이전 retirement 완료 시점만 제어하고, 새 자식은 실제 SDK/stdio로 기동한다. 이벤트 루프를 잠시 지연시켜 E만 만료되고 N은 유효한 순서를 만든다. 수정 전 N이 MCP_UNAVAILABLE로 실패했고, 수정 후 N이 정상 조회에 성공했다. 기존 슬롯 유지/고아 프로세스 방지 시험도 유지했다.
+
+## 4차 한정 검수
+
+A-1 보완 후 `npm run review` 최종 **68/68 통과**(실패·skip 없음). 첫 전체 실행에서는 별개의 기존 upstream 기동 시험이 10초 deadline으로 실패했다. 코드와 제한값을 바꾸지 않고 해당 시험만 다시 실행해 1.7초에 통과했고, 전체 재실행도 68개 모두 통과했다. 이 일시적 실패의 원인을 확정한 것은 아니며 Linux·운영 cold-start 검증은 여전히 필요하다.
+
+코드 commit·최종 artifact를 고정해 A-1만 재검수하고 최종 독립 판정을 아래에 기록한다. 아직 통과 선언이 아니다.

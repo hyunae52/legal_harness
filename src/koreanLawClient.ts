@@ -111,7 +111,9 @@ export class KoreanLawClient {
     await this.retiring;
     // A caller can expire while the previous child is being reaped. Never
     // create (or join) a new connection on behalf of that expired caller.
-    if (Date.now() >= deadline) throw new McpError(ErrorCode.RequestTimeout, 'Legal retrieval deadline exceeded');
+    // No connection has been acquired here. Use the pre-acquisition error
+    // path, which must not retire another caller's newly created connection.
+    if (Date.now() >= deadline) throw new LawMcpError(504, 'MCP_TIMEOUT', 'Legal retrieval expired before acquiring a connection.');
     if (this.stopped) throw new LawMcpError(503, "MCP_CLOSED", "The legal MCP client is shutting down.");
     if (this.connecting) return this.connecting;
     if (this.connection?.ready) return this.connection;

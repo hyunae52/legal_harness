@@ -86,6 +86,22 @@ test('expiration while waiting for retirement retains capacity and cannot spawn 
   await client.listTools();assert.equal((await client.callTool('search_law',{query:'ok'})).kind,'retrieval');
   assert.equal((await readFile(log,'utf8')).match(/^start:/gm)?.length,2);
 });
+test('an expired acquisition cannot retire another request that is still starting within its deadline',async t=>{
+  const client=fixture(t,{requestTimeoutMs:3000});
+  let finishRetirement;
+  // Control only the prior retirement boundary. The new child still uses the
+  // real SDK/stdio fixture, and both calls execute the production client code.
+  client.retiring=new Promise(resolve=>{finishRetirement=resolve;});
+  const expired=assert.rejects(client.callTool('search_law',{query:'expired'}),error=>error.code==='MCP_TIMEOUT');
+  await new Promise(resolve=>setTimeout(resolve,2100));
+  const live=client.callTool('search_law',{query:'live'});
+  // Delay timer callbacks so retirement microtasks run with E expired and N
+  // still valid. This reproduces the reported event-loop ordering explicitly.
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,1100);
+  finishRetirement();
+  const [,result]=await Promise.all([expired,live]);
+  assert.equal(result.kind,'retrieval');assert.equal(result.result.structuredContent.args.query,'live');
+});
 
 test('a crashed child is reported as failure and does not poison later requests', async t => {
   const client = fixture(t);
