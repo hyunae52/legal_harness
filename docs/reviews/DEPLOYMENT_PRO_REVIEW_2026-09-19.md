@@ -1,5 +1,7 @@
 # 독립 Pro 코드·배포 검수
 
+**최종: 조회 전용 제한 후보 CODE PASS / 실제 운영 배포 HOLD.** 4차 Pro 검수에서 A-1 해소 및 해당 수정 범위의 잔여 P1/P2 없음으로 판정했다. 전체 자동 자기수정 서비스의 production 완료나 merge·배포 실행 승인이 아니다. 최종 실행 코드 기준은 `e7ce0b2214c94dae1f3f2e96281b045635ddb4c5`이며 이후 변경은 검수 문서뿐이다.
+
 - 요청: 수정 후 별도 Pro 모델의 배포 검수.
 - 실행: ChatGPT 새 대화의 모델 선택기 **6 Pro**를 확인하고 코드 스냅샷 첨부.
 - 대화: https://chatgpt.com/c/6aae9b76-b7d8-83e8-b743-71f206c6b9dd
@@ -68,4 +70,10 @@ A-1 보완 후 `npm run review` 최종 **68/68 통과**(실패·skip 없음). �
 - 최종 `npm run review:package`: **6개 검사 통과**. artifact SHA-256 `08fe3e6d24a22d1d68e4db278b29d43d96f627339999a897423114b0a2cf7f61`.
 - [검증 manifest](DEPLOYMENT_VALIDATION_2026-09-20.json)에 코드/패킷/설치 artifact hash, 실행 환경, 68개 회귀시험 및 패키지 검사 결과와 한계를 기록했다.
 
-동일한 Pro 대화에 최종 패킷을 제출했고 응답을 기다린다. 최종 독립 판정은 수신 후 기록하며, 아직 통과 선언이 아니다.
+**3분 50초 후 최종 판정: A-1 해소, 해당 수정 범위의 잔여 P1/P2 없음, 조회 전용 제한 후보 CODE PASS / 실제 운영 배포 HOLD.**
+
+Pro는 패킷 및 3개 파일의 hash 일치를 확인했고 v3 대비 실행 코드 변경이 guard 한 줄과 주석 두 줄뿐임을 직접 대조했다. 확보 전 만료 오류가 즉시 재전파 분기로 처리되어 다른 요청의 새 연결을 종료하지 않으며, 실제 timeout 시 retirement/acquisition 종료 대기와 슬롯 유지가 보존됨을 확인했다.
+
+같은 합성 SDK/transport 보조 재현을 직접 실행해 v3의 정상 요청은 MCP_UNAVAILABLE, v4는 retrieval 성공으로 대조했다. 기존 A 시나리오도 통과했다. 실제 SDK/stdio 통합시험과 전체 68개, 최종 tgz 검증은 구현자의 실행 결과로 구분했다. 기동 timeout 한 번의 원인은 확정하지 않았고, 재실행 성공만으로 운영 기동 안정성을 보증하지 않았다.
+
+운영 HOLD 사유는 실제 HTTPS·외부 TCP 3000 폐쇄·Linux CI/운영 cold-start·안전한 rollback·마지막 사람 검수 미확인이다. 접수를 켜면 운영 DB migration/권한/복원 확인도 필요하다. 닫힌 자동 worker/게시/배포 경로는 그대로 유지한다.
