@@ -107,8 +107,11 @@ export class KoreanLawClient {
     }
   }
 
-  private async getConnection(): Promise<Connection> {
+  private async getConnection(deadline = Infinity): Promise<Connection> {
     await this.retiring;
+    // A caller can expire while the previous child is being reaped. Never
+    // create (or join) a new connection on behalf of that expired caller.
+    if (Date.now() >= deadline) throw new McpError(ErrorCode.RequestTimeout, 'Legal retrieval deadline exceeded');
     if (this.stopped) throw new LawMcpError(503, "MCP_CLOSED", "The legal MCP client is shutting down.");
     if (this.connecting) return this.connecting;
     if (this.connection?.ready) return this.connection;
@@ -141,8 +144,10 @@ export class KoreanLawClient {
       deadlineTimer = setTimeout(() => reject(new McpError(ErrorCode.RequestTimeout, 'Legal retrieval deadline exceeded')), this.options.requestTimeoutMs);
     });
     let connection: Connection | undefined;
+    let acquiring: Promise<Connection> | undefined;
     try {
-      connection = await Promise.race([this.getConnection(), expired]);
+      acquiring = this.getConnection(deadline);
+      connection = await Promise.race([acquiring, expired]);
       if (!connection.tools.some(tool => tool.name === name)) {
         throw new LawMcpError(400, "MCP_UNKNOWN_TOOL", "Tool is not advertised by korean-law-mcp. See /api/tools.");
       }
@@ -173,6 +178,11 @@ export class KoreanLawClient {
       // before permitting a fresh connection; never automatically replay calls.
       const retiring = connection ?? this.connection;
       if (retiring) await this.retire(retiring);
+      // Retirement clears this.connection before it finishes. A timed-out
+      // waiter must still await that cleanup and its own acquisition promise
+      // before releasing capacity; Promise.race alone does not cancel it.
+      await this.retiring;
+      await acquiring?.catch(() => undefined);
       if (error instanceof McpError && error.code === ErrorCode.RequestTimeout) {
         throw new LawMcpError(504, "MCP_TIMEOUT", "Legal retrieval timed out; the MCP process was reset.");
       }

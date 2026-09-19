@@ -64,6 +64,28 @@ test('cold child connection consumes the total retrieval budget; warm calls reta
   await client.listTools();assert.equal((await client.callTool('search_law',{query:'__budget_slow__'})).kind,'retrieval');
   assert.throws(()=>koreanLawOptionsFromEnv({KOREAN_LAW_MCP_TIMEOUT_MS:'45001'}));
 });
+test('expiration while waiting for retirement retains capacity and cannot spawn an orphan child',async t=>{
+  const directory=await mkdtemp(join(tmpdir(),'legal-harness-retirement-'));
+  const log=join(directory,'lifecycle.log');await writeFile(log,'');
+  const options=koreanLawOptionsFromEnv({LAW_OC:'fixture',KOREAN_LAW_MCP_COMMAND:process.execPath,KOREAN_LAW_MCP_ARGS:JSON.stringify([fixturePath,'--linger-after-eof','--lifecycle-log='+log])});
+  const client=fixture(t,{...options,requestTimeoutMs:100,maxConcurrentCalls:2});
+  t.after(async()=>{const target=await realpath(directory);assert.equal(dirname(target),await realpath(tmpdir()));assert.ok(basename(target).startsWith('legal-harness-retirement-'));await rm(target,{recursive:true,force:true});});
+  await client.listTools();
+  const first=assert.rejects(client.callTool('search_law',{query:'__hang__'}),e=>e.code==='MCP_TIMEOUT');
+  const until=Date.now()+4000;
+  while(!(await readFile(log,'utf8')).includes('eof:')) {assert.ok(Date.now()<until,'child entered actual SDK shutdown');await new Promise(r=>setTimeout(r,20));}
+  let secondSettled=false;
+  const second=assert.rejects(client.callTool('search_law',{query:'ok'}),e=>e.code==='MCP_TIMEOUT').finally(()=>{secondSettled=true;});
+  try {
+    await new Promise(r=>setTimeout(r,250));
+    assert.equal(secondSettled,false,'the expired waiter still owns its slot until cleanup completes');
+    await assert.rejects(client.callTool('search_law',{query:'excess'}),e=>e.code==='MCP_AT_CAPACITY');
+  } finally {await Promise.all([first,second]);}
+  await new Promise(r=>setTimeout(r,250));
+  assert.equal((await readFile(log,'utf8')).match(/^start:/gm)?.length,1,'no child starts without a new live request');
+  await client.listTools();assert.equal((await client.callTool('search_law',{query:'ok'})).kind,'retrieval');
+  assert.equal((await readFile(log,'utf8')).match(/^start:/gm)?.length,2);
+});
 
 test('a crashed child is reported as failure and does not poison later requests', async t => {
   const client = fixture(t);

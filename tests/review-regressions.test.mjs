@@ -86,17 +86,38 @@ test('upstream timeout/config/tool failures are failures and unexpected errors d
 });
 test('expected tool diagnostics survive REST and MCP while configured secrets and internal fields are removed',async t=>{
   const secret='fixture-law-secret-value';
-  const diagnostic={isError:true,content:[{type:'text',text:`PUBLIC_SYNTHETIC_EVENT_DATE_REQUIRED https://source.invalid?OC=${secret}`}],structuredContent:{required:['event_date'],headers:{authorization:secret},stack:secret,detail:'safe public fixture'},_meta:{token:secret}};
+  const encodedDiagnostic='{"required":["event_date"],"headers":{"x-private":"unknown-private"},"detail":"\\u0066ixture-law-secret-value"}';
+  const diagnostic={isError:true,content:[{type:'text',text:`PUBLIC_SYNTHETIC_EVENT_DATE_REQUIRED https://source.invalid?OC=${secret}`},{type:'text',text:encodedDiagnostic}],structuredContent:{required:['event_date'],headers:{authorization:secret},stack:secret,detail:'safe public fixture'},_meta:{token:secret}};
   const f=await fixture(t,{env:{LAW_OC:secret},error:new LawMcpError(502,'MCP_TOOL_ERROR','exception message must remain private',diagnostic)});
   const rest=await f.request('/api/analyze',{query:'fixture'});assert.equal(rest.status,502);assert.deepEqual(rest.body.result.structuredContent.required,['event_date']);assert.match(rest.body.result.content[0].text,/PUBLIC_SYNTHETIC/);
   assert.ok(!JSON.stringify(rest).includes(secret));assert.ok(!JSON.stringify(rest).includes('exception message'));
+  assert.deepEqual(JSON.parse(rest.body.result.content[1].text),{required:['event_date'],detail:'[REDACTED]'});
   const client=new Client({name:'error-contract',version:'1'});t.after(()=>client.close());
   await client.connect(new SSEClientTransport(new URL(f.base+'/sse'),{requestInit:{headers:{authorization:'Bearer alice'}}}),{timeout:3000});
   const mcp=await client.callTool({name:'search_law',arguments:{query:'fixture'}});assert.equal(mcp.isError,true);assert.deepEqual(mcp.structuredContent.required,['event_date']);assert.match(mcp.content[0].text,/PUBLIC_SYNTHETIC/);assert.ok(!JSON.stringify(mcp).includes(secret));assert.equal(mcp.structuredContent.stack,undefined);
+  assert.deepEqual(JSON.parse(mcp.content[1].text),{required:['event_date'],detail:'[REDACTED]'});
 });
 test('tool diagnostics bound oversized data and omit credential labels and internal traces',()=>{
   const result=safeToolDiagnostic({isError:true,content:[{type:'text',text:'PUBLIC_FIXTURE\nAuthorization: Bearer fixture-unknown-value\n    at /internal/private.js:10\nSUPABASE_SECRET=unconfigured-sensitive-value'}],structuredContent:{required:['event_date'],environment:{secret:'hidden'},large:'z'.repeat(20000)}},{});
   const json=JSON.stringify(result);assert.ok(json.includes('PUBLIC_FIXTURE'));assert.ok(!json.includes('fixture-unknown-value'));assert.ok(!json.includes('unconfigured-sensitive-value'));assert.ok(!json.includes('/internal/private.js'));assert.ok(Buffer.byteLength(json)<=16000);
+});
+test('JSON tool diagnostics decode before filtering nested private fields and escaped configured secrets',()=>{
+  const secret='fixture-"law\\secret\nvalue';
+  const encoded=JSON.stringify(secret).slice(1,-1).replace('f','\\u0066');
+  const text=`{"code":"PUBLIC_ARGUMENT_REQUIRED","required":["event_date"],"headers":{"x-private":"unknown-credential"},"stack":"internal-trace","detail":"${encoded}"}`;
+  const result=safeToolDiagnostic({isError:true,content:[{type:'text',text}],structuredContent:{nested:JSON.stringify({required:['event_date'],environment:{private:'unknown-environment'},detail:secret})}},{LAW_OC:secret});
+  const parsed=JSON.parse(result.content[0].text);
+  assert.equal(parsed.code,'PUBLIC_ARGUMENT_REQUIRED');assert.deepEqual(parsed.required,['event_date']);
+  assert.equal(parsed.headers,undefined);assert.equal(parsed.stack,undefined);assert.equal(parsed.detail,'[REDACTED]');
+  const nested=JSON.parse(result.structuredContent.nested);
+  assert.deepEqual(nested.required,['event_date']);assert.equal(nested.environment,undefined);assert.equal(nested.detail,'[REDACTED]');
+  const mixed=safeToolDiagnostic({isError:true,content:[{type:'text',text:'Source failure: '+text}]},{LAW_OC:secret});
+  assert.ok(!JSON.stringify(mixed).includes('unknown-credential'));
+});
+test('numeric credentials and serialized traces never enter public tool diagnostics',()=>{
+  const result=safeToolDiagnostic({isError:true,content:[{type:'text',text:JSON.stringify({required:['event_date'],stack:'Error: fixture\n at /internal/private.js:10:20'})}],structuredContent:{LAW_OC:123456789,detail:123456789,required:['event_date']}},{LAW_OC:'123456789'});
+  assert.deepEqual(JSON.parse(result.content[0].text),{required:['event_date']});
+  assert.equal(result.structuredContent.LAW_OC,undefined);assert.equal(result.structuredContent.detail,'[REDACTED]');
 });
 test('legacy automatic PR paths stay closed and unavailable durable intake never reports success',async t=>{
   const f=await fixture(t);

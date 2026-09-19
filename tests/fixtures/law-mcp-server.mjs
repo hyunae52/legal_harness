@@ -2,6 +2,14 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema, McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
+import { appendFileSync } from 'node:fs';
+
+const lifecycleLog=process.argv.find(a=>a.startsWith('--lifecycle-log='))?.slice('--lifecycle-log='.length);
+if(lifecycleLog) {
+  appendFileSync(lifecycleLog,`start:${process.pid}\n`);
+  process.stdin.on('end',()=>appendFileSync(lifecycleLog,`eof:${process.pid}\n`));
+}
+if(process.argv.includes('--linger-after-eof'))setInterval(()=>{},1000);
 
 if (process.argv.includes('--hang-start')) {
   setInterval(() => {}, 1000);
