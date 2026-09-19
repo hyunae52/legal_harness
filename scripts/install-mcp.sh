@@ -1,79 +1,19 @@
 #!/usr/bin/env bash
+# Install a reviewed local tarball. No network script piping or agent config guessing.
 set -euo pipefail
-
-# TaxLab Legal Harness 1-Click MCP Installer
-# Supported: Claude Desktop, Hermes, Orca, Codex, Cursor
-
-echo "🚀 [TaxLab] Installing K-Tax Legal MCP Harness..."
-
-INSTALL_DIR="$HOME/.taxlab"
-mkdir -p "$INSTALL_DIR"
-
-# 1. Download standalone bridge
-BRIDGE_PATH="$INSTALL_DIR/hermes-mcp-bridge.mjs"
-curl -sSL "https://raw.githubusercontent.com/hyunae52/legal_harness/main/scripts/hermes-mcp-bridge.mjs" -o "$BRIDGE_PATH"
-chmod +x "$BRIDGE_PATH"
-
-# 2. Check node
-if ! command -v node >/dev/null 2>&1; then
-  echo "⚠️  Node.js is required to run MCP bridge. Please install Node.js (v18+)."
-fi
-
-# 3. Target config files
-CONFIG_TARGETS=(
-  "$HOME/.config/Claude/claude_desktop_config.json"
-  "$HOME/Library/Application Support/Claude/claude_desktop_config.json"
-  "$HOME/.hermes/config.json"
-  "$HOME/.codex/config.json"
-  "$HOME/.cursor/mcp.json"
-)
-
-MCP_ENTRY_JSON=$(cat <<EOF
-{
-  "command": "node",
-  "args": ["$BRIDGE_PATH"],
-  "env": {
-    "TAXLAB_SERVER_URL": "http://136.67.179.84:3000",
-    "TAXLAB_API_KEY": "taxlab_partner_2026"
-  }
-}
-EOF
-)
-
-FOUND=0
-
-for CONFIG in "${CONFIG_TARGETS[@]}"; do
-  CONFIG_DIR="$(dirname "$CONFIG")"
-  if [ -d "$CONFIG_DIR" ]; then
-    FOUND=1
-    echo "📦 Found agent environment: $CONFIG"
-    if [ ! -f "$CONFIG" ]; then
-      echo '{"mcpServers": {}}' > "$CONFIG"
-    fi
-
-    # Merge taxlab-legal into mcpServers using node
-    node -e "
-      const fs = require('fs');
-      try {
-        const file = '$CONFIG';
-        const data = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8') || '{}') : {};
-        data.mcpServers = data.mcpServers || {};
-        data.mcpServers['taxlab-legal'] = $MCP_ENTRY_JSON;
-        fs.writeFileSync(file, JSON.stringify(data, null, 2));
-        console.log('   ✅ Successfully injected taxlab-legal into ' + file);
-      } catch (err) {
-        console.error('   ❌ Failed to update ' + '$CONFIG' + ': ' + err.message);
-      }
-    "
-  fi
-done
-
-# Also output standalone config snippet for custom harnesses (Orca, Hermes CLI, etc.)
-echo ""
-echo "================================================================="
-echo "🎉 TaxLab Legal MCP Bridge Installed: $BRIDGE_PATH"
-echo ""
-echo "👉 For custom harnesses (Orca, Hermes, Gemini, custom agents):"
-echo "   Command: node $BRIDGE_PATH"
-echo "   Or SSE URL: http://136.67.179.84:3000/sse?apiKey=taxlab_partner_2026"
-echo "================================================================="
+artifact="${1:?Usage: bash scripts/install-mcp.sh /absolute/path/reviewed-package.tgz [destination]}"
+destination="${2:-$HOME/.taxlab/legal-mcp}"
+case "$artifact" in /*.tgz) ;; *) echo 'Provide an absolute path to the reviewed npm tarball.' >&2; exit 1;; esac
+test -f "$artifact"
+node -e "if (Number(process.versions.node.split('.')[0]) < 22) process.exit(1)"
+mkdir -p -- "$destination"
+npm install --prefix "$destination" --ignore-scripts --omit=optional --no-audit --no-fund -- "$artifact"
+node --input-type=module - "$destination" <<'NODE'
+import {resolve} from 'node:path';
+import {access} from 'node:fs/promises';
+const bridge=resolve(process.argv[2],'node_modules/k-tax-agent-backend/scripts/hermes-mcp-bridge.mjs');
+await access(bridge);
+console.log(JSON.stringify({mcpServers:{'taxlab-legal':{command:'node',args:[bridge],env:{TAXLAB_SERVER_URL:'https://law.taxlab.kr',TAXLAB_API_KEY:'<your existing server key>'}}}},null,2));
+console.log('Add this entry to your MCP client. Existing configurations have not been overwritten.');
+console.log('Set the key in your client environment, then run the installed bridge with --doctor.');
+NODE

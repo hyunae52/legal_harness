@@ -1,50 +1,19 @@
-# TaxLab Legal Harness 1-Click MCP Installer for Windows
-# Run: irm https://raw.githubusercontent.com/hyunae52/legal_harness/main/scripts/install-mcp.ps1 | iex
-
-Write-Host "🚀 [TaxLab] Installing K-Tax Legal MCP Harness for Windows..." -ForegroundColor Cyan
-
-$InstallDir = "$HOME\.taxlab"
-if (!(Test-Path $InstallDir)) {
-    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-}
-
-$BridgePath = "$InstallDir\hermes-mcp-bridge.mjs"
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/hyunae52/legal_harness/main/scripts/hermes-mcp-bridge.mjs" -OutFile $BridgePath
-
-$ClaudeConfig = "$env:APPDATA\Claude\claude_desktop_config.json"
-$ClaudeDir = Split-Path $ClaudeConfig
-
-if (Test-Path $ClaudeDir) {
-    Write-Host "📦 Found Claude Desktop configuration: $ClaudeConfig" -ForegroundColor Yellow
-    $ConfigData = @{ mcpServers = @{} }
-    if (Test-Path $ClaudeConfig) {
-        try {
-            $Raw = Get-Content $ClaudeConfig -Raw -Encoding UTF8
-            if ($Raw.Trim()) { $ConfigData = $Raw | ConvertFrom-Json }
-        } catch {}
-    }
-    if (!$ConfigData.mcpServers) {
-        $ConfigData | Add-Member -MemberType NoteProperty -Name "mcpServers" -Value @{} -Force
-    }
-
-    $BridgeEscaped = $BridgePath.Replace("\", "/")
-    $ConfigData.mcpServers | Add-Member -MemberType NoteProperty -Name "taxlab-legal" -Value @{
-        command = "node"
-        args = @($BridgeEscaped)
-        env = @{
-            TAXLAB_SERVER_URL = "http://136.67.179.84:3000"
-            TAXLAB_API_KEY = "taxlab_partner_2026"
-        }
-    } -Force
-
-    $ConfigData | ConvertTo-Json -Depth 10 | Set-Content $ClaudeConfig -Encoding UTF8
-    Write-Host "✅ Successfully injected taxlab-legal into Claude Desktop config!" -ForegroundColor Green
-}
-
-Write-Host ""
-Write-Host "=================================================================" -ForegroundColor Cyan
-Write-Host "🎉 TaxLab Legal MCP Bridge Installed: $BridgePath" -ForegroundColor Green
-Write-Host "👉 For custom agent harnesses (Orca, Codex, Gemini):"
-Write-Host "   Command: node $BridgePath"
-Write-Host "   Or SSE URL: http://136.67.179.84:3000/sse?apiKey=taxlab_partner_2026"
-Write-Host "=================================================================" -ForegroundColor Cyan
+# Install a reviewed, locally downloaded npm tarball, including dependencies.
+# Example: .\scripts\install-mcp.ps1 -Package C:\Downloads\k-tax-agent-backend-2.2.0.tgz
+param([Parameter(Mandatory=$true)][string]$Package,
+      [string]$Destination = (Join-Path $env:USERPROFILE '.taxlab\legal-mcp'))
+$ErrorActionPreference = 'Stop'
+$artifact = (Resolve-Path -LiteralPath $Package).Path
+if (-not $artifact.EndsWith('.tgz')) { throw 'Select the reviewed npm .tgz artifact.' }
+node -e "if (Number(process.versions.node.split('.')[0]) < 22) process.exit(1)"
+if ($LASTEXITCODE -ne 0) { throw 'Node.js 22 or later is required.' }
+New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+& npm install --prefix $Destination --ignore-scripts --omit=optional --no-audit --no-fund -- $artifact
+if ($LASTEXITCODE -ne 0) { throw 'Package installation failed.' }
+$bridge = Join-Path $Destination 'node_modules\k-tax-agent-backend\scripts\hermes-mcp-bridge.mjs'
+if (-not (Test-Path -LiteralPath $bridge)) { throw 'Installed bridge is missing.' }
+@{mcpServers=@{'taxlab-legal'=@{command='node';args=@($bridge);env=@{
+    TAXLAB_SERVER_URL='https://law.taxlab.kr';TAXLAB_API_KEY='<your existing server key>'
+}}}} | ConvertTo-Json -Depth 8
+Write-Host 'Add this entry to your MCP client. Existing configurations have not been overwritten.'
+Write-Host 'Set the key in your client environment, then run the installed bridge with --doctor.'

@@ -1,0 +1,65 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {readFileSync} from 'node:fs';
+import {randomUUID} from 'node:crypto';
+import {PGlite} from '@electric-sql/pglite';
+import {createFailureService,FailureSchema} from '../dist/failures.js';
+import {digest} from '../dist/contracts.js';
+const alice='00000000-0000-4000-8000-000000000001',bob='00000000-0000-4000-8000-000000000002';
+const payload={case_id:'FC-09',category:'validation',expected:'needs_info',actual:'passed'};
+test('migration preserves legacy data, atomically queues submissions and fences retry ownership',async t=>{
+  const db=new PGlite();t.after(()=>db.close());
+  await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;
+    create schema auth;create table auth.users(id uuid primary key,raw_user_meta_data jsonb default '{}');
+    create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+    grant usage on schema public,auth to anon,authenticated,service_role;grant execute on function auth.uid() to authenticated;`);
+  await db.exec(readFileSync(new URL('../supabase/migrations/202609140001_profiles_evolution_logs.sql',import.meta.url),'utf8'));
+  await db.query('insert into auth.users(id) values($1),($2)',[alice,bob]);
+  await db.query("insert into public.evolution_logs(proposer_id,issue_summary,rule_content,correction_prompt,pr_url) values($1,'legacy','legacy','legacy','https://example.invalid/1')",[alice]);
+  await db.exec(readFileSync(new URL('../supabase/migrations/202609190001_durable_failures.sql',import.meta.url),'utf8'));
+  const asRole=(role,user,sql,args=[])=>db.transaction(async tx=>{await tx.exec(`set local role ${role}`);await tx.query("select set_config('request.jwt.claim.sub',$1,true)",[user]);return tx.query(sql,args);});
+  const rpc=async(kind,who,id=randomUUID(),hash=digest(payload),p=payload)=>(await asRole('service_role','','select public.harness_submit_failure($1,$2,$3,$4,$5) result',[kind,who,id,hash,p])).rows[0].result;
+  const keyId=randomUUID(),first=await rpc('api_client','partner',keyId);
+  assert.equal(first.status,'queued');assert.equal(first.duplicate,false);
+  assert.equal((await rpc('api_client','partner',keyId)).receipt_id,first.receipt_id);
+  await assert.rejects(rpc('api_client','partner',keyId,'a'.repeat(64)),/IDEMPOTENCY_CONFLICT/);
+  assert.equal((await db.query('select count(*)::int n from public.harness_jobs')).rows[0].n,1);
+  assert.equal((await db.query('select count(*)::int n from public.harness_outbox')).rows[0].n,1);
+  const own=await rpc('auth_user',alice);
+  assert.equal((await asRole('authenticated',alice,'select * from public.harness_failures')).rows.length,1);
+  assert.equal((await asRole('authenticated',bob,'select * from public.harness_failures')).rows.length,0);
+  assert.equal((await asRole('authenticated',alice,'select * from public.evolution_logs')).rows.length,1);
+  await assert.rejects(asRole('authenticated',alice,"insert into public.evolution_logs(proposer_id,issue_summary,rule_content,correction_prompt,pr_url) values($1,'x','x','x','https://example.invalid')",[alice]));
+  await assert.rejects(asRole('authenticated',alice,'select public.harness_submit_failure($1,$2,$3,$4,$5)',['auth_user',bob,randomUUID(),digest(payload),payload]));
+  await assert.rejects(asRole('anon','','select * from public.harness_failures'));
+  const wrong=(await asRole('service_role','','select public.harness_failure_status($1,$2,$3) value',['auth_user',bob,own.receipt_id])).rows[0].value;assert.equal(wrong,null);
+  await db.exec("create function public.test_outbox_failure() returns trigger language plpgsql as $$begin raise exception 'fixture fail';end$$;create trigger fixture_fail before insert on public.harness_outbox for each row execute function public.test_outbox_failure();");
+  const before=(await db.query('select count(*)::int n from public.harness_failures')).rows[0].n;
+  await assert.rejects(rpc('auth_user',bob),/fixture fail/);
+  assert.equal((await db.query('select count(*)::int n from public.harness_failures')).rows[0].n,before);
+  await db.exec('drop trigger fixture_fail on public.harness_outbox;drop function public.test_outbox_failure();');
+  const owner=randomUUID(),nextOwner=randomUUID();
+  const claim=async id=>(await asRole('service_role','','select public.harness_claim_job($1) value',[id])).rows[0].value;
+  const job=await claim(owner);assert.equal(job.attempt,1);assert.equal(await claim(nextOwner),null);
+  await db.query("update public.harness_jobs set lease_until=now()-interval '1 second' where id=$1",[job.id]);
+  const reclaimed=await claim(nextOwner);assert.equal(reclaimed.fence,job.fence+1);assert.equal(reclaimed.attempt,2);
+  const finish=async(w,f,state)=>(await asRole('service_role','','select public.harness_finish_attempt($1,$2,$3,$4,$5) ok',[job.id,w,f,state,{}])).rows[0].ok;
+  assert.equal(await finish(owner,job.fence,'waiting_dependency'),false);
+  await assert.rejects(finish(nextOwner,reclaimed.fence,'ready_for_human'),/PROMOTION_REQUIRES_TRUSTED_EVIDENCE/);
+  assert.equal(await finish(nextOwner,reclaimed.fence,'waiting_dependency'),true);
+});
+test('intake validates public payload and verified identity before any DB call',async()=>{
+  let calls=0,args;
+  const service=createFailureService({rpc:async(n,a)=>{calls++;args=a;return {data:{receipt_id:alice,job_id:bob,status:'queued',duplicate:false},error:null};}});
+  await service.submit({id:'api:partner',kind:'api_client'},{...payload,request_id:randomUUID()});
+  assert.equal(args.p_subject,'partner');
+  await assert.rejects(service.submit({id:'api:attacker',kind:'api_client'},{...payload,request_id:randomUUID()}));
+  await assert.rejects(service.submit({id:'api:partner',kind:'api_client'},{...payload,request_id:randomUUID(),issue_summary:'private canary'}));
+  assert.equal(calls,1);assert.throws(()=>FailureSchema.parse({...payload,request_id:randomUUID(),case_id:'private-person'}));
+});
+test('Supabase returned errors and thrown errors never become queued receipts',async()=>{
+  for(const [error,status] of [[{code:'42501'},503],[{code:'23505'},409],[{code:'54000'},429]]) {
+    const service=createFailureService({rpc:async()=>({data:null,error})});
+    await assert.rejects(service.submit({id:'api:partner',kind:'api_client'},{...payload,request_id:randomUUID()}),e=>e.status===status);
+  }
+});

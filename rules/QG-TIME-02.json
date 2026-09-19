@@ -1,0 +1,17 @@
+{
+  "id": "QG-TIME-02",
+  "case_id": "FC-07",
+  "name": "예규 시점",
+  "cues": [
+    "예규",
+    "해석례"
+  ],
+  "required_facts": [
+    "document_id",
+    "document_date",
+    "applicable_version"
+  ],
+  "guidance": "발행 당시 조문과 사건 적용 조문·부칙·후속 해석을 확인하세요.",
+  "legal_status": "research_required",
+  "version": 1
+}

@@ -1,0 +1,17 @@
+{
+  "id": "QG-PRECEDENT-03",
+  "case_id": "FC-05",
+  "name": "상속재산 분할 정산",
+  "cues": [
+    "상속재산",
+    "대상분할"
+  ],
+  "required_facts": [
+    "settlement_funding",
+    "inheritance_date",
+    "partition_terms"
+  ],
+  "guidance": "정산금 재원과 관련 해석·판결을 확인하세요.",
+  "legal_status": "research_required",
+  "version": 1
+}

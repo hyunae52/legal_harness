@@ -1,0 +1,7 @@
+# Point the proxied DNS record to the actual tunnel UUID; do not commit credentials.
+tunnel: REPLACE_WITH_VERIFIED_TUNNEL_UUID
+credentials-file: /etc/cloudflared/legal-harness-credentials.json
+ingress:
+  - hostname: law.taxlab.kr
+    service: http://127.0.0.1:3000
+  - service: http_status:404
