@@ -9,7 +9,7 @@
   },
   "type": "module",
   "engines": { "node": ">=22" },
-  "files": ["dist", "rules", "scripts/hermes-mcp-bridge.mjs", "LICENSE", "README.md"],
+  "files": ["dist", "rules", "scripts/hermes-mcp-bridge.mjs", "npm-shrinkwrap.json", "LICENSE", "README.md"],
   "scripts": {
     "build": "tsc",
     "review": "tsc && node --test --test-concurrency=1 tests/*.test.mjs",

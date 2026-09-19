@@ -10,8 +10,11 @@ export function stableJson(value: unknown): string {
 export class ServiceError extends Error {
   constructor(public readonly status: number, public readonly code: string) { super(code); }
 }
+// Validate nonblank content without normalizing it: receipts bind the exact
+// submitted draft, including Markdown whitespace and line breaks.
+const DraftText=z.string().min(1).max(50_000).refine(s=>s.trim().length>0,'Draft must not be blank');
 export const DraftSchema = z.object({
-  draft_answer: z.string().trim().min(1).max(50_000),
+  draft_answer: DraftText,
   query: z.string().max(20_000).optional(),
   facts: z.record(z.unknown()).default({}),
   skip_gates: z.array(z.string().max(80)).max(10).default([]),
@@ -26,7 +29,7 @@ export const AnalyzeSchema = z.object({
   query: z.string().trim().min(1).max(20_000),
   tool: z.string().regex(/^[a-zA-Z0-9_-]+$/).max(128).default('legal_research'),
   arguments: z.record(z.unknown()).default({}),
-  draft_answer: z.string().trim().min(1).max(50_000).optional(),
+  draft_answer: DraftText.optional(),
   facts: z.record(z.unknown()).default({}),
   skip_gates: z.array(z.string().max(80)).max(10).default([]),
   bypass_reason: z.string().trim().min(1).max(500).optional(),

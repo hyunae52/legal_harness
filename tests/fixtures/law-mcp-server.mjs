@@ -6,6 +6,8 @@ import { CallToolRequestSchema, ListToolsRequestSchema, McpError, ErrorCode } fr
 if (process.argv.includes('--hang-start')) {
   setInterval(() => {}, 1000);
 } else {
+  const startDelay=process.argv.find(a=>a.startsWith('--start-delay='));
+  if(startDelay)await new Promise(r=>setTimeout(r,Number(startDelay.split('=')[1])));
   const server = new Server({ name: 'law-fixture', version: '1.0.0' }, { capabilities: { tools: {} } });
   let lists = 0;
   let calls = 0;
@@ -25,6 +27,7 @@ if (process.argv.includes('--hang-start')) {
     if (args.query === '__invalid__') throw new McpError(ErrorCode.InvalidParams, 'Fixture invalid args');
     if (args.query === '__error__') return { isError: true, content: [{ type: 'text', text: 'Fixture upstream failure' }] };
     if (args.query === '__slow__') await new Promise(resolve => setTimeout(resolve, 250));
+    if (args.query === '__budget_slow__') await new Promise(resolve => setTimeout(resolve, 1500));
     return {
       content: [{ type: 'text', text: '법령 조회 fixture' }, {
         type: 'resource_link', name: '소득세법 fixture', uri: 'https://www.law.go.kr/법령/소득세법',

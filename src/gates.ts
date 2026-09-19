@@ -47,7 +47,8 @@ export class GateEngine {
       arithmeticChecks.push({ id: 'ARITH-SUM-01', status: sum === BigInt(parsed.total) ? 'pass' : 'fail', scope: 'caller_supplied_arithmetic', reason: 'Sum of submitted allocations compared with submitted total; not a legal allocation ruling.' });
     }
     const all = [...checks, ...arithmeticChecks];
-    const bypassed = draft.force || draft.mode === 'warn' || draft.skip_gates.length > 0;
+    const blockingBypass = draft.force || draft.mode === 'warn';
+    const bypassed = blockingBypass || draft.skip_gates.length > 0;
     const complete = all.length > 0 && all.every(c => ['pass', 'fail', 'not_applicable'].includes(c.status));
     const scopedPass = complete && !bypassed && all.every(c => c.status !== 'fail');
     return { receipt_id: randomUUID(), checked_at: new Date().toISOString(), draft_hash: digest(draft.draft_answer), facts_hash: digest(draft.facts),
@@ -55,7 +56,7 @@ export class GateEngine {
       checks: all, coverage: all.length ? 'limited' : 'no_coverage', assessment_complete: complete,
       scoped_pass: scopedPass, passed: false, // Legacy field never certifies an unassessed legal answer.
       legal_verification: 'unverified', draft_facts_agreement: 'unverified',
-      blocked: !bypassed && all.some(c => c.status === 'fail'),
+      blocked: !blockingBypass && all.some(c => c.status === 'fail'),
       bypass: { requested: bypassed, skipped: draft.skip_gates, reason: draft.bypass_reason ?? null },
       message: '제출한 사실·산식과 확인 범위에 대한 결과입니다. 법률 결론과 초안 전체가 검증된 것은 아닙니다.' };
   }

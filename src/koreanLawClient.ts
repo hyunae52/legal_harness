@@ -135,17 +135,23 @@ export class KoreanLawClient {
       throw new LawMcpError(429, "MCP_AT_CAPACITY", "Legal retrieval is at capacity. Please retry later.");
     }
     this.activeCalls++;
+    const deadline = Date.now() + this.options.requestTimeoutMs;
+    let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+    const expired = new Promise<never>((_resolve, reject) => {
+      deadlineTimer = setTimeout(() => reject(new McpError(ErrorCode.RequestTimeout, 'Legal retrieval deadline exceeded')), this.options.requestTimeoutMs);
+    });
     let connection: Connection | undefined;
     try {
-      connection = await this.getConnection();
+      connection = await Promise.race([this.getConnection(), expired]);
       if (!connection.tools.some(tool => tool.name === name)) {
         throw new LawMcpError(400, "MCP_UNKNOWN_TOOL", "Tool is not advertised by korean-law-mcp. See /api/tools.");
       }
-      const response = await connection.client.callTool({ name, arguments: args }, CallToolResultSchema, {
-        timeout: this.options.requestTimeoutMs,
-        maxTotalTimeout: this.options.requestTimeoutMs,
+      const remaining = Math.max(1, deadline - Date.now());
+      const response = await Promise.race([connection.client.callTool({ name, arguments: args }, CallToolResultSchema, {
+        timeout: remaining,
+        maxTotalTimeout: remaining,
         resetTimeoutOnProgress: false,
-      });
+      }), expired]);
       const result = CallToolResultSchema.parse(response);
       if (result.isError) {
         throw new LawMcpError(502, "MCP_TOOL_ERROR", "korean-law-mcp reported a tool failure.", result);
@@ -165,12 +171,14 @@ export class KoreanLawClient {
       }
       // A timed-out child may still be doing network work. Retire the process
       // before permitting a fresh connection; never automatically replay calls.
-      if (connection) await this.retire(connection);
+      const retiring = connection ?? this.connection;
+      if (retiring) await this.retire(retiring);
       if (error instanceof McpError && error.code === ErrorCode.RequestTimeout) {
         throw new LawMcpError(504, "MCP_TIMEOUT", "Legal retrieval timed out; the MCP process was reset.");
       }
       throw new LawMcpError(502, "MCP_CONNECTION_ERROR", "The legal MCP connection failed. A new request can reconnect.");
     } finally {
+      clearTimeout(deadlineTimer);
       this.activeCalls--;
     }
   }
@@ -183,7 +191,8 @@ export class KoreanLawClient {
   }
 }
 
-const TimeoutSchema = z.coerce.number().int().min(100).max(120_000);
+const ConnectTimeoutSchema = z.coerce.number().int().min(100).max(10_000);
+const RequestTimeoutSchema = z.coerce.number().int().min(100).max(45_000);
 
 export const McpReleaseSchema = z.object({
   version: z.string().regex(/^\d+\.\d+\.\d+$/),
@@ -222,8 +231,8 @@ export function koreanLawOptionsFromEnv(env: NodeJS.ProcessEnv = process.env): L
       // Avoid loading the application's .env in the child process.
       cwd: env.KOREAN_LAW_MCP_CWD || dirname(entrypoint),
     },
-    connectTimeoutMs: TimeoutSchema.parse(env.KOREAN_LAW_MCP_CONNECT_TIMEOUT_MS || 10_000),
-    requestTimeoutMs: TimeoutSchema.parse(env.KOREAN_LAW_MCP_TIMEOUT_MS || 45_000),
+    connectTimeoutMs: ConnectTimeoutSchema.parse(env.KOREAN_LAW_MCP_CONNECT_TIMEOUT_MS || 10_000),
+    requestTimeoutMs: RequestTimeoutSchema.parse(env.KOREAN_LAW_MCP_TIMEOUT_MS || 45_000),
     maxConcurrentCalls: 3,
     releaseVersion: release?.version,
   };

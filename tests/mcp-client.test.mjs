@@ -46,12 +46,23 @@ test('tool errors and invalid arguments remain failures without breaking a healt
 
 test('tool timeout retires the old child and the next request reconnects', async t => {
   const client = fixture(t, { requestTimeoutMs: 100 });
+  await client.listTools();
   const first = await client.callTool('search_law', { query: 'ok' });
   const oldPid = first.result.structuredContent.pid;
   await assert.rejects(client.callTool('search_law', { query: '__hang__' }), error => error.status === 504);
   assert.throws(() => process.kill(oldPid, 0), { code: 'ESRCH' });
+  await client.listTools();
   const next = await client.callTool('search_law', { query: 'ok' });
   assert.notEqual(next.result.structuredContent.pid, oldPid);
+});
+test('cold child connection consumes the total retrieval budget; warm calls retain the remaining budget',async t=>{
+  const options=koreanLawOptionsFromEnv({LAW_OC:'fixture',KOREAN_LAW_MCP_COMMAND:process.execPath,KOREAN_LAW_MCP_ARGS:JSON.stringify([fixturePath,'--start-delay=600'])});
+  const client=fixture(t,{...options,requestTimeoutMs:2000,connectTimeoutMs:2000});
+  const started=Date.now();
+  await assert.rejects(client.callTool('search_law',{query:'__budget_slow__'}),e=>e.code==='MCP_TIMEOUT');
+  assert.ok(Date.now()-started<6500,'slot includes bounded child cleanup');
+  await client.listTools();assert.equal((await client.callTool('search_law',{query:'__budget_slow__'})).kind,'retrieval');
+  assert.throws(()=>koreanLawOptionsFromEnv({KOREAN_LAW_MCP_TIMEOUT_MS:'45001'}));
 });
 
 test('a crashed child is reported as failure and does not poison later requests', async t => {

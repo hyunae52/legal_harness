@@ -9,6 +9,7 @@ import { GateEngine } from './gates.js';
 import { createAuthenticator } from './auth.js';
 import { retrievalEnvelope } from './evidence.js';
 import { type SourceVerifier } from './sourceVerifier.js';
+import { safeToolDiagnostic } from './errorDiagnostics.js';
 
 interface Options {
   law: Pick<KoreanLawClient, 'listTools' | 'callTool' | 'close' | 'releaseVersion'>;
@@ -40,6 +41,7 @@ export function createApp(options: Options) {
   };
   const errorBody = (error: unknown) => {
     if (error instanceof z.ZodError) return { status: 400, body: { code: 'INVALID_INPUT', fields: error.issues.map(i => i.path.join('.')) } };
+    if (error instanceof LawMcpError && error.code==='MCP_TOOL_ERROR' && error.result) return {status:error.status,body:{code:error.code,result:safeToolDiagnostic(error.result,env)}};
     if (error instanceof ServiceError || error instanceof LawMcpError) return { status: error.status, body: { code: error.code } };
     return { status: 500, body: { code: 'INTERNAL_ERROR' } };
   };
@@ -127,7 +129,10 @@ export function createApp(options: Options) {
           const data = await retrieve(name, args);
           return { ...data.result, _meta: { ...data.result._meta, 'legal-harness/evidence': data.evidence } };
         });
-      } catch (error) { return { isError: true, content: [{ type: 'text', text: JSON.stringify(errorBody(error).body) }] }; }
+      } catch (error) {
+        if(error instanceof LawMcpError && error.code==='MCP_TOOL_ERROR' && error.result)return {...safeToolDiagnostic(error.result,env),_meta:{'legal-harness/error':error.code}};
+        return { isError: true, content: [{ type: 'text', text: JSON.stringify(errorBody(error).body) }] };
+      }
     });
     return server;
   }
