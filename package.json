@@ -3,6 +3,10 @@
   "version": "2.0.0",
   "description": "Production Backend for K-Tax Agent (GCE + Supabase + Express)",
   "main": "dist/index.js",
+  "bin": {
+    "k-tax-agent-backend": "./scripts/hermes-mcp-bridge.mjs",
+    "taxlab-legal": "./scripts/hermes-mcp-bridge.mjs"
+  },
   "type": "module",
   "scripts": {
     "build": "tsc",
