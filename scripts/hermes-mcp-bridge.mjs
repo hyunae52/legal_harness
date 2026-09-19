@@ -5,7 +5,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
-const SERVER_URL = process.env.TAXLAB_SERVER_URL || "https://law.taxlab.kr";
+const SERVER_URL = process.env.TAXLAB_SERVER_URL || "http://136.67.179.84:3000";
 const API_KEY = process.env.TAXLAB_API_KEY || "taxlab_partner_2026";
 
 async function main() {
