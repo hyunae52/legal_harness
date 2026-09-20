@@ -123,6 +123,8 @@ MCP `submit_failure` 또는 `POST /api/failures`는 공개 합성 사례 식별�
 
 ## upstream 업데이트와 배포
 
+국세청 해석례·불복 결정례의 본문 수집은 별도 zisu17/korean-taxlaw-mcp 제공자를 연결할 수 있습니다. 서버에서 `python3 scripts/install-taxlaw-mcp.py`로 검토한 커밋을 설치하면 기존 인증 REST/MCP에 국세청·지방세 도구 12개가 추가됩니다. 설치·본문 조회·오류 계약·실제 문서 시험은 [국세청 연결 안내](docs/TAXLAW_INTEGRATION.md), OpenTax와 korean-tax-agent를 검토한 후속 구조 제안은 [리서치 하네스 참고 검토](docs/RESEARCH_HARNESS_REFERENCES.md)에 있습니다.
+
 서버에서만 `KOREAN_LAW_MCP_RELEASE_FILE`을 설정하고 최초에 `bash scripts/update-korean-law.sh --bootstrap`으로 별도 설치본을 준비합니다. [cron 예시](deploy/korean-law-update.cron.example)를 설정하면 새 버전은 설치·review·MCP schema 확인을 거친 **후보**로 남습니다. cron은 운영 프로세스를 재시작하거나 후보를 활성화하지 않습니다.
 
 사람이 후보 fingerprint를 포함한 검수 묶음을 승인한 후에만 `bash scripts/update-korean-law.sh --activate <approved-sha256>`를 실행합니다. 활성화 전 설치 파일 전체와 lock을 다시 hash하고 재검증합니다. 실패 시 이전 버전으로 복원하며 복원도 실패하면 journal을 보존하고 운영자의 복구가 필요합니다. 첫 bootstrap과 수동 활성화는 운영자 명령이며 자동 사람 승인 확인 기능을 대체하지 않습니다.
