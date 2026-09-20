@@ -141,7 +141,7 @@ export class CorrectionService {
       if (record.confirmation_token !== data.confirmation_token || record.proposal_hash !== data.proposal_hash || consentDigest(record) !== data.proposal_hash) throw new ServiceError(409, 'CORRECTION_CONFIRMATION_MISMATCH');
       if (record.pr) return { proposal_id: record.id, state: 'already_published', pr_url: record.pr.url, message: '이미 생성한 PR입니다. get_correction_pr로 현재 검수·머지 상태를 확인하세요.' };
       this.writableTarget(record);
-      if (record.state === 'publication_blocked') return { proposal_id: record.id, state: record.state, error_code: record.blocked_reason };
+      if (record.state === 'publication_blocked' && record.blocked_reason !== 'CORRECTION_ALREADY_CLOSED') return { proposal_id: record.id, state: record.state, error_code: record.blocked_reason };
       if (record.state === 'awaiting_confirmation' && Date.parse(record.expires_at) < this.now()) throw new ServiceError(410, 'CORRECTION_EXPIRED');
       if (!record.base_sha) record.base_sha = z.string().regex(/^[a-f0-9]{40}$/).parse(await this.options.repository.base());
       record.state = 'publishing'; this.save(record); // persist intent before any GitHub write
@@ -151,12 +151,12 @@ export class CorrectionService {
         return { proposal_id: record.id, state: 'pending_review', pr_url: record.pr.url,
           message: '교정 자료 draft PR을 생성했습니다. 별도 AI 검수·사람 검수 전이며 자동 머지하거나 법적 정답으로 적용하지 않습니다.' };
       } catch (error) {
-        if (error instanceof ServiceError && error.status === 409) {
+        if (error instanceof ServiceError && error.status === 409 && error.code !== 'CORRECTION_ALREADY_CLOSED') {
           record.state = 'publication_blocked'; record.blocked_reason = error.code; this.save(record);
           return { proposal_id: record.id, state: record.state, error_code: record.blocked_reason,
             message: '경로 충돌 또는 변경 범위 불일치로 게시를 중단했습니다. 기존 자료를 덮어쓰거나 자동 재시도하지 않습니다. 새 제안이 필요하면 내용을 보여주고 새 동의를 받으세요.' };
         }
-        record.state = 'publication_uncertain'; this.save(record);
+        record.state = 'publication_uncertain'; delete record.blocked_reason; this.save(record);
         return { proposal_id: record.id, state: 'publication_uncertain', message: 'GitHub 게시 결과를 확인하지 못했습니다. 새 제안을 만들지 말고 get_correction_pr로 이 제안의 상태를 확인하세요.' };
       }
     });
@@ -166,7 +166,9 @@ export class CorrectionService {
       const record = this.owned(actor, id);
       if (!this.readableTarget(record)) return { proposal_id: id, state: 'target_unavailable', pr_url: record.pr?.url,
         message: '기존 동의 대상과 현재 저장소 설정이 일치하지 않거나 구형 제안에 대상 정보가 없습니다. 게시를 재개하지 않습니다.' };
-      if (record.state === 'publication_blocked') return { proposal_id: id, state: record.state, error_code: record.blocked_reason };
+      // Older releases incorrectly blocked ended PRs whose creation response was lost.
+      // Keep those records reconcilable; real path/content/scope conflicts stay blocked.
+      if (record.state === 'publication_blocked' && record.blocked_reason !== 'CORRECTION_ALREADY_CLOSED') return { proposal_id: id, state: record.state, error_code: record.blocked_reason };
       if (record.state === 'awaiting_confirmation') return { proposal_id: id, state: record.state, expires_at: record.expires_at };
       try {
         const state = await this.options.repository.inspect(record);

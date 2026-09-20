@@ -16,9 +16,9 @@ const baseSha='a'.repeat(40),headSha='b'.repeat(40);
 const blobSha=content=>createHash('sha1').update(`blob ${Buffer.byteLength(content)}\0`).update(content).digest('hex');
 const input=()=>({request_id:randomUUID(),title:'공식 출처의 기준일 구분',previous_claim:'공포일과 시행일을 같은 것으로 보았다.',correction:'두 날짜를 각각 확인해야 한다.',why:'공식 원문에 구분된 항목을 확인했다.',sources:[{url:'https://www.law.go.kr/법령/근로기준법',title:'국가법령정보센터',supporting_excerpt:'시행일과 공포일이 별도 표시된다.'}],keywords:['시행일'],next_checks:['사건 기준일과 시행일을 대조한다.'],public_safe:true});
 async function fixture(t,{loseResponse=false,loseRefResponse=false,baseConflict=false,now}={}) {
-  const state={ref:false,pr:false,merged:false,altered:false,extraFile:false,posts:[],unexpected:[],content:'',lawCalls:[]};
+  const state={ref:false,pr:false,merged:false,closed:false,altered:false,extraFile:false,posts:[],unexpected:[],content:'',lawCalls:[]};
   let currentId;
-  const pr=()=>({number:7,html_url:'https://github.com/fixture/legal/pull/7',state:state.merged?'closed':'open',merged:state.merged,draft:!state.merged,
+  const pr=()=>({number:7,html_url:'https://github.com/fixture/legal/pull/7',state:state.merged||state.closed?'closed':'open',merged:state.merged,draft:!state.merged,
     base:{ref:'main'},head:{sha:headSha,ref:'correction/'+currentId,repo:{full_name:'fixture/legal'}}});
   const github=createServer(async(req,res)=>{
     try {
@@ -60,8 +60,31 @@ async function fixture(t,{loseResponse=false,loseRefResponse=false,baseConflict=
   const server=createServer(runtime.app);await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(async()=>{await runtime.close();server.closeAllConnections();await new Promise(r=>server.close(r));});
   const origin='http://127.0.0.1:'+server.address().port;
   const post=async(path,body,key='fixture-key')=>{const res=await fetch(origin+path,{method:'POST',headers:{'content-type':'application/json',...(key?{authorization:'Bearer '+key}:{})},body:JSON.stringify(body)});return {status:res.status,body:await res.json()};};
-  return {state,corrections,post,origin};
+  return {state,corrections,repository,post,origin};
 }
+
+for(const ended of ['closed','merged']) for(const legacyBlocked of [false,true]) test(`CP-16: ${ended} PR after response loss remains recoverable across restart${legacyBlocked?' from a previously blocked record':''}`,async t=>{
+  const f=await fixture(t,{loseResponse:true});const p=(await f.post('/api/corrections/prepare',input())).body;
+  const yes={proposal_id:p.proposal_id,proposal_hash:p.proposal_hash,confirmation_token:p.confirmation_token,confirm:true};
+  assert.equal((await f.post('/api/corrections/create',yes)).body.state,'publication_uncertain');
+  f.state[ended]=true;const writes=f.state.posts.length;
+  const path=join(f.corrections.directory,p.proposal_id+'.json');const record=JSON.parse(await readFile(path,'utf8'));
+  if(legacyBlocked){
+    record.state='publication_blocked';record.blocked_reason='CORRECTION_ALREADY_CLOSED';await writeFile(path,JSON.stringify(record));
+    assert.equal((await f.post('/api/corrections/create',yes)).body.state,'publication_uncertain','legacy retry must also stay reconcilable');
+    await writeFile(path,JSON.stringify(record)); // Also exercise read-only recovery from the original persisted bad state.
+  }
+  else assert.equal((await f.post('/api/corrections/create',yes)).body.state,'publication_uncertain','an existing ended PR must remain reconcilable');
+  await f.corrections.close();const restarted=new CorrectionService({directory:f.corrections.directory,repository:f.repository});t.after(()=>restarted.close());
+  const actor={id:record.actor,kind:'api_key'};
+  const status=await restarted.status(actor,p.proposal_id);
+  assert.equal(status.state,ended);assert.equal(status.pr_url,'https://github.com/fixture/legal/pull/7');
+  assert.equal(status.retry,undefined);assert.equal(f.state.posts.length,writes,'reconciliation must perform no new GitHub write');
+  const recovered=JSON.parse(await readFile(path,'utf8'));assert.equal(recovered.state,'published');assert.equal(recovered.pr.number,7);
+  assert.equal((await restarted.confirm(actor,yes)).state,'already_published');
+  await restarted.refresh();assert.equal(restarted.search('시행일').items.length,ended==='merged'?1:0);
+  assert.equal(f.state.posts.filter(p=>p.path==='/pulls').length,1);
+});
 test('CP-01/04/05/06: real Octokit HTTP adapter creates one JSON-only draft, reconciles lost response and verifies merge/main contents',async t=>{
   const f=await fixture(t,{loseResponse:true});const request=input();
   assert.equal((await f.post('/api/corrections/prepare',request,null)).status,401);
