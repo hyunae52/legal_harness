@@ -1,0 +1,137 @@
+{
+  "started_at": "2026-09-20T05:05:29.498Z",
+  "law_tool_calls": 0,
+  "checks": [
+    {
+      "name": "wrong_manifest_digest",
+      "status": "rejected"
+    },
+    {
+      "name": "altered_artifact",
+      "status": "rejected",
+      "reason": "ARTIFACT_MISMATCH"
+    },
+    {
+      "name": "runtime_hash",
+      "status": "rejected",
+      "reason": "RUNTIME_FILE_MISMATCH"
+    },
+    {
+      "name": "changed_config",
+      "status": "rejected",
+      "reason": "CONFIGURATION_MISMATCH"
+    }
+  ],
+  "linux_doctor_before": {
+    "status": "ok",
+    "origin": "http://127.0.0.1:3100",
+    "tools": 14
+  },
+  "linux_doctor_after": {
+    "status": "ok",
+    "origin": "http://127.0.0.1:3100",
+    "tools": 14
+  },
+  "restart": {
+    "before": 54861,
+    "after": 55485,
+    "prior_children": [
+      55202
+    ],
+    "lingering": [],
+    "health": {
+      "status": "ok",
+      "version": "2.2.0",
+      "active_requests": 0,
+      "mcp_release": "4.13.0",
+      "rules_version": "934db2b435cd1a4bd6c0a8d470930029433af7b9ede8f080ebfea383461050f7",
+      "maintenance": "unavailable"
+    }
+  },
+  "maintenance_statuses": [
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503,
+    503
+  ],
+  "identity": {
+    "status": "staged_identity_verified",
+    "manifest_sha256": "edc4ce73ddd0623a0aed77921c70d6bde8b12e2d985c386dcf9d2941a94f8fd6",
+    "artifact_sha256": "72665b205984f213702bd36b5ebd5ce949fec7a0668dc5899aaeac45f440ae48",
+    "deployment_authorized": false
+  },
+  "production_processes_unchanged": {
+    "app": 11748,
+    "tunnel": 3705
+  },
+  "units": {
+    "legal-harness-a.service": {
+      "pid": 55485,
+      "restarts": 0,
+      "memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+    },
+    "legal-harness-maintenance.service": {
+      "pid": 54862,
+      "restarts": 0,
+      "memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+    },
+    "legal_harness.service": {
+      "pid": 11748,
+      "restarts": 0,
+      "memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+    },
+    "cloudflared.service": {
+      "pid": 3705,
+      "restarts": 0,
+      "memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+    }
+  },
+  "status": "pass",
+  "finished_at": "2026-09-20T05:05:33.801Z"
+}

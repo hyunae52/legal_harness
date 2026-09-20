@@ -1,0 +1,23 @@
+[Unit]
+Description=Legal Harness closed maintenance fallback
+After=network-online.target
+
+[Service]
+Type=simple
+User=cta
+Group=cta
+ExecStart=/usr/bin/node /home/cta/legal-harness-maintenance-20260920.mjs
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=15
+MemoryMax=64M
+MemorySwapMax=0
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadOnlyPaths=/home/cta/legal-harness-maintenance-20260920.mjs
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

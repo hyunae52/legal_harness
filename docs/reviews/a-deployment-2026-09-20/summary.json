@@ -1,0 +1,103 @@
+{
+  "status": "STAGED_REVIEW_PENDING",
+  "created_at": "2026-09-20T05:11:11.756751+00:00",
+  "source_build_head": "ddddafa9b7ebaefb98574a0c6e5a3669ab3fcd88",
+  "source_build_tree": "cff4ff2738596c22d6ff0e8a1e2e3e604bdccdd8",
+  "artifact_sha256": "72665b205984f213702bd36b5ebd5ce949fec7a0668dc5899aaeac45f440ae48",
+  "linux_ci": {
+    "run_id": 35489072150,
+    "attempt": 1,
+    "job_id": 106020707420,
+    "workflow_id": 362449564,
+    "event": "pull_request",
+    "checkout_head": "ddddafa9b7ebaefb98574a0c6e5a3669ab3fcd88",
+    "result": "success",
+    "tests": 68,
+    "package_tests": 6,
+    "skipped": 0,
+    "node": "22.23.2",
+    "npm": "10.9.8",
+    "ubuntu": "24.04.5",
+    "runner_image": "20260907.300.1",
+    "runner": "2.337.0",
+    "provider_log_sha256": "ae1a76631b5596841cb31fe82f3db5ce929541ea8d4a6b414f3ebeb038c447ec"
+  },
+  "gce": {
+    "account": "gncntodrkd@gmail.com",
+    "project": "project-fc97e503-d3b6-4b10-a9f",
+    "instance": "instance-20260918-213052",
+    "zone": "us-west1-b",
+    "ipv4": "136.67.179.84",
+    "ipv6": false,
+    "machine": "e2-micro",
+    "os": "Debian 13.7",
+    "kernel": "6.12.107+deb13-cloud-amd64",
+    "ram_bytes": 1011417088,
+    "disk_size_gb": 10,
+    "initial_disk_free_gb": 3.6,
+    "swap_gb": 2,
+    "existing_trial_credit_krw": 414880.24,
+    "existing_trial_days_left": 88,
+    "new_paid_resources": false
+  },
+  "dns": {
+    "state": "PENDING",
+    "parent_nameservers": [
+      "ns.gabia.co.kr",
+      "ns1.gabia.co.kr",
+      "ns.gabia.net",
+      "kai.ns.cloudflare.com",
+      "laila.ns.cloudflare.com"
+    ],
+    "assigned_cloudflare": [
+      "kai.ns.cloudflare.com",
+      "laila.ns.cloudflare.com"
+    ],
+    "law_proxy_enabled": true,
+    "registrar_login_available": true,
+    "owner_verification_required": true,
+    "dnssec_ds_observed": false,
+    "configuration_changed": false
+  },
+  "failure_history": [
+    {
+      "stage": "GCE build",
+      "result": "V8 heap OOM at explicit 320 MiB heap before tests",
+      "resolution": "Build off VM, install identical trusted Linux CI artifact; no runtime timeout increase."
+    },
+    {
+      "stage": "WSL first package",
+      "result": "umask 077 produced mode-0600 tar entries and different digest",
+      "resolution": "Normalized file modes and umask 022; reproduced exact CI SHA-256."
+    },
+    {
+      "stage": "FastMCP Windows CLI",
+      "result": "cp949 renderer failed on U+2014 after receiving protocol result",
+      "resolution": "PYTHONUTF8=1 and PYTHONIOENCODING=utf-8; same server/artifact then passed."
+    }
+  ],
+  "limitations": [
+    "No public HTTPS success yet; DNS activation/last human approval pending.",
+    "Public 3000 remains the old app until approved transition.",
+    "Two logical law tool calls; outbound HTTP count was not instrumented.",
+    "No server DB write key, migration, intake, worker or automatic updates enabled.",
+    "No desktop/LLM applications beyond the two named CLI clients were tested.",
+    "Final ops source commit must get its own exact-head CI and independent deployment review."
+  ],
+  "evidence_files": {
+    "qualification.json": "89a87ce75ebdd265224b8e64afe06ecf0de8016334b6b903a5b4c63e4e70166f",
+    "staged-checks.json": "d43e2666aaafefac8d90ddb362fe7e7f8d9a39f1f0753e5483b1528bcd663a78",
+    "clients.json": "a21f86a16de91cde7a654c8dcc98698ca986d508d1aa08bcfaa36b63c56ce25e",
+    "stage-manifest.json": "edc4ce73ddd0623a0aed77921c70d6bde8b12e2d985c386dcf9d2941a94f8fd6"
+  },
+  "qualification_harness_sha256": "49cd3f4b3ad94d97aa15fcc13a5a79204e3909d122246aef0828ebf914c12e8f",
+  "public_route_changed": false,
+  "deployment_authorized": false,
+  "kernel_oom_scan": {
+    "from_utc": "2026-09-20T04:30:00Z",
+    "to_utc": "2026-09-20T05:06:00Z",
+    "matches": 0,
+    "journal_result": "No entries",
+    "permission_error": false
+  }
+}

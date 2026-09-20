@@ -1,0 +1,6 @@
+tunnel: 17b12877-8633-4b3f-a08a-f414e20a636b
+credentials-file: /etc/cloudflared/17b12877-8633-4b3f-a08a-f414e20a636b.json
+ingress:
+  - hostname: law.taxlab.kr
+    service: http://127.0.0.1:3100
+  - service: http_status:404

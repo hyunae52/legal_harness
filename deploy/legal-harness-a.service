@@ -1,0 +1,27 @@
+[Unit]
+Description=Reviewed Legal Harness retrieval-only candidate
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cta
+Group=cta
+WorkingDirectory=/home/cta/legal-harness-candidate-ddddafa
+EnvironmentFile=/home/cta/legal-harness-candidate-ddddafa/.runtime/candidate.env
+ExecStart=/usr/bin/node /home/cta/legal-harness-candidate-ddddafa/dist/index.js
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=15
+MemoryMax=640M
+MemorySwapMax=256M
+TasksMax=64
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadOnlyPaths=/home/cta/legal-harness-candidate-ddddafa
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
