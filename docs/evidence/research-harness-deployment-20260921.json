@@ -1,0 +1,468 @@
+{
+  "schema": 1,
+  "application_commit": "75314179eb1d2fbf17ad5eb2ad367031d99749dc",
+  "operator_commit": "b84fe1327e0fc7d4f550a3cf6d9f142b201808ea",
+  "operator_sha256": "ce79e3bed77e8468db20377559385de85cb1ba1de9e56a5df9a81278048dde37",
+  "artifact_sha256": "d63b301deaeea5d48c9719da7918b23cb3cff6216abae4a83d8de603f9464ce6",
+  "artifact_files": 47,
+  "application_ci": {
+    "id": 35534024679,
+    "head_sha": "75314179eb1d2fbf17ad5eb2ad367031d99749dc",
+    "status": "completed",
+    "conclusion": "success",
+    "html_url": "https://github.com/hyunae52/legal_harness/actions/runs/35534024679",
+    "event": "pull_request"
+  },
+  "operator_ci": {
+    "head_sha": "b84fe1327e0fc7d4f550a3cf6d9f142b201808ea",
+    "conclusion": "success",
+    "html_url": "https://github.com/hyunae52/legal_harness/actions/runs/35534642267"
+  },
+  "installed_node_dependencies": {
+    "algorithm": "sha256-path-type-content-v1",
+    "sha256": "bd4653a5c3b1b77dc5624dd5cfc3bbb2d1bab44b61b650b5ae8a6feb2e95746c",
+    "files": 6679,
+    "links": 9,
+    "bytes": 107564579
+  },
+  "python": {
+    "version": "3.13.5",
+    "provider_commit": "d77c94e5b64892fe85928508544366e418397c71",
+    "provider_version": "2.0.0",
+    "installed_dependencies_sha256": "246f788d6ca347801bd3286d5fcb4deb9d0310ef5956466a3b42b9cdbddec538",
+    "selected_dependency_versions": {
+      "fastmcp": "3.4.7",
+      "mcp": "1.30.0",
+      "httpx": "0.28.1",
+      "pydantic": "2.13.5"
+    }
+  },
+  "rollout": {
+    "status": "candidate_active_verified",
+    "public_resumed": true,
+    "events": [
+      {
+        "phase": "fence",
+        "started_at": "2026-09-20T20:13:12.639678+00:00",
+        "root_probe": "blocked",
+        "operator_probe": "reachable",
+        "ingress_connections": "cleared",
+        "old_pid": "72649",
+        "status": "pass",
+        "finished_at": "2026-09-20T20:13:24.462963+00:00"
+      },
+      {
+        "phase": "drain",
+        "started_at": "2026-09-20T20:13:26.460727+00:00",
+        "samples": [
+          {
+            "elapsed": 2.042,
+            "active": 0
+          },
+          {
+            "elapsed": 2.572,
+            "active": 0
+          },
+          {
+            "elapsed": 3.076,
+            "active": 0
+          },
+          {
+            "elapsed": 3.581,
+            "active": 0
+          },
+          {
+            "elapsed": 4.093,
+            "active": 0
+          },
+          {
+            "elapsed": 4.595,
+            "active": 0
+          },
+          {
+            "elapsed": 5.097,
+            "active": 0
+          },
+          {
+            "elapsed": 5.6,
+            "active": 0
+          },
+          {
+            "elapsed": 6.103,
+            "active": 0
+          }
+        ],
+        "authentication_bound_ms": 5000,
+        "authentication_hashes": {
+          "dist/auth.js": "f515f8054c9f738a720bb7b650865e6b4ac7ab63929dda9f53a7f53276410699",
+          "node_modules/@supabase/auth-js/dist/module/GoTrueClient.js": "3cb8e370ebf6c366510d7650b63d5a409a907cf956a1e18bc4dbaf558d8c1c98",
+          "node_modules/@supabase/auth-js/dist/module/lib/fetch.js": "a2ad61127a66873e5aa411e599de32deef155e3cb0daaefc59e7a6a65964edde",
+          "node_modules/@supabase/auth-js/dist/main/GoTrueClient.js": "9aad21a85ebe67f5c0fd1c1bc134d8fcf98f9d7a0958c28f5d8de8b54032a864",
+          "node_modules/@supabase/auth-js/dist/main/lib/fetch.js": "50fa4e318e07a49de1179256e3fa3dc927a6a46664386f0baed30ef80f3c1d0b"
+        },
+        "status_condition": "fenced_connections_closed_auth_bound_elapsed_work_zero",
+        "status": "pass",
+        "finished_at": "2026-09-20T20:13:30.631664+00:00"
+      },
+      {
+        "phase": "activate",
+        "started_at": "2026-09-20T20:13:32.462918+00:00",
+        "status": "pass",
+        "finished_at": "2026-09-20T20:13:40.569503+00:00"
+      },
+      {
+        "phase": "verify-candidate",
+        "started_at": "2026-09-20T20:13:42.804737+00:00",
+        "health": {
+          "status": "ok",
+          "version": "2.2.0",
+          "active_requests": 0,
+          "active_authentications": 0,
+          "active_dispatches": 0,
+          "release_commit": "75314179eb1d2fbf17ad5eb2ad367031d99749dc",
+          "research_harness": {
+            "policy": "research-v1-20260921",
+            "tools": 5,
+            "storage": "ephemeral"
+          },
+          "mcp_release": "4.13.0",
+          "taxlaw_release": {
+            "version": "2.0.0",
+            "commit": "d77c94e5b64892fe85928508544366e418397c71"
+          },
+          "rules_version": "934db2b435cd1a4bd6c0a8d470930029433af7b9ede8f080ebfea383461050f7",
+          "maintenance": "unavailable",
+          "correction_pr": "available"
+        },
+        "smoke": {
+          "result": {
+            "status": "pass",
+            "transport": "REST and MCP SSE",
+            "tool_count": 35,
+            "provider": "korean-taxlaw",
+            "provider_version": "2.0.0",
+            "provider_commit": "d77c94e5b64892fe85928508544366e418397c71",
+            "document_number": "서면-2020-부동산-4503",
+            "body_scope": "body_returned",
+            "passages": 4,
+            "response_hash": "5c94093c787ba6a917f6c0c54b44d661a1b8c71d4a3b024525dbfdcbad42e1f6",
+            "quote_match": true,
+            "missing_fact_result": "needs_info",
+            "forged_quote_result": "blocked",
+            "legal_verification": "unverified",
+            "github_writes": 0,
+            "endpoint": "loopback",
+            "observed_at": "2026-09-20T20:13:58.753Z"
+          },
+          "peak_smoke_tree_rss": 86953984,
+          "minimum_mem_available": 284131328,
+          "wall_seconds": 11.122,
+          "child_cpu_seconds": 2.65
+        },
+        "resources": {
+          "MemAvailable": 289894400,
+          "SwapFree": 2053873664,
+          "disk_free": 1648201728,
+          "service_memory": 220758016
+        },
+        "timeout_stop": "1min 30s",
+        "status": "pass",
+        "finished_at": "2026-09-20T20:13:59.751896+00:00"
+      },
+      {
+        "phase": "resume",
+        "started_at": "2026-09-20T20:14:03.511518+00:00",
+        "public_resumed": true,
+        "status": "pass",
+        "finished_at": "2026-09-20T20:14:03.807249+00:00"
+      }
+    ]
+  },
+  "events": [
+    {
+      "phase": "stage",
+      "started_at": "2026-09-20T20:01:54.344048+00:00",
+      "status": "failed",
+      "error_type": "AssertionError",
+      "finished_at": "2026-09-20T20:03:54.917097+00:00"
+    },
+    {
+      "phase": "restage",
+      "started_at": "2026-09-20T20:10:19.718246+00:00",
+      "before": {
+        "MemAvailable": 424255488,
+        "SwapFree": 1967910912,
+        "disk_free": 1649299456,
+        "service_memory": 37482496
+      },
+      "staged_smoke": {
+        "result": {
+          "status": "pass",
+          "transport": "REST and MCP SSE",
+          "tool_count": 35,
+          "provider": "korean-taxlaw",
+          "provider_version": "2.0.0",
+          "provider_commit": "d77c94e5b64892fe85928508544366e418397c71",
+          "document_number": "서면-2020-부동산-4503",
+          "body_scope": "body_returned",
+          "passages": 4,
+          "response_hash": "5c94093c787ba6a917f6c0c54b44d661a1b8c71d4a3b024525dbfdcbad42e1f6",
+          "quote_match": true,
+          "missing_fact_result": "needs_info",
+          "forged_quote_result": "blocked",
+          "legal_verification": "unverified",
+          "github_writes": 0,
+          "endpoint": "loopback",
+          "observed_at": "2026-09-20T20:10:41.049Z"
+        },
+        "peak_smoke_tree_rss": 291741696,
+        "minimum_mem_available": 284561408,
+        "wall_seconds": 9.962,
+        "child_cpu_seconds": 6.317
+      },
+      "after": {
+        "MemAvailable": 442658816,
+        "SwapFree": 1967648768,
+        "disk_free": 1648979968,
+        "service_memory": 37175296
+      },
+      "artifact_sha256": "d63b301deaeea5d48c9719da7918b23cb3cff6216abae4a83d8de603f9464ce6",
+      "status": "pass",
+      "finished_at": "2026-09-20T20:10:41.869753+00:00"
+    },
+    {
+      "phase": "fence",
+      "started_at": "2026-09-20T20:13:12.639678+00:00",
+      "root_probe": "blocked",
+      "operator_probe": "reachable",
+      "ingress_connections": "cleared",
+      "old_pid": "72649",
+      "status": "pass",
+      "finished_at": "2026-09-20T20:13:24.462963+00:00"
+    },
+    {
+      "phase": "drain",
+      "started_at": "2026-09-20T20:13:26.460727+00:00",
+      "samples": [
+        {
+          "elapsed": 2.042,
+          "active": 0
+        },
+        {
+          "elapsed": 2.572,
+          "active": 0
+        },
+        {
+          "elapsed": 3.076,
+          "active": 0
+        },
+        {
+          "elapsed": 3.581,
+          "active": 0
+        },
+        {
+          "elapsed": 4.093,
+          "active": 0
+        },
+        {
+          "elapsed": 4.595,
+          "active": 0
+        },
+        {
+          "elapsed": 5.097,
+          "active": 0
+        },
+        {
+          "elapsed": 5.6,
+          "active": 0
+        },
+        {
+          "elapsed": 6.103,
+          "active": 0
+        }
+      ],
+      "authentication_bound_ms": 5000,
+      "authentication_hashes": {
+        "dist/auth.js": "f515f8054c9f738a720bb7b650865e6b4ac7ab63929dda9f53a7f53276410699",
+        "node_modules/@supabase/auth-js/dist/module/GoTrueClient.js": "3cb8e370ebf6c366510d7650b63d5a409a907cf956a1e18bc4dbaf558d8c1c98",
+        "node_modules/@supabase/auth-js/dist/module/lib/fetch.js": "a2ad61127a66873e5aa411e599de32deef155e3cb0daaefc59e7a6a65964edde",
+        "node_modules/@supabase/auth-js/dist/main/GoTrueClient.js": "9aad21a85ebe67f5c0fd1c1bc134d8fcf98f9d7a0958c28f5d8de8b54032a864",
+        "node_modules/@supabase/auth-js/dist/main/lib/fetch.js": "50fa4e318e07a49de1179256e3fa3dc927a6a46664386f0baed30ef80f3c1d0b"
+      },
+      "status_condition": "fenced_connections_closed_auth_bound_elapsed_work_zero",
+      "status": "pass",
+      "finished_at": "2026-09-20T20:13:30.631664+00:00"
+    },
+    {
+      "phase": "activate",
+      "started_at": "2026-09-20T20:13:32.462918+00:00",
+      "status": "pass",
+      "finished_at": "2026-09-20T20:13:40.569503+00:00"
+    },
+    {
+      "phase": "verify-candidate",
+      "started_at": "2026-09-20T20:13:42.804737+00:00",
+      "health": {
+        "status": "ok",
+        "version": "2.2.0",
+        "active_requests": 0,
+        "active_authentications": 0,
+        "active_dispatches": 0,
+        "release_commit": "75314179eb1d2fbf17ad5eb2ad367031d99749dc",
+        "research_harness": {
+          "policy": "research-v1-20260921",
+          "tools": 5,
+          "storage": "ephemeral"
+        },
+        "mcp_release": "4.13.0",
+        "taxlaw_release": {
+          "version": "2.0.0",
+          "commit": "d77c94e5b64892fe85928508544366e418397c71"
+        },
+        "rules_version": "934db2b435cd1a4bd6c0a8d470930029433af7b9ede8f080ebfea383461050f7",
+        "maintenance": "unavailable",
+        "correction_pr": "available"
+      },
+      "smoke": {
+        "result": {
+          "status": "pass",
+          "transport": "REST and MCP SSE",
+          "tool_count": 35,
+          "provider": "korean-taxlaw",
+          "provider_version": "2.0.0",
+          "provider_commit": "d77c94e5b64892fe85928508544366e418397c71",
+          "document_number": "서면-2020-부동산-4503",
+          "body_scope": "body_returned",
+          "passages": 4,
+          "response_hash": "5c94093c787ba6a917f6c0c54b44d661a1b8c71d4a3b024525dbfdcbad42e1f6",
+          "quote_match": true,
+          "missing_fact_result": "needs_info",
+          "forged_quote_result": "blocked",
+          "legal_verification": "unverified",
+          "github_writes": 0,
+          "endpoint": "loopback",
+          "observed_at": "2026-09-20T20:13:58.753Z"
+        },
+        "peak_smoke_tree_rss": 86953984,
+        "minimum_mem_available": 284131328,
+        "wall_seconds": 11.122,
+        "child_cpu_seconds": 2.65
+      },
+      "resources": {
+        "MemAvailable": 289894400,
+        "SwapFree": 2053873664,
+        "disk_free": 1648201728,
+        "service_memory": 220758016
+      },
+      "timeout_stop": "1min 30s",
+      "status": "pass",
+      "finished_at": "2026-09-20T20:13:59.751896+00:00"
+    },
+    {
+      "phase": "resume",
+      "started_at": "2026-09-20T20:14:03.511518+00:00",
+      "public_resumed": true,
+      "status": "pass",
+      "finished_at": "2026-09-20T20:14:03.807249+00:00"
+    },
+    {
+      "phase": "public-smoke",
+      "started_at": "2026-09-20T20:14:30.202401+00:00",
+      "smoke": {
+        "result": {
+          "status": "pass",
+          "transport": "REST and MCP SSE",
+          "tool_count": 35,
+          "provider": "korean-taxlaw",
+          "provider_version": "2.0.0",
+          "provider_commit": "d77c94e5b64892fe85928508544366e418397c71",
+          "document_number": "서면-2020-부동산-4503",
+          "body_scope": "body_returned",
+          "passages": 4,
+          "response_hash": "5c94093c787ba6a917f6c0c54b44d661a1b8c71d4a3b024525dbfdcbad42e1f6",
+          "quote_match": true,
+          "missing_fact_result": "needs_info",
+          "forged_quote_result": "blocked",
+          "legal_verification": "unverified",
+          "github_writes": 0,
+          "endpoint": "https://law.taxlab.kr",
+          "observed_at": "2026-09-20T20:14:32.757Z"
+        },
+        "peak_smoke_tree_rss": 90419200,
+        "minimum_mem_available": 273412096,
+        "wall_seconds": 3.03,
+        "child_cpu_seconds": 1.377
+      },
+      "resources": {
+        "MemAvailable": 304091136,
+        "SwapFree": 2054135808,
+        "disk_free": 1648013312,
+        "service_memory": 213274624
+      },
+      "status": "pass",
+      "finished_at": "2026-09-20T20:14:33.314482+00:00"
+    }
+  ],
+  "public_pages": {
+    "observed_at": "2026-09-20T20:15:28.846Z",
+    "checks": [
+      {
+        "path": "/health",
+        "status": 200,
+        "bytes": 498,
+        "data": {
+          "status": "ok",
+          "version": "2.2.0",
+          "active_requests": 0,
+          "active_authentications": 0,
+          "active_dispatches": 0,
+          "release_commit": "75314179eb1d2fbf17ad5eb2ad367031d99749dc",
+          "research_harness": {
+            "policy": "research-v1-20260921",
+            "tools": 5,
+            "storage": "ephemeral"
+          },
+          "mcp_release": "4.13.0",
+          "taxlaw_release": {
+            "version": "2.0.0",
+            "commit": "d77c94e5b64892fe85928508544366e418397c71"
+          },
+          "rules_version": "934db2b435cd1a4bd6c0a8d470930029433af7b9ede8f080ebfea383461050f7",
+          "maintenance": "unavailable",
+          "correction_pr": "available"
+        }
+      },
+      {
+        "path": "/",
+        "status": 200,
+        "bytes": 35923
+      },
+      {
+        "path": "/setup.md",
+        "status": 200,
+        "bytes": 15617
+      },
+      {
+        "path": "/openapi.json",
+        "status": 200,
+        "bytes": 29359,
+        "research_operations": [
+          "/api/research/start",
+          "/api/research/update",
+          "/api/research/status",
+          "/api/research/retrieve",
+          "/api/research/review"
+        ]
+      }
+    ]
+  },
+  "previous_release": {
+    "head": "a9808ddd629f18cb915e710bf52835fe6db400e5",
+    "artifact_sha256": "c0977a5e3508d02c1340cde15307b05ba8c10413c14fb182f96809b584df1561",
+    "preserved": true
+  },
+  "limitations": [
+    "single-document live smoke; not a sustained-load or legal-correctness test",
+    "Default Python-urllib user agent receives Cloudflare 1010; node, python-httpx/0.28.1 and browser user agents returned 200."
+  ]
+}
