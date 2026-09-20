@@ -56,6 +56,23 @@ Windows에서는 `scripts/install-mcp.ps1 -Package C:\Downloads\k-tax-agent-back
 
 ## 조회·검증 계약
 
+### 쟁점과 실제 인용을 연결하는 연구 하네스
+
+연결한 AI에게 이렇게 요청할 수 있습니다: **“TaxLab 연구 하네스로 쟁점을 나누고, 실제 원문과 반대 근거를 읽은 뒤, 주장별 인용·빠진 사실을 검사해줘. 다른 쟁점의 자료를 가져다 썼다면 연결 이유와 한계를 밝혀줘.”** 서버용 LLM API나 벡터 DB를 추가로 준비할 필요는 없습니다.
+
+1. `start_legal_research`: 쟁점, 필수 사실, 사건 날짜의 역할·정밀도를 등록합니다.
+2. `research_legal_sources`: 기존 법제처·국세청 도구를 읽고 서버가 보관한 `evidence_id`, 정확한 `passage_id/text`를 받습니다. 지지 자료와 반대 자료의 조회 목적을 구분합니다.
+3. `review_legal_reasoning`: 최종 초안, 주장별 인용·연결 이유, 반론 처리와 미확인점을 제출합니다. 등록한 필수 사실을 분석에서 빼도 누락 검사를 피할 수 없습니다.
+4. `get_legal_research`로 현재 상태를 확인하고 `update_legal_research`로 계획을 바꿀 수 있습니다. 계획 교체는 기존 원문·검토를 무효화하며, 추가 조회도 이전 검토의 현재 효력을 없앱니다.
+
+REST/GPT Actions에는 같은 계약의 POST `/api/research/start`, `/retrieve`, `/review`, `/status`, `/update`가 있습니다. 입력 스키마는 MCP 목록과 [OpenAPI](https://law.taxlab.kr/openapi.json)에 제공됩니다. 기존 `/api/analyze`와 초안 검사도 유지합니다.
+
+`blocked`는 잘못된 인용·연결·모순을 수정해야 한다는 뜻입니다. `needs_info`는 사실·자료·시점·반론 공백이 남았다는 뜻이며 조건부·유보 답변을 표시하지 말라는 뜻은 아닙니다. `structurally_complete`도 **등록한 계획과 제출한 주장만** 구조가 갖춰졌다는 뜻입니다. 법률적 의미와 독립 AI 검수는 여전히 미검수입니다. quote 일치는 제공자가 반환한 텍스트와의 대조이며 원천 XML의 완전성·최신성·법적 지지를 인증하지 않습니다.
+
+연구 장부는 메모리에 30분만 보관하며 재시작 시 사라집니다. 한 연구당 40회 조회, 32개 영수증, 1MiB, 전체 8MiB 보관 예산을 적용합니다. 같은 연구의 조회 중에는 갱신·추가 조회·검토를 잠시 거부합니다. 검색 0건·실패·부분 본문은 성공 근거로 승격하지 않으며, 연구 자료를 로그나 GitHub에 자동 게시하지 않습니다. 공유 접속키는 같은 인증 주체이므로 개인별 자료 격리가 필요하면 사용자 JWT를 사용해야 합니다.
+
+설계 참고: [OpenTax](https://github.com/koi2026/opentax/tree/38c49cba2952dea847ba87970bf2800f1855b763)의 인용·사실·시점 경계와 [korean-tax-agent](https://github.com/minsooparkk/korean-tax-agent/tree/6095cdcf1583a2cd513d08f418b65558346a8845)의 쟁점·반론·공백 구조를 검토했습니다. 새 하네스 TypeScript는 독자 작성했으며 두 프로젝트를 실행 의존성으로 추가하지 않았습니다. [상세 리뷰](docs/HARNESS_REFERENCE_REVIEW.md), [확정 계획·시험 계약](docs/RESEARCH_HARNESS_PLAN.md)을 함께 보세요.
+
 `GET /api/tools`에서 실제 upstream 도구와 입력 스키마를 확인합니다. `POST /api/analyze` 예:
 
 ```json

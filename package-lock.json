@@ -15,7 +15,8 @@
         "express": "^4.19.2",
         "js-yaml": "^5.4.2",
         "korean-law-mcp": "4.13.0",
-        "zod": "^3.23.8"
+        "zod": "^3.23.8",
+        "zod-to-json-schema": "3.25.2"
       },
       "bin": {
         "k-tax-agent-backend": "scripts/hermes-mcp-bridge.mjs",

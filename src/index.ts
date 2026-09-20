@@ -18,12 +18,17 @@ let closing = false;
 async function shutdown() {
   if (closing) return;
   closing = true;
-  const timer = setTimeout(() => { server.closeAllConnections(); process.exit(1); }, 10_000);
-  timer.unref();
-  await runtime.close();
-  await corrections?.close();
-  await new Promise<void>(resolve => server.close(() => resolve()));
-  clearTimeout(timer);
+  try {
+    await runtime.drain();
+    await corrections?.close();
+    await runtime.close();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  } catch {
+    // Keep ingress closed; do not interrupt an in-flight public PR publication.
+    // The operator must investigate a drain timeout instead of declaring readiness.
+    console.error('Legal Harness drain did not complete; ingress remains closed.');
+    closing = false;
+  }
 }
 process.once('SIGINT', () => void shutdown());
 process.once('SIGTERM', () => void shutdown());

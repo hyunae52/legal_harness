@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { CalendarDay } from './dates.js';
 
 export const digest = (value: unknown): string => createHash('sha256').update(stableJson(value)).digest('hex');
 export function stableJson(value: unknown): string {
@@ -35,7 +36,7 @@ export const AnalyzeSchema = z.object({
   bypass_reason: z.string().trim().min(1).max(500).optional(),
   mode: z.enum(['strict', 'warn']).default('strict'),
   force: z.boolean().default(false),
-  event_dates: z.record(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).default({}),
+  event_dates: z.record(CalendarDay).default({}),
 }).strict();
 
 export interface Actor { id: string; kind: 'auth_user' | 'api_client'; userId?: string }
