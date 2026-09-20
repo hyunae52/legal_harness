@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "repository": "hyunae52/legal_harness",
+  "artifact_build_head": "ddddafa9b7ebaefb98574a0c6e5a3669ab3fcd88",
+  "artifact_build_tree": "cff4ff2738596c22d6ff0e8a1e2e3e604bdccdd8",
+  "ci_run_id": 35489072150,
+  "ci_job_id": 106020707420,
+  "artifact_sha256": "72665b205984f213702bd36b5ebd5ce949fec7a0668dc5899aaeac45f440ae48",
+  "artifact_path": "/home/cta/legal-harness-candidate-72665b.tgz",
+  "app_root": "/home/cta/legal-harness-candidate-ddddafa",
+  "node": "v22.23.2",
+  "files": {
+    "LICENSE": "612c9bd87c7fa02969a6558f3f84b7ea9b10c3e2fa00edcb881c2c44a7a37640",
+    "dist/app.js": "474078dec7905a5db1f9a818ff4c780504da3255951e6546abd7e3736be321e2",
+    "dist/auth.js": "f515f8054c9f738a720bb7b650865e6b4ac7ab63929dda9f53a7f53276410699",
+    "dist/contracts.js": "2caf7a6353685fbf00d4023676d3f517ed5b82f44a615f88c804e54ae4155f15",
+    "dist/errorDiagnostics.js": "5a8d1a0244e2e8b6a6e533129148af799e6e7a98567adfbae0b3b04c89bb65b5",
+    "dist/evidence.js": "e517755c8fc25df7ee4ca0b3985b1e256758b419b8db8b49f6393d114010c838",
+    "dist/evolution.js": "bb74e0698182a25bc59ae852109233bac3bf0e46402dcb9f80e1d2f35a4fb77f",
+    "dist/failures.js": "d5496dd7a89481aba88b4fc764a5b5fa55953817b9d5378f0f76ff79d1205839",
+    "dist/gates.js": "615b6cc71dcbfc7454001641d0606c342a48ad6dfbbb492fc8dbcac5d9649d4b",
+    "dist/gitOps.js": "3c3d796d418301c13dd00b253a8052c5599d76dde6a515a4e60b0e7fd2d2116c",
+    "dist/index.js": "59da77b3363efb3b374370b23ec12b6d27f27273a35339bba4fe6874bff2833a",
+    "dist/koreanLawClient.js": "c5b5183d789a8c866221d4e6a756095cb655a3cd485e382d55492571c85e43b6",
+    "dist/releaseGate.js": "750956637065183d378fa1252ee376b1240cc75c02489982de3007d25f989cbf",
+    "dist/sourceVerifier.js": "09af1b659352cf37cdc43c77769c2fb89e2dcb285c62da1549e3bf4447501114",
+    "dist/supremeJudge.js": "794a7c958f39439c6297993447b36f43030a91ac4b09297e95beb10f52750034",
+    "rules/manifest.json": "12df64a53752d7b0bf2d823cd6b9cd7c41b6e6be9bea15842bf8a48aeca2c973",
+    "npm-shrinkwrap.json": "f728dffab62fc5a1d8792819611e6b6bcf9812f6fece5f9ef7cd17fb0838e950",
+    "package.json": "0e1684007032f06b51dc7c55c38eefeb76c127d100bae74e021cc0c533f84de6",
+    "rules/QG-COST-01.json": "ea9145c0eb642a220b0fcbeea06eac484ec78607abefd7162ac5c0fc9070d57e",
+    "rules/QG-COST-02.json": "d74561a76a363a3e837a4a8a18db699808d99690169b182394ba18a9b6200b45",
+    "rules/QG-COST-03.json": "650837f6c288922b8018a5795a6017cecfe5de1d79b88090786bc6c423256f36",
+    "rules/QG-EXCEPTION-02.json": "32974dcb16aaf07757b4268297ef2d0575cec2c1792da2d9b99d4f9894114a03",
+    "rules/QG-FACT-02.json": "fc639f99ba0fb3118462de1e3266fa25fb8d20694ed6a1492ff915c693dfb701",
+    "rules/QG-MATH-01.json": "c00ca33cdaf9bdcd96ecd47ef48419765da48c64b27ebd221473681f0d0883da",
+    "rules/QG-PRECEDENT-03.json": "b61b5818da71f9a0c279c2bd802a01784e7bed11b2984745edd79d80f22d78e1",
+    "rules/QG-TIME-02.json": "cfba01fb9bb0fa1cae119115b808c39c391a01e962b2280377292ac4cdb78717",
+    "rules/QG-TIME-03.json": "95873177c173f28e0fa64f3a0d53f07645b2515d3bfba60d7f3a5d0f4db52345",
+    "rules/QG-VALUATION-01.json": "d20db8853dbf23b1cc336ec1242f0d3802bda70603c41b85ed46b1ef60c53d97",
+    "README.md": "06ee0c9f6e5025ca9c84100918ca6860333485881222cd16893339aa75843f67",
+    "scripts/hermes-mcp-bridge.mjs": "75ce4e51f7465006946ed51617389051cfab45159f212f8aea47acea40581d20"
+  },
+  "config_files": [
+    {
+      "label": "runtime env",
+      "path": "/home/cta/legal-harness-candidate-ddddafa/.runtime/candidate.env",
+      "sha256": "6fe76d617cf0fae9dc02fbd316bfa45bd3fc6840575223575d6140bb237a549b"
+    },
+    {
+      "label": "upstream manifest",
+      "path": "/home/cta/legal-harness-candidate-ddddafa/.runtime/upstream.json",
+      "sha256": "11f55fda27b064504b6d044c8abc33db523ecade9cef60c54696958543a45d93"
+    },
+    {
+      "label": "legal-harness-a.service",
+      "path": "/etc/systemd/system/legal-harness-a.service",
+      "sha256": "1a7c6e8377ae5a410b061a0aa0f7b41101afcf112fd91053533c15053924278a"
+    },
+    {
+      "label": "legal-harness-maintenance.service",
+      "path": "/etc/systemd/system/legal-harness-maintenance.service",
+      "sha256": "4a12101e748a97a5729a9ef02f89bbdafc0a27c602e02c2941302b9e7f77f8e9"
+    },
+    {
+      "label": "maintenance-a.mjs",
+      "path": "/home/cta/legal-harness-maintenance-20260920.mjs",
+      "sha256": "de89dbf5ae08db715d5291762a5bdff1cd61eb90be5215e330cb66614226493a"
+    },
+    {
+      "label": "cloudflared-a.yml",
+      "path": "/home/cta/cloudflared-a.yml",
+      "sha256": "e0a93d9e228f3aecef7772f785fb34cbcdd30f9fa8b7e32b715ca39509c00e8c"
+    },
+    {
+      "label": "cloudflared-maintenance-a.yml",
+      "path": "/home/cta/cloudflared-maintenance-a.yml",
+      "sha256": "48fb94034aab0eea1cd1428399fe3b50b8017da44bc6e79c3e5f59f72ed76aad"
+    },
+    {
+      "label": "verify-a-candidate.mjs",
+      "path": "/home/cta/verify-a-candidate.mjs",
+      "sha256": "6c37206ba6e3019a6aefee5fd586f660cc21354da7e95e53f602664afc440d71"
+    },
+    {
+      "label": "installed-dependencies.mjs",
+      "path": "/home/cta/installed-dependencies.mjs",
+      "sha256": "d8c7971b07e56d451b7c2fa4076de3b7c737fd309a7975dfb0201477b65b21b2"
+    },
+    {
+      "label": "freeze-legacy-cron.py",
+      "path": "/home/cta/freeze-legacy-cron.py",
+      "sha256": "b1c4854e463c5c3824dbc89b443cd34285edb22f5f342bb7f41afcc9f1c5f29b"
+    }
+  ],
+  "runtime_profile": "retrieval_only",
+  "database_migration": false,
+  "public_route_changed": false,
+  "deployment_authorized": false,
+  "installed_dependencies": {
+    "algorithm": "sha256-path-type-content-v1",
+    "sha256": "bd4653a5c3b1b77dc5624dd5cfc3bbb2d1bab44b61b650b5ae8a6feb2e95746c",
+    "files": 6679,
+    "links": 9,
+    "bytes": 107564579
+  }
+}

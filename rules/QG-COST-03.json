@@ -1,0 +1,17 @@
+{
+  "id": "QG-COST-03",
+  "case_id": "FC-09",
+  "name": "분담금 부담자",
+  "cues": [
+    "분담금",
+    "청산금"
+  ],
+  "required_facts": [
+    "contribution_payers",
+    "contribution_amounts",
+    "ownership_shares"
+  ],
+  "guidance": "실제 부담자·부담액과 관리처분 전후 취득분을 구분하세요.",
+  "legal_status": "research_required",
+  "version": 1
+}

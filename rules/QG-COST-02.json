@@ -1,0 +1,18 @@
+{
+  "id": "QG-COST-02",
+  "case_id": "FC-08",
+  "name": "소유자별 원가",
+  "cues": [
+    "취득원가",
+    "종전 취득",
+    "권리가액"
+  ],
+  "required_facts": [
+    "owner_cost_buckets",
+    "ownership_shares",
+    "allocation_basis"
+  ],
+  "guidance": "소유자별 원가와 지분을 분리하고 법적 안분 근거를 확인하세요.",
+  "legal_status": "research_required",
+  "version": 1
+}

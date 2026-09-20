@@ -1,0 +1,17 @@
+{
+  "id": "QG-COST-01",
+  "case_id": "FC-01",
+  "name": "재산분할 취득원가",
+  "cues": [
+    "이혼",
+    "재산분할"
+  ],
+  "required_facts": [
+    "acquisition_history",
+    "paid_acquisition_tax",
+    "event_dates"
+  ],
+  "guidance": "취득 경위와 비용 지급 사실을 확인하고 해당 시점 법령·공식 해석을 대조하세요.",
+  "legal_status": "research_required",
+  "version": 1
+}

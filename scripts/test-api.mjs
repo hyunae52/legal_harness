@@ -1,8 +1,10 @@
+import 'dotenv/config';
+if(!process.env.TAXLAB_API_KEY)throw Error('Set TAXLAB_API_KEY for this local manual check');
 const response = await fetch("http://127.0.0.1:3000/api/analyze", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
-    "x-api-key": "taxlab_partner_2026",
+    "x-api-key": process.env.TAXLAB_API_KEY,
   },
   body: JSON.stringify({
     query: "소득세법",

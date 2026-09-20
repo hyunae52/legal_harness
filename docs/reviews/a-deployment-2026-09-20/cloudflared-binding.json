@@ -1,0 +1,13 @@
+{
+  "pid": 3705,
+  "argv": [
+    "/usr/bin/cloudflared",
+    "--no-autoupdate",
+    "--config",
+    "/etc/cloudflared/config.yml",
+    "tunnel",
+    "run"
+  ],
+  "config_binding_verified": true,
+  "configuration_changed": false
+}

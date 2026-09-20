@@ -1,0 +1,225 @@
+{
+  "status": "pass",
+  "node": "v22.23.2",
+  "platform": "linux",
+  "started_at": "2026-09-20T04:36:49.391Z",
+  "duration_requested_ms": 900000,
+  "cold_starts_requested": 20,
+  "law_api_calls": 0,
+  "ram_bytes": 1011417088,
+  "baseline_pids": [
+    11748,
+    3705
+  ],
+  "cold_starts": [
+    {
+      "attempt": 1,
+      "status": "pass",
+      "initialize_ms": 1092.20984,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 22.088332000000037
+    },
+    {
+      "attempt": 2,
+      "status": "pass",
+      "initialize_ms": 1013.091651,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 16.502332000000024
+    },
+    {
+      "attempt": 3,
+      "status": "pass",
+      "initialize_ms": 1002.767527,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 17.483793000000333
+    },
+    {
+      "attempt": 4,
+      "status": "pass",
+      "initialize_ms": 973.3372469999995,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 14.05651299999954
+    },
+    {
+      "attempt": 5,
+      "status": "pass",
+      "initialize_ms": 971.7525509999996,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 15.291438999999627
+    },
+    {
+      "attempt": 6,
+      "status": "pass",
+      "initialize_ms": 978.1081649999996,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 16.718676999999843
+    },
+    {
+      "attempt": 7,
+      "status": "pass",
+      "initialize_ms": 995.7351369999997,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 15.326420000000326
+    },
+    {
+      "attempt": 8,
+      "status": "pass",
+      "initialize_ms": 981.6193869999997,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 16.547457000000577
+    },
+    {
+      "attempt": 9,
+      "status": "pass",
+      "initialize_ms": 1005.3063739999998,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 17.7802470000006
+    },
+    {
+      "attempt": 10,
+      "status": "pass",
+      "initialize_ms": 1010.8896999999997,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 17.763780999999653
+    },
+    {
+      "attempt": 11,
+      "status": "pass",
+      "initialize_ms": 1031.8782969999993,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 17.347365999999965
+    },
+    {
+      "attempt": 12,
+      "status": "pass",
+      "initialize_ms": 1026.5484700000015,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 22.470401000000493
+    },
+    {
+      "attempt": 13,
+      "status": "pass",
+      "initialize_ms": 1059.6833669999996,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 17.69506200000069
+    },
+    {
+      "attempt": 14,
+      "status": "pass",
+      "initialize_ms": 1022.7853900000009,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 17.148850999999922
+    },
+    {
+      "attempt": 15,
+      "status": "pass",
+      "initialize_ms": 1024.8581319999994,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 16.935944999999265
+    },
+    {
+      "attempt": 16,
+      "status": "pass",
+      "initialize_ms": 1098.18692,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 23.488846999996895
+    },
+    {
+      "attempt": 17,
+      "status": "pass",
+      "initialize_ms": 1013.4474750000008,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 18.471913000001223
+    },
+    {
+      "attempt": 18,
+      "status": "pass",
+      "initialize_ms": 1000.5729910000009,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 14.772393999999622
+    },
+    {
+      "attempt": 19,
+      "status": "pass",
+      "initialize_ms": 1007.4354500000009,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 17.258492000000842
+    },
+    {
+      "attempt": 20,
+      "status": "pass",
+      "initialize_ms": 999.4111650000013,
+      "tools": 10,
+      "upstream": "4.13.0",
+      "close_ms": 15.271241999998892
+    }
+  ],
+  "rounds": 336,
+  "timeouts": 4,
+  "disconnects": 68,
+  "capacity_rejections": 336,
+  "peak_combined_rss_bytes": 263540736,
+  "peak_processes": [
+    {
+      "pid": 3705,
+      "ppid": 1,
+      "rss_bytes": 27238400,
+      "comm": "cloudflared"
+    },
+    {
+      "pid": 11748,
+      "ppid": 1,
+      "rss_bytes": 23003136,
+      "comm": "node"
+    },
+    {
+      "pid": 22131,
+      "ppid": 11748,
+      "rss_bytes": 10911744,
+      "comm": "node"
+    },
+    {
+      "pid": 50016,
+      "ppid": 49996,
+      "rss_bytes": 90755072,
+      "comm": "node"
+    },
+    {
+      "pid": 50085,
+      "ppid": 50016,
+      "rss_bytes": 111632384,
+      "comm": "node"
+    }
+  ],
+  "sample_interval_ms": 250,
+  "baseline_disappeared": [],
+  "orphan_pids": [],
+  "soak_elapsed_ms": 901256.2767149999,
+  "final_active_requests": 0,
+  "event_loop_p99_ms": 225.574911,
+  "event_loop_max_ms": 745.013247,
+  "probe_cpu_micros": {
+    "user": 35431895,
+    "system": 19812258
+  },
+  "finished_at": "2026-09-20T04:52:12.464Z"
+}

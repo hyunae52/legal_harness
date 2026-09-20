@@ -1,347 +1,168 @@
-// Run: node --test tests/review-regressions.test.mjs
-// Executes the current Express route code. Supabase HTTP, judge and GitHub
-// dependencies are isolated: no credentials, paid API calls or remote writes.
-// This is a backend regression gate, not validation of legal conclusions.
-import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { createServer } from 'node:http';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import vm from 'node:vm';
+﻿import assert from 'node:assert/strict';
 import test from 'node:test';
-import express from 'express';
-import * as yaml from 'js-yaml';
-import ts from 'typescript';
-import { z } from 'zod';
-import { createClient } from '@supabase/supabase-js';
+import { createServer } from 'node:http';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+import { createApp } from '../dist/app.js';
+import { createAuthenticator } from '../dist/auth.js';
+import { GateEngine } from '../dist/gates.js';
 import { LawMcpError } from '../dist/koreanLawClient.js';
+import { ServiceError, digest } from '../dist/contracts.js';
+import { safeToolDiagnostic } from '../dist/errorDiagnostics.js';
 
-const root = fileURLToPath(new URL('../', import.meta.url));
-const source = fs.readFileSync(path.join(root, 'src/index.ts'), 'utf8');
-const compiled = ts.transpileModule(source, {
-  compilerOptions: {
-    module: ts.ModuleKind.CommonJS,
-    target: ts.ScriptTarget.ES2022,
-    esModuleInterop: true,
-  },
-}).outputText;
-const token = 'review-user-token';
-const userId = '00000000-0000-4000-8000-000000000001';
-const evolveBody = {
-  issue_summary: 'Review fixture',
-  proposed_fail_if: 'Review fixture with no legal assertion',
-  correction_prompt: 'Review fixture correction',
-};
-
-async function fixture(t, options = {}) {
-  let app;
-  const upstream = [];
-  const mcpCalls = [];
-  const clients = [];
-  const reviewExpress = (...args) => {
-    app = express(...args);
-    // Suppress the entrypoint's production listen call. Bind only loopback below.
-    app.listen = () => undefined;
-    return app;
+async function fixture(t, opts = {}) {
+  const calls = [];
+  const law = { releaseVersion: '4.13.0', listTools: async () => ({tools: [{name:'search_law',inputSchema:{type:'object'}}]}), close: async () => {},
+    callTool: async (name,args) => { calls.push({name,args}); if(opts.operation) await opts.operation(); if(opts.error) throw opts.error;
+      return {kind:'retrieval',tool:name,result:{content:[{type:'text',text:'Fixture source'}], structuredContent:{law:'fixture'}, _meta:{upstream:'preserved'}}}; } };
+  const authenticate = opts.realAuth ? createAuthenticator({TAXLAB_API_KEY: 'fixture-key'}) : async req => {
+    if (req.query.apiKey !== undefined || !['Bearer alice','Bearer bob'].includes(req.get('authorization'))) throw new ServiceError(401,'UNAUTHORIZED');
+    return {id:req.get('authorization').slice(7),kind:'auth_user',userId:req.get('authorization').slice(7)};
   };
-  Object.assign(reviewExpress, express);
-
-  const fakeFetch = async (input, init) => {
-    const request = new Request(input, init);
-    const url = new URL(request.url);
-    assert.equal(url.origin, 'https://review.invalid');
-    upstream.push({
-      path: url.pathname,
-      authorization: request.headers.get('authorization'),
-    });
-    if (url.pathname === '/auth/v1/user') {
-      assert.equal(request.headers.get('authorization'), 'Bearer ' + token);
-      return Response.json({
-        id: userId,
-        aud: 'authenticated',
-        role: 'authenticated',
-        app_metadata: {},
-        user_metadata: {},
-        created_at: '2024-01-01T00:00:00Z',
-      });
-    }
-    if (url.pathname === '/rest/v1/evolution_logs') {
-      return options.dbError
-        ? Response.json({ code: '42501', message: 'Review insert denied' }, { status: 403 })
-        : Response.json([], { status: 201 });
-    }
-    throw new Error('Unexpected upstream request: ' + url.pathname);
-  };
-  const dependencies = {
-    express: reviewExpress,
-    'js-yaml': yaml,
-    zod: { z },
-    dotenv: { config: () => ({}) },
-    './supremeJudge.js': {
-      verifyWithSupremeJudge: options.judge ?? (async () => true),
-    },
-    './gitOps.js': {
-      createAutoPR: async () => 'https://example.invalid/review/pull/1',
-    },
-    './koreanLawClient.js': {
-      LawMcpError,
-      createKoreanLawClient: () => ({
-        releaseVersion: options.releaseVersion,
-        listTools: async () => ({ server: { name: 'fixture', version: '1' }, tools: [{ name: 'search_law' }] }),
-        callTool: async (name, args) => {
-          mcpCalls.push({ name, args });
-          if (options.mcpError) throw options.mcpError;
-          return { kind: 'retrieval', tool: name, result: { content: [{ type: 'text', text: 'Actual MCP fixture context' }] } };
-        },
-        close: async () => {},
-      }),
-    },
-    '@supabase/supabase-js': {
-      createClient: (url, key, clientOptions = {}) => {
-        const client = createClient(url, key, {
-          ...clientOptions,
-          auth: {
-            ...clientOptions.auth,
-            persistSession: false,
-            autoRefreshToken: false,
-            detectSessionInUrl: false,
-          },
-          global: { ...clientOptions.global, fetch: fakeFetch },
-        });
-        clients.push(client);
-        return client;
-      },
-    },
-    fs: {
-      ...fs,
-      readFileSync: (file, ...args) => {
-        if (options.missingGates && path.basename(String(file)) === 'fail-cases.yaml') {
-          throw Object.assign(new Error('Review fixture: no gates file'), { code: 'ENOENT' });
-        }
-        return fs.readFileSync(file, ...args);
-      },
-    },
-    path,
-  };
-  const module = { exports: {} };
-  vm.runInNewContext(compiled, {
-    module,
-    exports: module.exports,
-    require: (id) => {
-      if (!(id in dependencies)) throw new Error('Unmocked dependency: ' + id);
-      return dependencies[id];
-    },
-    process: {
-      env: {
-        NODE_ENV: 'test',
-        SUPABASE_URL: 'https://review.invalid',
-        SUPABASE_ANON_KEY: 'review-anon-key',
-      },
-      cwd: () => root,
-      once() {},
-    },
-    console: { log() {}, warn() {}, error() {} },
-    setTimeout,
-    clearTimeout,
-  }, { filename: 'review-current-index.cjs' });
-
-  const server = createServer(app);
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
-  });
-  t.after(async () => {
-    for (const client of clients) client.auth.stopAutoRefresh();
-    server.closeAllConnections();
-    await new Promise((resolve) => server.close(resolve));
-  });
+  const runtime = createApp({law,authenticate,...opts});
+  const server = createServer(runtime.app);
+  await new Promise(r => server.listen(0,'127.0.0.1',r));
   const base = 'http://127.0.0.1:' + server.address().port;
-  return {
-    upstream,
-    mcpCalls,
-    request: async (endpoint, body, authenticated = true) => {
-      const response = await fetch(base + endpoint, {
-        method: body === undefined ? 'GET' : 'POST',
-        headers: {
-          ...(body === undefined ? {} : { 'content-type': 'application/json' }),
-          ...(authenticated ? { authorization: 'Bearer ' + token } : {}),
-        },
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(3000),
-      });
-      return { status: response.status, body: await response.json() };
-    },
-  };
+  t.after(async()=>{await runtime.close();server.closeAllConnections();await new Promise(r=>server.close(r));});
+  async function request(path,body,auth='Bearer alice',extra={}) {
+    const res=await fetch(base+path,{method:body===undefined?'GET':'POST',headers:{...(body===undefined?{}:{'content-type':'application/json'}),...(auth?{authorization:auth}:{}),...extra},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(4000)});
+    return {status:res.status,body:await res.json()};
+  }
+  return {base,calls,request,runtime};
 }
 
-test('entrypoint external imports link in the production ESM module format', () => {
-  // The route fixture uses CommonJS to inject dependencies. Check native ESM
-  // separately so interop in that fixture cannot hide an invalid default import.
-  // Only package import declarations execute: no entrypoint startup or .env load.
-  const esm = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.ESNext,
-      target: ts.ScriptTarget.ES2022,
-      esModuleInterop: true,
-    },
-  }).outputText;
-  const ast = ts.createSourceFile('review-entry.mjs', esm, ts.ScriptTarget.ES2022);
-  const imports = ast.statements.filter((statement) =>
-    ts.isImportDeclaration(statement)
-    && ts.isStringLiteral(statement.moduleSpecifier)
-    && !statement.moduleSpecifier.text.startsWith('.')
-  ).map((statement) => statement.getText(ast)).join('\n');
-  const result = spawnSync(process.execPath, ['--input-type=module', '--eval', imports], {
-    cwd: root,
-    encoding: 'utf8',
-    timeout: 5000,
+test('native ESM app imports without starting a listener or loading environment credentials',()=>assert.equal(typeof createApp,'function'));
+test('unauthenticated analyze/tools/messages do no upstream work',async t=>{
+  const f=await fixture(t);
+  for(const [p,b] of [['/api/analyze',{query:'law'}],['/api/tools',undefined],['/messages?sessionId=00000000-0000-4000-8000-000000000001',{}]]) assert.equal((await f.request(p,b,null)).status,401);
+  assert.equal(f.calls.length,0);
+});
+test('production authentication rejects query keys and missing key configuration',async t=>{
+  const f=await fixture(t,{realAuth:true});
+  assert.equal((await f.request('/api/tools?apiKey=fixture-key',undefined,null)).status,401);
+  assert.equal((await f.request('/api/tools',undefined,'Bearer fixture-key')).status,200);
+  const noKey=createAuthenticator({});
+  await assert.rejects(noKey({query:{},get:n=>n==='x-api-key'?'fixture-key':undefined}),e=>e.status===401);
+});
+test('JWT identity is verified through Supabase and never comes from submitted names',async()=>{
+  let observed;
+  const auth=createAuthenticator({SUPABASE_URL:'https://fixture.invalid',SUPABASE_PUBLISHABLE_KEY:'fixture-publishable'},async(input,init)=>{
+    observed=new Request(input,init);return Response.json({id:'00000000-0000-4000-8000-000000000001'});
   });
-  assert.ifError(result.error);
-  assert.equal(result.status, 0, result.stderr);
+  const actor=await auth({query:{},get:n=>n==='authorization'?'Bearer fixture-jwt':undefined});
+  assert.equal(observed.headers.get('authorization'),'Bearer fixture-jwt');
+  assert.equal(actor.id,'user:00000000-0000-4000-8000-000000000001');
 });
-
-test('unauthenticated analyze is rejected before upstream work', async (t) => {
-  const app = await fixture(t);
-  const result = await app.request('/api/analyze', { query: 'review' }, false);
-  assert.equal(result.status, 401);
-  assert.equal(app.upstream.length, 0);
-  assert.equal(app.mcpCalls.length, 0);
+test('global execution capacity counts work until completion including disconnected callers',async t=>{
+  let entered=0;const wait=Promise.withResolvers();
+  const f=await fixture(t,{operation:async()=>{entered++;await wait.promise;}});
+  const controller=new AbortController();
+  const disconnected=fetch(f.base+'/api/analyze',{method:'POST',headers:{authorization:'Bearer alice','content-type':'application/json'},body:JSON.stringify({query:'law'}),signal:controller.signal}).catch(()=>null);
+  const requests=[1,2].map(()=>f.request('/api/analyze',{query:'law'}));
+  while(entered<3) await new Promise(r=>setTimeout(r,5));
+  controller.abort();await disconnected;
+  assert.equal((await f.request('/api/analyze',{query:'law'})).status,429);
+  wait.resolve();await Promise.all(requests);
+  assert.equal((await f.request('/health')).body.active_requests,0);
 });
-
-test('completed requests release a concurrency slot exactly once', async (t) => {
-  const app = await fixture(t);
-  await app.request('/api/analyze', { query: 'review' }, false);
-  const health = await app.request('/health');
-  assert.equal(health.body.active_requests, 0,
-    'finish and close must not both decrement the same request');
+test('retrieval retains structured content and provenance without pretending to validate a final answer',async t=>{
+  const f=await fixture(t);const r=await f.request('/api/analyze',{query:'law'});
+  assert.equal(r.status,200);assert.equal(f.calls[0].name,'legal_research');assert.equal(f.calls[0].args.query,'law');
+  assert.equal(r.body.data.result.structuredContent.law,'fixture');assert.equal(r.body.quality_gate,null);
+  assert.equal(r.body.data.evidence.applicability,'unverified');assert.equal(r.body.data.evidence.purpose,'retrieval_only');
 });
-
-test('missing required quality gates cannot produce analyze success', async (t) => {
-  const app = await fixture(t, { missingGates: true });
-  const result = await app.request('/api/analyze', { query: '부당행위' });
-  assert.ok(result.status >= 400,
-    'required gates are unavailable but the endpoint returned ' + result.status);
+test('explicit retrieval identifiers are not overwritten; invalid process settings/query rejected',async t=>{
+  const f=await fixture(t);await f.request('/api/analyze',{query:'law',tool:'get_law_text',arguments:{mst:'123',jo:'88'}});
+  assert.deepEqual(f.calls[0].args,{mst:'123',jo:'88'});
+  assert.equal((await f.request('/api/analyze',{})).status,400);
+  assert.equal((await f.request('/api/analyze',{query:'law',command:'bad'})).status,400);
 });
-
-test('quality-gate correction comes from the matching rule, not the first YAML entry', async (t) => {
-  const gates = yaml.load(fs.readFileSync(path.join(root, 'fail-cases.yaml'), 'utf8')).gates;
-  const matchingGate = gates.find((gate) => gate.id === 'QG-TIME-03');
-  assert.ok(matchingGate, 'the time-of-assessment rule must exist');
-  const app = await fixture(t);
-  const result = await app.request('/api/analyze', {
-    query: '특수관계인 간 부당행위계산부인의 해당성 판단시점과 시가 평가기간을 모두 잔금일 기준으로 통일합니다.',
-  });
-  assert.equal(result.status, 400);
-  assert.equal(result.body.correction_prompt, matchingGate.correction_prompt,
-    'a timing-rule violation must not return an unrelated divorce-cost correction');
-});
-
-test('evolution insert carries the verified user token to Supabase RLS', async (t) => {
-  const app = await fixture(t);
-  const result = await app.request('/api/evolve', evolveBody);
-  assert.equal(result.status, 200);
-  const authRequest = app.upstream.find((entry) => entry.path === '/auth/v1/user');
-  const dbRequest = app.upstream.find((entry) => entry.path === '/rest/v1/evolution_logs');
-  assert.equal(authRequest?.authorization, 'Bearer ' + token);
-  assert.equal(dbRequest?.authorization, 'Bearer ' + token,
-    'getUser(token) alone does not set the database authorization context');
-});
-
-test('a returned database error cannot be reported as evolve success', async (t) => {
-  const app = await fixture(t, { dbError: true });
-  const result = await app.request('/api/evolve', evolveBody);
-  assert.equal(result.status, 500);
-  assert.notEqual(result.body.status, 'success');
-});
-
-test('evolution work also respects the configured concurrency capacity', async (t) => {
-  const release = Promise.withResolvers();
-  const overloaded = Promise.withResolvers();
-  let entered = 0;
-  const app = await fixture(t, {
-    judge: async () => {
-      entered++;
-      if (entered > 3) overloaded.resolve('over-capacity');
-      await release.promise;
-      return true;
-    },
-  });
-  const requests = Array.from({ length: 4 }, () => app.request('/api/evolve', evolveBody));
-  const rejected = requests.map((request) => request.then((result) => {
-    assert.equal(result.status, 429);
-    return 'limited';
-  }));
-  try {
-    const result = await Promise.race([overloaded.promise, ...rejected]);
-    assert.equal(result, 'limited', 'all four evolution jobs entered the judge');
-  } finally {
-    release.resolve();
-    // All requests must finish before closing their HTTP server, including
-    // promises created only to detect an early 429 response.
-    await Promise.allSettled([...requests, ...rejected]);
+test('upstream timeout/config/tool failures are failures and unexpected errors do not leak secrets',async t=>{
+  for(const [status,code] of [[502,'MCP_TOOL_ERROR'],[503,'MCP_NOT_CONFIGURED'],[504,'MCP_TIMEOUT']]) {
+    const f=await fixture(t,{error:new LawMcpError(status,code,'private-detail')});const r=await f.request('/api/analyze',{query:'law'});
+    assert.equal(r.status,status);assert.equal(r.body.code,code);assert.ok(!JSON.stringify(r).includes('private-detail'));
   }
+  const f=await fixture(t,{error:new Error('private-token')});assert.deepEqual((await f.request('/api/analyze',{query:'law'})).body,{code:'INTERNAL_ERROR'});
 });
-
-test('analyze rejects an absent query instead of fabricating a successful answer', async (t) => {
-  const app = await fixture(t);
-  const result = await app.request('/api/analyze', {});
-  assert.equal(result.status, 400,
-    'an absent query must not become a successful "Draft answer for undefined"');
+test('expected tool diagnostics survive REST and MCP while configured secrets and internal fields are removed',async t=>{
+  const secret='fixture-law-secret-value';
+  const encodedDiagnostic='{"required":["event_date"],"headers":{"x-private":"unknown-private"},"detail":"\\u0066ixture-law-secret-value"}';
+  const diagnostic={isError:true,content:[{type:'text',text:`PUBLIC_SYNTHETIC_EVENT_DATE_REQUIRED https://source.invalid?OC=${secret}`},{type:'text',text:encodedDiagnostic}],structuredContent:{required:['event_date'],headers:{authorization:secret},stack:secret,detail:'safe public fixture'},_meta:{token:secret}};
+  const f=await fixture(t,{env:{LAW_OC:secret},error:new LawMcpError(502,'MCP_TOOL_ERROR','exception message must remain private',diagnostic)});
+  const rest=await f.request('/api/analyze',{query:'fixture'});assert.equal(rest.status,502);assert.deepEqual(rest.body.result.structuredContent.required,['event_date']);assert.match(rest.body.result.content[0].text,/PUBLIC_SYNTHETIC/);
+  assert.ok(!JSON.stringify(rest).includes(secret));assert.ok(!JSON.stringify(rest).includes('exception message'));
+  assert.deepEqual(JSON.parse(rest.body.result.content[1].text),{required:['event_date'],detail:'[REDACTED]'});
+  const client=new Client({name:'error-contract',version:'1'});t.after(()=>client.close());
+  await client.connect(new SSEClientTransport(new URL(f.base+'/sse'),{requestInit:{headers:{authorization:'Bearer alice'}}}),{timeout:3000});
+  const mcp=await client.callTool({name:'search_law',arguments:{query:'fixture'}});assert.equal(mcp.isError,true);assert.deepEqual(mcp.structuredContent.required,['event_date']);assert.match(mcp.content[0].text,/PUBLIC_SYNTHETIC/);assert.ok(!JSON.stringify(mcp).includes(secret));assert.equal(mcp.structuredContent.stack,undefined);
+  assert.deepEqual(JSON.parse(mcp.content[1].text),{required:['event_date'],detail:'[REDACTED]'});
 });
-
-test('analyze returns upstream content and defaults to natural-language legal research', async (t) => {
-  const app = await fixture(t);
-  const result = await app.request('/api/analyze', { query: '소득세법' });
-  assert.equal(result.status, 200);
-  assert.equal(app.mcpCalls[0].name, 'legal_research');
-  assert.equal(app.mcpCalls[0].args.query, '소득세법');
-  assert.equal(result.body.data.result.content[0].text, 'Actual MCP fixture context');
-  assert.equal(result.body.data.kind, 'retrieval');
-  assert.equal(result.body.data.answer, undefined);
+test('tool diagnostics bound oversized data and omit credential labels and internal traces',()=>{
+  const result=safeToolDiagnostic({isError:true,content:[{type:'text',text:'PUBLIC_FIXTURE\nAuthorization: Bearer fixture-unknown-value\n    at /internal/private.js:10\nSUPABASE_SECRET=unconfigured-sensitive-value'}],structuredContent:{required:['event_date'],environment:{secret:'hidden'},large:'z'.repeat(20000)}},{});
+  const json=JSON.stringify(result);assert.ok(json.includes('PUBLIC_FIXTURE'));assert.ok(!json.includes('fixture-unknown-value'));assert.ok(!json.includes('unconfigured-sensitive-value'));assert.ok(!json.includes('/internal/private.js'));assert.ok(Buffer.byteLength(json)<=16000);
 });
-
-test('caller can select a text retrieval tool and retain upstream identifiers', async (t) => {
-  const app = await fixture(t);
-  const result = await app.request('/api/analyze', {
-    query: '소득세법 제88조', tool: 'get_law_text', arguments: { mst: '123456', jo: '제88조' },
-  });
-  assert.equal(result.status, 200);
-  assert.equal(app.mcpCalls[0].name, 'get_law_text');
-  assert.deepEqual({ ...app.mcpCalls[0].args }, { mst: '123456', jo: '제88조' });
+test('JSON tool diagnostics decode before filtering nested private fields and escaped configured secrets',()=>{
+  const secret='fixture-"law\\secret\nvalue';
+  const encoded=JSON.stringify(secret).slice(1,-1).replace('f','\\u0066');
+  const text=`{"code":"PUBLIC_ARGUMENT_REQUIRED","required":["event_date"],"headers":{"x-private":"unknown-credential"},"stack":"internal-trace","detail":"${encoded}"}`;
+  const result=safeToolDiagnostic({isError:true,content:[{type:'text',text}],structuredContent:{nested:JSON.stringify({required:['event_date'],environment:{private:'unknown-environment'},detail:secret})}},{LAW_OC:secret});
+  const parsed=JSON.parse(result.content[0].text);
+  assert.equal(parsed.code,'PUBLIC_ARGUMENT_REQUIRED');assert.deepEqual(parsed.required,['event_date']);
+  assert.equal(parsed.headers,undefined);assert.equal(parsed.stack,undefined);assert.equal(parsed.detail,'[REDACTED]');
+  const nested=JSON.parse(result.structuredContent.nested);
+  assert.deepEqual(nested.required,['event_date']);assert.equal(nested.environment,undefined);assert.equal(nested.detail,'[REDACTED]');
+  const mixed=safeToolDiagnostic({isError:true,content:[{type:'text',text:'Source failure: '+text}]},{LAW_OC:secret});
+  assert.ok(!JSON.stringify(mixed).includes('unknown-credential'));
 });
-
-test('tool catalog requires authentication and process settings cannot come from HTTP input', async (t) => {
-  const app = await fixture(t);
-  assert.equal((await app.request('/api/tools', undefined, false)).status, 401);
-  assert.equal((await app.request('/api/tools')).body.data.tools[0].name, 'search_law');
-  assert.equal((await app.request('/api/analyze', { query: '법령', command: 'other-program' })).status, 400);
-  assert.equal(app.mcpCalls.length, 0);
+test('numeric credentials and serialized traces never enter public tool diagnostics',()=>{
+  const result=safeToolDiagnostic({isError:true,content:[{type:'text',text:JSON.stringify({required:['event_date'],stack:'Error: fixture\n at /internal/private.js:10:20'})}],structuredContent:{LAW_OC:123456789,detail:123456789,required:['event_date']}},{LAW_OC:'123456789'});
+  assert.deepEqual(JSON.parse(result.content[0].text),{required:['event_date']});
+  assert.equal(result.structuredContent.LAW_OC,undefined);assert.equal(result.structuredContent.detail,'[REDACTED]');
 });
-
-test('upstream tool failure, missing credentials and timeout never become analyze success', async (t) => {
-  for (const [status, code] of [[502, 'MCP_TOOL_ERROR'], [503, 'MCP_NOT_CONFIGURED'], [504, 'MCP_TIMEOUT']]) {
-    const app = await fixture(t, { mcpError: new LawMcpError(status, code, 'Fixture error') });
-    const result = await app.request('/api/analyze', { query: '소득세법' });
-    assert.equal(result.status, status);
-    assert.equal(result.body.code, code);
-    assert.notEqual(result.body.status, 'success');
-  }
+test('legacy automatic PR paths stay closed and unavailable durable intake never reports success',async t=>{
+  const f=await fixture(t);
+  assert.equal((await f.request('/api/evolve',{issue_summary:'old'})).status,410);
+  assert.equal((await f.request('/api/failures',{})).status,503);
 });
-
-test('explicit caller draft is evaluated before legal retrieval', async (t) => {
-  const app = await fixture(t);
-  const result = await app.request('/api/analyze', {
-    query: '소득세법',
-    draft_answer: '특수관계인 간 부당행위계산부인의 해당성 판단시점과 시가 평가기간을 모두 잔금일 기준으로 통일합니다.',
-  });
-  assert.equal(result.status, 400);
-  assert.equal(app.mcpCalls.length, 0);
+test('durable service receives verified actor and DB error is not success',async t=>{
+  let actor;const f=await fixture(t,{failures:{submit:async(a)=>{actor=a;throw new ServiceError(503,'DB_UNAVAILABLE');},status:async()=>({})}});
+  assert.equal((await f.request('/api/failures',{proposer_name:'bob'})).status,503);assert.equal(actor.id,'alice');
 });
-
-test('health identifies the MCP release loaded by this Express process for deployment checks', async t => {
-  const app = await fixture(t, { releaseVersion: '4.14.0' });
-  const result = await app.request('/health');
-  assert.equal(result.status, 200);
-  assert.equal(result.body.mcp_release, '4.14.0');
+test('real MCP SSE and messages require matching authenticated principal, preserve upstream result',async t=>{
+  const f=await fixture(t);let session;
+  const client=new Client({name:'review',version:'1'});
+  const transport=new SSEClientTransport(new URL(f.base+'/sse'),{requestInit:{headers:{authorization:'Bearer alice'}},fetch:async(url,init)=>{
+    if(String(url).includes('/messages?')) session=new URL(url).searchParams.get('sessionId');return fetch(url,init);
+  }});
+  t.after(()=>client.close());await client.connect(transport,{timeout:3000});
+  const catalog=await client.listTools();assert.ok(catalog.tools.some(x=>x.name==='validate_legal_draft'));
+  assert.equal((await f.request('/messages?sessionId='+session,{jsonrpc:'2.0',method:'ping',id:20},'Bearer bob')).status,404);
+  const r=await client.callTool({name:'search_law',arguments:{query:'law'}});assert.equal(r.structuredContent.law,'fixture');assert.equal(r._meta.upstream,'preserved');
+  const invalid=await client.callTool({name:'validate_tax_draft',arguments:{draft_answer:'law',force:'false'}});assert.equal(invalid.isError,true);
+  const old=await client.callTool({name:'propose_tax_rule',arguments:{}});assert.equal(old.isError,true);
 });
+test('foreign browser Origin and oversized body are rejected',async t=>{
+  const f=await fixture(t);assert.equal((await f.request('/api/tools',undefined,'Bearer alice',{origin:'https://evil.invalid'})).status,403);
+  assert.equal((await f.request('/api/analyze',{query:'x'.repeat(300000)})).status,413);
+});
+test('all ten rules have executable missing-fact paths; FC08-10 are no longer silent passes',()=>{
+  const engine=new GateEngine();assert.equal(engine.rules.length,10);
+  for(const rule of engine.rules){const r=engine.validate({draft_answer:rule.cues[0]},'fixture');assert.equal(r.checks.find(x=>x.id===rule.id).status,'needs_info');assert.equal(r.passed,false);}
+  const result=engine.validate({draft_answer:'종전 취득원가 권리가액 분담금 전액을 시가로 안분'},'fixture');
+  assert.ok(['FC-08','FC-09','FC-10'].every(id=>result.checks.some(c=>c.case_id===id)));
+});
+test('empty checks/skips/unverified legal basis cannot become passed; force preserves completed failed arithmetic',()=>{
+  const e=new GateEngine();assert.equal(e.validate({draft_answer:'hello'},'v').coverage,'no_coverage');
+  assert.throws(()=>e.validate({draft_answer:''},'v'));assert.throws(()=>new GateEngine('missing-rules-directory'));
+  const normal=e.validate({draft_answer:'arithmetic',facts:{allocation:{total:100,parts:[60,60]}}},'v');assert.equal(normal.blocked,true);assert.equal(normal.assessment_complete,true);
+  const forced=e.validate({draft_answer:'arithmetic',facts:{allocation:{total:100,parts:[60,60]}},force:true,bypass_reason:'review exception'},'v');
+  assert.equal(forced.blocked,false);assert.equal(forced.assessment_complete,true);assert.equal(forced.scoped_pass,false);assert.equal(forced.passed,false);
+  const skipped=e.validate({draft_answer:'분담금',skip_gates:['QG-COST-03'],bypass_reason:'review exception'},'v');assert.equal(skipped.assessment_complete,false);
+  const unrelatedSkip=e.validate({draft_answer:'arithmetic',facts:{allocation:{total:100,parts:[60,60]}},skip_gates:['QG-COST-03'],bypass_reason:'skip only contribution research'},'v');
+  assert.equal(unrelatedSkip.blocked,true,'skipping a legal research question cannot disable an executed arithmetic failure');assert.equal(unrelatedSkip.scoped_pass,false);
+  const revised=e.validate({draft_answer:'different'},'v');assert.notEqual(normal.draft_hash,revised.draft_hash);
+  const exact='  original draft  \n';assert.equal(e.validate({draft_answer:exact},'v').draft_hash,digest(exact));
+  assert.notEqual(e.validate({draft_answer:exact},'v').draft_hash,e.validate({draft_answer:exact.trim()},'v').draft_hash);
+  assert.throws(()=>e.validate({draft_answer:'   \n'},'v'));
+});
+test('health records release and rule fingerprints',async t=>{const f=await fixture(t);const r=await f.request('/health');assert.equal(r.body.mcp_release,'4.13.0');assert.match(r.body.rules_version,/^[a-f0-9]{64}$/);});

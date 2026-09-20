@@ -1,0 +1,19 @@
+{
+  "id": "QG-MATH-01",
+  "case_id": "FC-10",
+  "name": "안분 근거 확인",
+  "cues": [
+    "안분",
+    "시가",
+    "경제적 지분"
+  ],
+  "required_facts": [
+    "allocation_basis",
+    "rights_values",
+    "contribution_amounts",
+    "event_dates"
+  ],
+  "guidance": "산식의 변수와 법정 기준을 구분하고 근거 부족이면 결론을 보류하세요.",
+  "legal_status": "research_required",
+  "version": 1
+}

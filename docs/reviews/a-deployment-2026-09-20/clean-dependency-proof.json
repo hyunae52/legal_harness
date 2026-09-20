@@ -1,0 +1,20 @@
+{
+  "status": "pass",
+  "observed_at": "2026-09-20T05:38:06.749Z",
+  "method": "Independent clean npm ci from identical approved artifact, before executing any installed app/upstream code; full closure equals staged installation",
+  "clean": {
+    "algorithm": "sha256-path-type-content-v1",
+    "sha256": "bd4653a5c3b1b77dc5624dd5cfc3bbb2d1bab44b61b650b5ae8a6feb2e95746c",
+    "files": 6679,
+    "links": 9,
+    "bytes": 107564579
+  },
+  "staged": {
+    "algorithm": "sha256-path-type-content-v1",
+    "sha256": "bd4653a5c3b1b77dc5624dd5cfc3bbb2d1bab44b61b650b5ae8a6feb2e95746c",
+    "files": 6679,
+    "links": 9,
+    "bytes": 107564579
+  },
+  "public_route_changed": false
+}

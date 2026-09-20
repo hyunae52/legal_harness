@@ -1,0 +1,17 @@
+{
+  "id": "QG-VALUATION-01",
+  "case_id": "FC-04",
+  "name": "법인 거래 평가",
+  "cues": [
+    "법인",
+    "감정가액"
+  ],
+  "required_facts": [
+    "parties",
+    "valuation_reports",
+    "event_dates"
+  ],
+  "guidance": "적용 세목·당사자·평가 근거를 확인하세요.",
+  "legal_status": "research_required",
+  "version": 1
+}

@@ -38,10 +38,10 @@ try {
     throw new Error('Remove manual MCP command/args/cwd settings when enabling release-file updates');
   }
   const args = process.argv.slice(2);
-  if (args.some(arg => arg !== '--bootstrap')) throw new Error('Only --bootstrap is accepted');
+  if (args.length>2 || (args.length===1 && args[0]!=='--bootstrap') || (args.length===2 && (args[0]!=='--activate' || !/^[a-f0-9]{64}$/.test(args[1])))) throw new Error('Use no arguments (candidate check), --bootstrap, or --activate APPROVED_SHA256');
   const npm = process.env.npm_execpath;
   const healthUrl = process.env.KOREAN_LAW_UPDATE_HEALTH_URL || `http://127.0.0.1:${process.env.PORT || 3000}/health`;
-  await updateMcp({ activeFile: resolve(appDir, process.env.KOREAN_LAW_MCP_RELEASE_FILE), bootstrap: args.includes('--bootstrap') }, {
+  const result=await updateMcp({ activeFile: resolve(appDir, process.env.KOREAN_LAW_MCP_RELEASE_FILE), bootstrap: args.includes('--bootstrap'),activateHash:args[0]==='--activate'?args[1]:undefined }, {
     log,
     latestVersion: async () => JSON.parse(await runNode([npm, 'view', 'korean-law-mcp@latest', 'version', '--json'], { capture: true, timeout: 30_000 })),
     install: async (directory, version) => {
@@ -77,6 +77,7 @@ try {
       throw new Error(`Express did not report the selected MCP release ${version}`);
     },
   });
+  log(JSON.stringify(result));
 } catch (error) {
   console.error(`[${new Date().toISOString()}] MCP update failed: ${error.message}`);
   process.exitCode = 1;

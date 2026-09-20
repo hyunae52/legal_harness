@@ -1,0 +1,17 @@
+{
+  "id": "QG-EXCEPTION-02",
+  "case_id": "FC-03",
+  "name": "거주 요건",
+  "cues": [
+    "직전거주",
+    "거주주택"
+  ],
+  "required_facts": [
+    "residence_history",
+    "ownership_history",
+    "event_dates"
+  ],
+  "guidance": "명칭만으로 특례를 확정하지 말고 사실과 적용 요건을 구분하세요.",
+  "legal_status": "research_required",
+  "version": 1
+}
