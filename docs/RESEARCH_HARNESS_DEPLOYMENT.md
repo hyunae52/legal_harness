@@ -45,7 +45,9 @@ Debian에 venv 모듈은 있었지만 ensurepip 구성요소가 없어 설치가
 
 ## 검수 상태
 
-REVIEW PASS / PLAN PASS / CODE PASS (`5f5ee328cdce448c6854ef2b99edffee3d96b203`, CR-01~03 및 원격 완료 불명 보호 확인). 전체 130개·설치 패키지 7개 통과. 최초 DEPLOYMENT 검수는 원본 결합 자료 누락 DR-01로 REVISE였으며 아래 자료를 보완해 한정 재검수한다. 제품 결함·전환 순서 모순·rollback 필요 판정은 아니었다.
+**REVIEW PASS / PLAN PASS / CODE PASS / DEPLOYMENT PASS.** CODE 고정 대상은 `5f5ee328cdce448c6854ef2b99edffee3d96b203`이며 CR-01~03 및 원격 완료 불명 보호를 확인했다. 전체 130개·설치 패키지 7개 통과. 최초 DEPLOYMENT 검수는 원본 결합 자료 누락 DR-01로 REVISE였고, 아래 자료를 보완한 고정 증거 `196b1a95b98fc5083ab3d80431877c0b50a795cf`에 대해 Pro가 **DR-01 CLOSED / DEPLOYMENT PASS**를 판정했다. 남은 필수 보완·재배포 요구는 없다.
+
+판정은 앱 `75314179…`, 배포 artifact `d63b301d…9464ce6`, helper `b84fe132…` 및 해당 고정 증거에 적용된다. Pro는 공개 코드·CI 로그·파일별 hash 목록·commit/tree·실행 기록의 일관성을 확인했고, 실제 빌드·GCE·HTTPS MCP 실행은 Codex가 수행했다. [단계별 Pro 대화](https://chatgpt.com/c/6ab023ff-1d48-83ee-b465-31894bedbd22). 이후 문서 상태 정리는 운영 릴리스를 변경하지 않는다.
 
 ## DR-01: 실제 배포 파일과 고정 소스의 대응
 

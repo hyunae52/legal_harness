@@ -1,6 +1,6 @@
 # 독자 연구 하네스 구현 계획
 
-상태: 리뷰 REVIEW PASS, 계획 최종 PLAN PASS (`086913b`, PH-01~06 CLOSED). 아래 계약을 기준으로 구현·시험 후 CODE Pro 검수를 진행한다.
+상태: REVIEW PASS, 계획 최종 PLAN PASS (`086913b`, PH-01~06 CLOSED), 최종 CODE PASS (`5f5ee32`), DEPLOYMENT PASS (`196b1a9` 증거, DR-01 CLOSED). 아래 계약에 따른 구현·시험 및 GCE 배포와 단계별 Pro 검수를 완료했다. [배포 기록](RESEARCH_HARNESS_DEPLOYMENT.md) 참고.
 
 ## 사용자에게 보이는 결과
 

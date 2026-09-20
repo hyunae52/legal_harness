@@ -81,7 +81,7 @@
 
 1. 리뷰: Pro 1차 **REVISE**, 집중 재검수 **REVIEW PASS**. R1(검증 전 인용 삭제), R2(검증 후 판정 변경), R3(축소·생략 상태)는 모두 CLOSED. 6개 설계 경계도 충족 판정을 받았다. 이는 참고 소스 해석과 설계 전제의 승인으로, 구체 계획·구현·배포 승인이 아니다. Pro는 소스 정적 검토를 수행했고 로컬 시험을 직접 실행하지 않았다. 대화: https://chatgpt.com/c/6ab023ff-1d48-83ee-b465-31894bedbd22
 2. 계획: Pro 1차 **PLAN REVISE**, 후속1에서 **PH-01~05 CLOSED**, 후속2에서 **PH-06 CLOSED / PLAN PASS** (`086913bf21ff13f4185724da909f6b4303ca7104`). 인증 대기/디스패치 drain과 rollback 실패 후 공개 금지까지 계획에 반영했다. 운영본의 실제 drain 증명은 배포 준비 조건이며 계획 승인으로 대체하지 않는다.
-3. 구현: 진행 중. 초기 HTTP 404/MCP 도구 부재 RED 2건 뒤 독자 TypeScript 및 보호 경계 시험을 구현했다. CODE Pro 검수는 아직 받지 않았다.
-4. 배포: 미착수.
+3. 구현: 최종 CODE PASS (`5f5ee328cdce448c6854ef2b99edffee3d96b203`). CR-01~03 및 원격 완료 불명 보호를 반영했다. 초기 HTTP 404/MCP 도구 부재와 추가 반례를 RED로 확인한 뒤 전체 130개·패키지 7개를 통과했다. Pro는 고정 코드와 같은 SHA의 CI 실행 로그를 확인했다. [구현 기록](RESEARCH_HARNESS_IMPLEMENTATION.md) 참고.
+4. 배포: GCE 전환 및 공개 HTTPS REST/MCP 원문 검증 완료. 원본 결합 자료 보완 후 **DR-01 CLOSED / DEPLOYMENT PASS** (`196b1a95b98fc5083ab3d80431877c0b50a795cf` 증거 기준). Pro는 공개 기록의 일관성을 검수했으며 실제 서버·HTTPS 호출은 Codex가 수행했다. [배포 기록](RESEARCH_HARNESS_DEPLOYMENT.md) 참고.
 
 직접 확인한 소스, 로컬 실행 증거, Pro의 판단, 실제 운영 증거를 서로 대체하지 않는다.
