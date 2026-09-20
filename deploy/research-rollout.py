@@ -12,6 +12,7 @@ OLD = BASE / 'legal-harness-client-guide-a9808dd'
 OLD_HEAD = 'a9808ddd629f18cb915e710bf52835fe6db400e5'
 OLD_SHA = 'c0977a5e3508d02c1340cde15307b05ba8c10413c14fb182f96809b584df1561'
 ENV = BASE / '.config/legal-harness/corrections.env'
+RUNTIME_ENV = BASE / 'legal-harness-candidate-ddddafa/.runtime/candidate.env'
 DROPIN = pathlib.Path('/etc/systemd/system/legal-harness-a.service.d/90-research.conf')
 AUTH_HASHES = {
     'dist/auth.js': 'f515f8054c9f738a720bb7b650865e6b4ac7ab63929dda9f53a7f53276410699',
@@ -70,8 +71,12 @@ def previous():
     assert record['head'] == OLD_HEAD and record['artifact_sha256'] == OLD_SHA
     assert sha(BASE / 'legal-harness-client-guide-a9808dd.tgz') == OLD_SHA
     files(OLD, record)
-    expected = json.loads((BASE / 'a-staged-manifest.json').read_text())['installed_dependencies']
+    baseline = json.loads((BASE / 'a-staged-manifest.json').read_text())
+    expected = baseline['installed_dependencies']
     assert closure(OLD) == expected
+    for item in baseline['config_files']:
+        if item['label'] in ('runtime env', 'upstream manifest'):
+            assert sha(pathlib.Path(item['path'])) == item['sha256']
     for name, expected_sha in AUTH_HASHES.items():
         assert sha(OLD / name) == expected_sha
     return expected
@@ -125,9 +130,11 @@ def main(mode, packet):
         # the keys needed by this read-only smoke. No correction publisher exists
         # in the staged createApp; no persistent correction directory is passed.
         bootstrap = """import {readFileSync} from 'node:fs';import dotenv from 'dotenv';
-const saved=dotenv.parse(readFileSync('/home/cta/.config/legal-harness/corrections.env'));
+const saved=dotenv.parse(readFileSync('/home/cta/legal-harness-candidate-ddddafa/.runtime/candidate.env'));
 if(process.env.TAXLAB_SERVER_URL)process.env.TAXLAB_API_KEY=saved.TAXLAB_API_KEY;
-else process.env.LAW_OC=saved.LAW_OC||saved.KOREAN_LAW_API_KEY||'';
+else for(const name of ['LAW_OC','KOREAN_LAW_API_KEY','KOREAN_LAW_MCP_RELEASE_FILE','LAW_API_PROTOCOL',
+ 'MCP_MAX_UPSTREAM_REQUESTS','MCP_MAX_UPSTREAM_BODY_BYTES','MCP_MAX_TOTAL_UPSTREAM_BODY_BYTES','MCP_MAX_TOOL_RESPONSE_CHARS'])
+ if(saved[name])process.env[name]=saved[name];
 await import('./scripts/research-smoke.mjs');"""
         env = {k: os.environ[k] for k in ['PATH', 'HOME', 'USER', 'LANG'] if k in os.environ}
         output = new / '.runtime' / ('public-smoke.json' if endpoint and endpoint.startswith('https:') else 'candidate-smoke.json' if endpoint else 'stage-smoke.json')
@@ -162,6 +169,7 @@ await import('./scripts/research-smoke.mjs');"""
             assert not new.exists() and not DROPIN.exists()
             assert prop('WorkingDirectory') == str(OLD)
             assert ENV.stat().st_uid == os.getuid() and ENV.stat().st_mode & 0o777 == 0o600
+            assert RUNTIME_ENV.stat().st_uid == os.getuid() and RUNTIME_ENV.stat().st_mode & 0o777 == 0o600
             expected_closure = previous(); cron_quiet()
             assert config['ci']['head_sha'] == head and config['ci']['conclusion'] == 'success'
             assert sha(archive) == config['artifact_sha256']
