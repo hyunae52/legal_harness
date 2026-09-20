@@ -1,4 +1,5 @@
 import { Octokit } from '@octokit/rest';
+import { createHash } from 'node:crypto';
 import { CorrectionService, correctionContent, correctionFile, type CorrectionRecord, type CorrectionRepository } from './corrections.js';
 import { ServiceError } from './contracts.js';
 
@@ -75,6 +76,30 @@ export function createCorrectionRepository(options: { token: string; owner: stri
         return { state: 'merged', pr: identity };
       }
       return { state: pr.state === 'closed' ? 'closed' : 'pending_review', pr: identity };
+    },
+    async merged(records, signal) {
+      if (!records.length) return [];
+      const request = { signal };
+      const main = (await api.rest.git.getRef({ ...scope, ref: 'heads/' + options.baseBranch, request })).data.object.sha;
+      const commit = (await api.rest.git.getCommit({ ...scope, commit_sha: main, request })).data;
+      const tree = (await api.rest.git.getTree({ ...scope, tree_sha: commit.tree.sha, recursive: '1', request })).data;
+      if (tree.truncated) throw new ServiceError(503, 'CORRECTION_TREE_INCOMPLETE');
+      const files = new Map(tree.tree.map(entry => [entry.path, entry]));
+      const found: string[] = [];
+      for (const record of records) {
+        const content = Buffer.from(correctionContent(record), 'utf8');
+        const expected = createHash('sha1').update(`blob ${content.length}\0`).update(content).digest('hex');
+        const entry = files.get(correctionFile(record));
+        if (!record.pr || entry?.type !== 'blob' || entry.mode !== '100644' || entry.sha !== expected) continue;
+        // Merge is an immutable event; main's exact file is rechecked on every refresh.
+        const marker = record.merge_verified;
+        if (marker?.proposal_hash !== record.proposal_hash || marker.head_sha !== record.pr.head_sha || marker.number !== record.pr.number) {
+          const { data: pr } = await api.rest.pulls.get({ ...scope, pull_number: record.pr.number, request });
+          if (!pr.merged || pr.base.ref !== options.baseBranch || pr.head.ref !== branch(record) || pr.head.repo?.full_name !== target || pr.head.sha !== record.pr.head_sha) continue;
+        }
+        found.push(record.id);
+      }
+      return found;
     },
   };
 }

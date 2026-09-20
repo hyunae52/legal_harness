@@ -24,6 +24,7 @@
 | CP-06 | 미머지 PR은 조회에 반영하지 않는다. 머지된 PR과 main의 정확한 파일을 대조한다 | GitHub adapter + 조회 envelope |
 | CP-07 | 모든 연결에서 도구 설명으로 제안 시점을 알 수 있고 ChatGPT 작업에도 같은 흐름이 있다 | MCP + REST + 생성 안내 |
 | CP-08 | 실패·한도·설정 누락 시 상태를 사실대로 돌려주며 법령 조회는 계속 가능하다 | 회귀 시험 |
+| CP-09 | 50건을 초과해도 누락하지 않으며 main 파일 변경을 재확인한다. 확인한 머지 이벤트를 영속 저장해 재시작마다 PR을 다시 조회하지 않는다 | GitHub HTTP adapter + 60건 영속 상태 |
 
 운영은 기존 단일 GCE 서비스 프로세스와 권한 제한된 영속 상태 디렉터리를 사용한다. 프로세스 내 동시 쓰기를 직렬화하고 실제 외부 작업 전 intent를 저장한다. 공유 접속키는 공유 actor이며 개인 계정별 비공개 저장소라고 안내하지 않는다. 자료와 URL은 검수 대상 데이터이고 실행하지 않는다. API 키·법제처 키·임의 사건 원본을 PR에 싣지 않는다. 사용자의 동의는 호출 클라이언트가 전달하며, 서버가 독립적으로 사람의 발언을 인증한다고 주장하지 않는다.
 
@@ -32,6 +33,7 @@
 ## 검사 기록
 
 - RED: `node --test tests/correction-pr.test.mjs`에서 CP-07 실패. 기존 MCP 도구 목록에 `prepare_correction_pr`가 없다는 사용자 계약 위반을 확인했다. import/fixture 오류가 원인이 아니었다.
-- GREEN: 같은 명령 통과. 영속 상태·동의·일일 한도·재시도·머지 반영 시험을 포함한 두 correction 시험 파일 8개가 통과했다.
+- GREEN: 같은 명령 통과. 영속 상태·동의·일일 한도·재시도·머지 반영 시험을 포함한 두 correction 시험 파일 9개가 통과했다.
 - 실제 Octokit HTTP adapter를 로컬 GitHub HTTP fixture와 연결하여 JSON 한 파일만 추가, draft 생성, PR 생성 후 응답 유실, 같은 PR 대조, 변경된 branch 거부를 검사했다. 실제 GitHub 운영 생성 증거와는 별개이다.
-- 전체 회귀: `npm run review` 84/84, skip 0. 기존 Actions schema 경로 기대값 변경은 새 교정 작업 3개의 추가 요구사항을 반영한 것이며, 실제 생성 작업이 consequential인지 추가 검증했다.
+- 전체 회귀: `npm run review` 85/85, skip 0. 기존 Actions schema 경로 기대값 변경은 새 교정 작업 3개의 추가 요구사항을 반영한 것이며, 실제 생성 작업이 consequential인지 추가 검증했다.
+- 영속 저장은 파일 fsync 후 rename하고 Linux 운영 환경에서는 디렉터리도 fsync한다. 재시작 시험은 실제 전원 장애 시험을 의미하지 않는다. 조회의 `merged` 상태는 GitHub 머지와 main 파일 일치만 확인하며, 별도 AI 승인이나 법적 정답을 뜻하지 않는다.

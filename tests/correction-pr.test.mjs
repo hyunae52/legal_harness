@@ -83,7 +83,7 @@ test('CP-05/08: blank matching cues, private text, source credentials, arbitrary
 test('CP-06: only verified merged records enter later lookup; changed files and stale cache do not pass',async t=>{
   let clock=Date.now();const {service,state}=await serviceFixture(t,{now:()=>clock});const p=await service.prepare(actor,proposal());await service.confirm(actor,consent(p));
   await service.refresh();assert.equal(service.search('시행일 확인').items.length,0);
-  state.merged=true;await service.refresh();const found=service.search('시행일 확인');assert.equal(found.items.length,1);assert.equal(found.items[0].review_state,'human_merged');assert.equal(found.legal_applicability,'unverified');
+  state.merged=true;await service.refresh();const found=service.search('시행일 확인');assert.equal(found.items.length,1);assert.equal(found.items[0].review_state,'merged');assert.equal(found.legal_applicability,'unverified');
   assert.equal(service.search('관련 없는 다른 질의').items.length,0);
   state.changed=true;await service.refresh();assert.equal(service.search('시행일 확인').items.length,0);
   state.changed=false;await service.refresh();state.offline=true;clock+=11*60000;await service.refresh();assert.equal(service.search('시행일 확인').status,'unavailable');assert.equal(service.search('시행일 확인').items.length,0);

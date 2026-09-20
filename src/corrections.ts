@@ -27,12 +27,14 @@ export interface CorrectionRecord {
   id: string; actor: string; created_at: string; expires_at: string; proposal: CorrectionProposal;
   proposal_hash: string; confirmation_token: string; state: 'awaiting_confirmation' | 'publishing' | 'publication_uncertain' | 'published';
   base_sha?: string; pr?: { number: number; url: string; head_sha: string };
+  merge_verified?: { proposal_hash: string; head_sha: string; number: number };
 }
 export interface CorrectionRepository {
   readonly target: string;
   base(): Promise<string>;
   publish(record: CorrectionRecord): Promise<NonNullable<CorrectionRecord['pr']>>;
   inspect(record: CorrectionRecord, signal?: AbortSignal): Promise<{ state: 'pending_review' | 'merged' | 'closed' | 'missing' | 'changed'; pr?: NonNullable<CorrectionRecord['pr']> }>;
+  merged?(records: CorrectionRecord[], signal: AbortSignal): Promise<string[]>;
 }
 export function correctionDocument(record: Pick<CorrectionRecord, 'id' | 'created_at' | 'proposal'>) {
   return { schema_version: 1, proposal_id: record.id, proposed_at: record.created_at,
@@ -67,6 +69,11 @@ export class CorrectionService {
     const fd = openSync(temp, 'w', 0o600);
     try { writeFileSync(fd, JSON.stringify(record) + '\n'); fsyncSync(fd); } finally { closeSync(fd); }
     renameSync(temp, path);
+    // Linux production needs the directory entry durable as well as the file contents.
+    if (process.platform !== 'win32') {
+      const directory = openSync(this.directory, 'r');
+      try { fsyncSync(directory); } finally { closeSync(directory); }
+    }
   }
   private owned(actor: Actor, id: string) {
     const record = this.read(id);
@@ -143,12 +150,21 @@ export class CorrectionService {
     this.refreshing = (async () => {
       const found: typeof this.merged = [], signal = AbortSignal.timeout(30000);
       try {
-        const records = this.records().filter(r => r.pr).slice(-50);
+        const records = this.records().filter(r => r.pr);
+        const mergedIds = this.options.repository.merged ? new Set(await this.options.repository.merged(records, signal)) : undefined;
         for (const record of records) {
           if (this.closed) return;
           if (signal.aborted) throw Error('Refresh expired');
-          const state = await this.options.repository.inspect(record, signal);
-          if (state.state === 'merged') found.push({ record, checked_at: new Date(this.now()).toISOString() });
+          const merged = mergedIds ? mergedIds.has(record.id) : (await this.options.repository.inspect(record, signal)).state === 'merged';
+          if (merged) {
+            const verified = { proposal_hash: record.proposal_hash, head_sha: record.pr!.head_sha, number: record.pr!.number };
+            if (JSON.stringify(record.merge_verified) !== JSON.stringify(verified)) {
+              const latest = this.read(record.id)!;
+              if (latest.proposal_hash !== record.proposal_hash || latest.pr?.head_sha !== record.pr!.head_sha || latest.pr?.number !== record.pr!.number) throw Error('Record changed during refresh');
+              latest.merge_verified = verified; this.save(latest);
+            }
+            found.push({ record, checked_at: new Date(this.now()).toISOString() });
+          }
         }
         this.merged = found; this.checkedAt = this.now();
       } catch { /* Do not refresh timestamps or turn lookup failure into approval. */ }
@@ -160,8 +176,8 @@ export class CorrectionService {
     const normalized = query.normalize('NFKC').toLowerCase();
     return { status: current ? 'cached' : 'unavailable', legal_applicability: 'unverified',
       items: current ? this.merged.filter(({ record }) => record.proposal.keywords.some(k => normalized.includes(k.normalize('NFKC').toLowerCase()))).slice(0, 5).map(({ record, checked_at }) => ({
-        ...correctionDocument(record), pr_url: record.pr!.url, review_state: 'human_merged', checked_at,
-        note: '사람이 머지한 교정 참고 자료입니다. 원천의 최신성·사건 적용과 독립 AI 검수는 별도로 확인하세요.',
+        ...correctionDocument(record), pr_url: record.pr!.url, review_state: 'merged', checked_at,
+        note: '저장소의 main에 머지된 교정 참고 자료입니다. 원천의 최신성·사건 적용과 독립 AI 검수는 별도로 확인하세요.',
       })) : [] };
   }
   start() { if (!this.timer) { void this.refresh(); this.timer = setInterval(() => void this.refresh(), 5 * 60000); this.timer.unref(); } }

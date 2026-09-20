@@ -1,18 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createServer} from 'node:http';
-import {mkdtemp,rm} from 'node:fs/promises';
+import {mkdtemp,rm,writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
 import {Octokit} from '@octokit/rest';
-import {CorrectionService} from '../dist/corrections.js';
+import {CorrectionService,correctionContent,correctionFile} from '../dist/corrections.js';
 import {createCorrectionRepository} from '../dist/correctionGitHub.js';
 import {createApp} from '../dist/app.js';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {SSEClientTransport} from '@modelcontextprotocol/sdk/client/sse.js';
 
 const baseSha='a'.repeat(40),headSha='b'.repeat(40);
+const blobSha=content=>createHash('sha1').update(`blob ${Buffer.byteLength(content)}\0`).update(content).digest('hex');
 const input=()=>({request_id:randomUUID(),title:'공식 출처의 기준일 구분',previous_claim:'공포일과 시행일을 같은 것으로 보았다.',correction:'두 날짜를 각각 확인해야 한다.',why:'공식 원문에 구분된 항목을 확인했다.',sources:[{url:'https://www.law.go.kr/법령/근로기준법',title:'국가법령정보센터',supporting_excerpt:'시행일과 공포일이 별도 표시된다.'}],keywords:['시행일'],next_checks:['사건 기준일과 시행일을 대조한다.'],public_safe:true});
 async function fixture(t,{loseResponse=false}={}) {
   const state={ref:false,pr:false,merged:false,altered:false,extraFile:false,posts:[],unexpected:[],content:''};
@@ -31,6 +32,7 @@ async function fixture(t,{loseResponse=false}={}) {
       if(req.method==='GET'&&path==='/pulls/7')return send(pr());
       if(req.method==='GET'&&path.startsWith('/git/ref/heads/correction/'))return state.ref?send({object:{sha:headSha}}):send({message:'Not Found'},404);
       if(req.method==='GET'&&path==='/git/commits/'+baseSha)return send({sha:baseSha,tree:{sha:'c'.repeat(40)}});
+      if(req.method==='GET'&&path==='/git/trees/'+'c'.repeat(40))return send({truncated:false,tree:state.merged?[{path:'corrections/proposals/'+currentId+'.json',mode:'100644',type:'blob',sha:blobSha(state.altered?'changed':state.content)}]:[]});
       if(req.method==='POST'&&path==='/git/blobs'){assert.equal(body.encoding,'utf-8');state.content=body.content;currentId=JSON.parse(body.content).proposal_id;return send({sha:'d'.repeat(40)},201);}
       if(req.method==='POST'&&path==='/git/trees'){
         assert.equal(body.base_tree,'c'.repeat(40));assert.deepEqual(body.tree,[{path:'corrections/proposals/'+currentId+'.json',mode:'100644',type:'blob',sha:'d'.repeat(40)}]);return send({sha:'e'.repeat(40)},201);}
@@ -72,6 +74,50 @@ test('CP-01/04/05/06: real Octokit HTTP adapter creates one JSON-only draft, rec
   f.state.merged=true;await f.corrections.refresh();assert.equal(f.corrections.search('시행일').items.length,1);
   const retrieved=await f.post('/api/analyze',{query:'시행일',tool:'search_law'});assert.equal(retrieved.body.data.corrections.items.length,1);assert.equal(retrieved.body.data.evidence.applicability,'unverified');
   f.state.altered=true;const mismatch=await f.post('/api/corrections/status',{proposal_id:p.proposal_id});assert.equal(mismatch.body.state,'status_unavailable');
+  await f.corrections.refresh();assert.equal(f.corrections.search('시행일').items.length,0);
+});
+
+test('CP-09: all 60 merged proposals survive restart without repeated PR reads, and main file changes revoke cached matches',async t=>{
+  const directory=await mkdtemp(join(tmpdir(),'taxlab-merged-correction-'));
+  t.after(async()=>{assert.ok(directory.startsWith(join(tmpdir(),'taxlab-merged-correction-')));await rm(directory,{recursive:true,force:true});});
+  const records=[];
+  for(let i=0;i<60;i++){
+    const {request_id,...proposal}=input();proposal.keywords=['unique-case-'+String(i).padStart(3,'0')];
+    const record={id:request_id,actor:'fixture',created_at:new Date().toISOString(),expires_at:new Date().toISOString(),proposal,
+      proposal_hash:createHash('sha256').update(JSON.stringify(proposal)).digest('hex'),confirmation_token:'0'.repeat(64),state:'published',base_sha:baseSha,
+      pr:{number:i+1,url:'https://github.com/fixture/legal/pull/'+(i+1),head_sha:headSha}};
+    records.push(record);await writeFile(join(directory,record.id+'.json'),JSON.stringify(record));
+  }
+  let prReads=0,treeReads=0,altered=false;
+  const unexpected=[];
+  const server=createServer((req,res)=>{
+    try{
+      const url=new URL(req.url,'http://fixture'),path=decodeURIComponent(url.pathname).replace('/repos/fixture/legal','');
+      assert.equal(req.method,'GET');assert.equal(req.headers.authorization,'token github-fixture');
+      let data;
+      if(path==='/git/ref/heads/main')data={object:{sha:baseSha}};
+      else if(path==='/git/commits/'+baseSha)data={tree:{sha:'c'.repeat(40)}};
+      else if(path==='/git/trees/'+'c'.repeat(40)){
+        assert.equal(url.searchParams.get('recursive'),'1');treeReads++;
+        data={truncated:false,tree:records.map((r,i)=>({path:correctionFile(r),type:'blob',mode:'100644',sha:blobSha(altered&&i===0?'changed':correctionContent(r))}))};
+      } else if(/^\/pulls\/\d+$/.test(path)){
+        const record=records[Number(path.split('/').at(-1))-1];assert.ok(record);prReads++;
+        data={number:record.pr.number,merged:true,base:{ref:'main'},head:{ref:'correction/'+record.id,sha:headSha,repo:{full_name:'fixture/legal'}}};
+      } else throw Error(path);
+      res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify(data));
+    }catch(error){unexpected.push(error.message);res.writeHead(500,{'content-type':'application/json'});res.end('{}');}
+  });
+  await new Promise(r=>server.listen(0,'127.0.0.1',r));
+  t.after(async()=>{server.closeAllConnections();await new Promise(r=>server.close(r));assert.deepEqual(unexpected,[]);});
+  const repository=createCorrectionRepository({token:'github-fixture',owner:'fixture',repo:'legal',baseBranch:'main'},new Octokit({auth:'github-fixture',baseUrl:'http://127.0.0.1:'+server.address().port}));
+  const service=new CorrectionService({directory,repository});t.after(()=>service.close());
+  await service.refresh();assert.equal(prReads,60);assert.equal(treeReads,1);
+  for(const record of records)assert.equal(service.search(record.proposal.keywords[0]).items[0]?.proposal_id,record.id);
+  await service.close();const restarted=new CorrectionService({directory,repository});t.after(()=>restarted.close());
+  await restarted.refresh();assert.equal(prReads,60);assert.equal(treeReads,2);
+  for(const record of records)assert.equal(restarted.search(record.proposal.keywords[0]).items[0]?.proposal_id,record.id);
+  altered=true;await restarted.refresh();assert.equal(prReads,60);assert.equal(restarted.search(records[0].proposal.keywords[0]).items.length,0);
+  assert.equal(restarted.search(records[59].proposal.keywords[0]).items.length,1);
 });
 test('CP-07: MCP prepare/consent returns the actual PR and an altered branch cannot become approved',async t=>{
   const f=await fixture(t);const client=new Client({name:'correction-mcp-integration',version:'1'});t.after(()=>client.close());
