@@ -21,6 +21,15 @@ export function inspectResearch(input: ReviewInput, plan: Plan, evidence: Resear
       const fact = plan.facts.find(f => f.id === factId)!;
       if (fact.status !== 'provided') gap('REQUIRED_FACT_UNCONFIRMED', `${factId}: ${fact.description} (${fact.status})`);
     }
+    // A successful current unit cannot erase failed roles in the same lookup,
+    // including receipts that the model does not cite in its claims.
+    for (const receipt of evidence.filter(e => e.issue_ids.includes(issue.id))) {
+      for (const unit of receipt.units) {
+        const detail = `${receipt.evidence_id}: ${unit.role} (${unit.date ?? 'unknown'})`;
+        if (unit.source_access === 'unavailable') gap('UNAVAILABLE_SOURCE_ROLE', detail);
+        else if (unit.body_scope === 'unknown' || unit.body_scope === 'partial') gap('SOURCE_ROLE_BODY_INCOMPLETE', detail);
+      }
+    }
     if (analysis.claims.length === 0 || analysis.conclusion_mode === 'withheld') {
       if (analysis.conclusion_mode !== 'withheld' || !analysis.withholding_reason.trim()) block('CLAIM_REQUIRED', '주장을 제출하거나 명시적으로 유보 사유를 적으세요.');
       gap('CONCLUSION_WITHHELD', analysis.withholding_reason || '주장이 제출되지 않았습니다.');
@@ -80,7 +89,7 @@ export function inspectResearch(input: ReviewInput, plan: Plan, evidence: Resear
       if (!analysis.timing.date_roles.includes(role)) gap('DATE_ROLE_NOT_ADDRESSED', role);
       if (date.precision !== 'day' || date.basis !== 'provided') gap('DATE_UNCONFIRMED', `${role}: ${date.precision}/${date.basis}`);
     }
-    if (issue.required_date_roles.length && analysis.timing.status !== 'addressed') gap('TIMING_REVIEW_REQUIRED', analysis.timing.reason);
+    if (analysis.timing.status === 'unresolved' || (issue.required_date_roles.length && analysis.timing.status !== 'addressed')) gap('TIMING_REVIEW_REQUIRED', analysis.timing.reason);
     if (analysis.exceptions.status === 'unresolved') gap('EXCEPTIONS_UNRESOLVED', analysis.exceptions.reason);
     if (analysis.unknowns.length) gap('DECLARED_UNKNOWNS', analysis.unknowns.join('; '));
     const hasGaps = findings.slice(beginning).some(f => f.severity === 'needs_info');

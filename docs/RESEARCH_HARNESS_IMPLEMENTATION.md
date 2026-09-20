@@ -24,8 +24,8 @@ LLM을 서버에 종속시키지 않고 REST와 MCP에서 같은 연구 세션�
 | 검증 | 관측 결과 |
 | --- | --- |
 | 구현 전 기준 | 기존 review 103개 통과 |
-| 새 하네스·배포 경계 표적 시험 | 22개 통과, skip 0 |
-| 전체 회귀 | `npm run review` 125개 통과, 실패·skip 0 (50.6초) |
+| 새 하네스·배포 경계 표적 시험 | 최초 22개, CODE 반례 3개 추가 후 총 25개 통과 |
+| 전체 회귀 | CODE 수정 후 `npm run review` 128개 통과, 실패·skip 0 (50.5초) |
 | 설치 패키지 | clean install, 설치된 패키지에서 앱 import, 실제 stdio→SSE 연구 호출 포함 7개 통과 |
 | 실패 주입 | 인용 대조·actor 검사·필수 사실 검사를 각각 제거한 격리 빌드 3개 모두 assertion으로 실패. 작업 빌드 hash 불변 |
 | 실제 원문 조회 | REST+MCP SSE 35개 도구; `서면-2020-부동산-4503` 실제 반환 본문 4개 passage |
@@ -33,7 +33,7 @@ LLM을 서버에 종속시키지 않고 REST와 MCP에서 같은 연구 세션�
 
 실제 원문 관측: 2026-09-20T19:16:37.982Z. NTS 제공자 `korean-taxlaw` 2.0.0, 커밋 `d77c94e5b64892fe85928508544366e418397c71`, 반환 해시 `5c94093c787ba6a917f6c0c54b44d661a1b8c71d4a3b024525dbfdcbad42e1f6`. 이 행은 **로컬 loopback** 증거다. 운영 HTTPS 검증은 별도 배포 기록에 남긴다.
 
-패키지 시험 artifact SHA-256: `7bd683a54b6acaee66de5988926800551a59519f1180c3dbc7ee38a31d383657`. 운영 배포에는 실제 선택한 artifact·commit·Linux CI·설치된 의존성 파일 지문을 다시 결합한다.
+CODE 수정 후 패키지 시험 artifact SHA-256: `d63b301deaeea5d48c9719da7918b23cb3cff6216abae4a83d8de603f9464ce6`. 운영 배포에는 실제 선택한 artifact·commit·Linux CI·설치된 의존성 파일 지문을 다시 결합한다.
 
 ## 한계와 운영 계약
 
@@ -45,5 +45,15 @@ LLM을 서버에 종속시키지 않고 REST와 MCP에서 같은 연구 세션�
 
 - REVIEW: PASS. 인용 삭제 후 검증, 최종 답변 변경 후 미검증, 독립 검수 과장 문제를 참조 리뷰에 반영했다.
 - PLAN: PASS. PH-01~06 입력·동시성·adapter·날짜·시험·drain/rollback 계약까지 검수했다.
-- CODE: 제출 준비 중. 실제 실행은 Codex가 수행하며 Pro의 정적 검토와 구분한다.
+- CODE: 최초 검수 REVISE의 CR-01~03을 아래와 같이 수정했다. 고정 수정본 재검수 대기. 실제 실행은 Codex가 수행하며 Pro의 정적 검토와 구분한다.
 - DEPLOYMENT: 미실행. CODE 지적 해소 및 고정 릴리스 준비 후 기존 사용자 승인 범위에서 진행한다.
+
+### CODE 검수 반영
+
+CR-01: 복합 조회의 현재 본문이 성공했더라도 다른 역할의 실패/unknown/partial 상태는 같은 쟁점 전체의 공백으로 검사한다. 반론에 irrelevant를 적거나 주장 인용에서 해당 receipt를 빼도 숨기지 못한다. 정상 현재 passage는 보존한다. counter/context 각각 실패 및 인식 불가 과거 역할을 시험했다.
+
+CR-02: `timing.status=unresolved`는 필수 날짜 역할 등록 여부와 무관하게 공백이다. 정상 not_required 대조는 유지하고, definitive=blocked, conditional=needs_info와 구체 시점 오류 코드를 함께 검사한다.
+
+CR-03: 공개 재개 요청의 외부 효과와 성공 응답을 구분한다. `resume`을 시도한 뒤 오류가 나면 자동 rollback/재시도를 하지 않고 검증된 릴리스를 유지하며 `public_state_unknown`, `public_resumed=null`을 반환한다. 작업자가 실제 ingress 상태를 확인해야 한다. 후보·이전 릴리스 공개 모두에서 공개 효과 후 응답 유실을 주입했고, 이후 교체 호출 0회 및 공개 상태를 거짓으로 차단 판정하지 않는지 검사한다. 최초 fence조차 확인되지 않은 경우도 차단 유지라고 보고하지 않는다.
+
+세 반례는 수정 전 실제 assertion 실패로 재현했다. 첫 두 반례의 잘못된 결과는 structurally_complete, 마지막 반례는 publicOpen=true인데 maintenance_required를 반환했다. 수정 후 전체 128개·패키지 7개·guard 변형 3개를 다시 통과했다. 운영 절차는 `deploy/research-rollout.py`와 `deploy/run-research-rollout.mjs`에서 같은 시험된 gate를 사용한다.

@@ -363,6 +363,45 @@ test('RH-04/08: actual stdio NTS failures, compact reads and timeout preserve re
   assert.equal(full.attempts.filter(a => a.status === 'failed').length, 4);
 });
 
+test('RH-04: an unavailable role in a composite counter or context receipt remains a review gap', async t => {
+  let access = 'unavailable';
+  const f = await fixture(t, { sources: { close: async () => {}, check: async () => ({
+    source_access: 'available', upstream_version: 'fixture',
+    current_result: { content: [{ type: 'text', text: '법령명: 합성법\n시행일: 20250101\n제1조(원가)\n' + sourceText }] },
+    historical_observations: [{ role: 'transfer', date: '2025-03-15', source_access: access,
+      result: access === 'available' ? { content: [{ type: 'text', text: '인식하지 못하는 과거 복합 형식' }] } : null }],
+  }) } });
+  for (const [purpose, sourceAccess] of [['counter', 'unavailable'], ['context', 'unavailable'], ['counter', 'available'], ['context', 'available']]) {
+    access = sourceAccess;
+    const p = plan(); p.event_dates = [{ role: 'transfer', value: '2025-03-15', precision: 'day', basis: 'provided', source: '합성 진술' }];
+    let state = await seed(f, p);
+    state = (await f.request('retrieve', { ...retrieveInput(state), purpose, tool: 'check_legal_sources',
+      arguments: { law_name: '합성법', law_id: '1', article: '1', event_dates: { transfer: '2025-03-15' } } })).body;
+    const failedRole = state.evidence.at(-1);
+    assert.equal(failedRole.body_scope, 'body_returned');
+    assert.equal(failedRole.units.find(u => u.role === 'transfer').source_access, sourceAccess);
+    const input = reviewInput(state);
+    if (purpose === 'counter') input.analysis[0].counter_evidence.push({ evidence_id: failedRole.evidence_id, disposition: 'irrelevant', reason: '다른 시점이라고 선언해도 조회 실패는 해결되지 않음' });
+    const blocked = (await f.request('review', input)).body;
+    const expectedCode = sourceAccess === 'unavailable' ? 'UNAVAILABLE_SOURCE_ROLE' : 'SOURCE_ROLE_BODY_INCOMPLETE';
+    assert.equal(blocked.status, 'blocked'); assert.ok(codes(blocked).includes(expectedCode));
+    const incomplete = (await f.request('review', conditional(input))).body;
+    assert.equal(incomplete.status, 'needs_info'); assert.ok(codes(incomplete).includes(expectedCode));
+  }
+  assert.equal(f.writes(), 0);
+});
+
+test('RH-07: explicitly unresolved timing cannot pass when no required date role was registered', async t => {
+  const f = await fixture(t), state = await seed(f), input = reviewInput(state);
+  assert.equal((await f.request('review', input)).body.status, 'structurally_complete');
+  input.analysis[0].timing = { status: 'unresolved', reason: '적용 시점을 아직 확인하지 못함', date_roles: [] };
+  const blocked = (await f.request('review', input)).body;
+  assert.equal(blocked.status, 'blocked'); assert.ok(codes(blocked).includes('TIMING_REVIEW_REQUIRED'));
+  const incomplete = (await f.request('review', conditional(input))).body;
+  assert.equal(incomplete.status, 'needs_info'); assert.ok(codes(incomplete).includes('TIMING_REVIEW_REQUIRED'));
+  assert.equal(f.writes(), 0);
+});
+
 test('RH-08: byte and session capacity reject before source calls, including cross-session reservations', async t => {
   const small = await fixture(t, { researchOptions: { limits: { maxSessionBytes: 10_000 } } });
   const state = (await small.request('start', { plan: plan() })).body;
