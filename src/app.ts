@@ -69,10 +69,10 @@ export function createApp(options: Options) {
     })().catch(error => fail(res, error));
   };
   const validate = (input: unknown) => gates.validate(DraftSchema.parse(input), version);
-  const retrieve = async (name: string, args: Record<string, unknown>, dates: Record<string, string> = {}) => {
+  const retrieve = async (name: string, args: Record<string, unknown>, dates: Record<string, string> = {}, correctionQuery = String(args.query ?? '')) => {
     const result = await options.law.callTool(name, args);
     const evidence = retrievalEnvelope(name, args, result.result, version, dates);
-    return { ...result, evidence, corrections: options.corrections?.search(String(args.query ?? '')) ?? { status: 'unavailable', items: [] } };
+    return { ...result, evidence, corrections: options.corrections?.search(correctionQuery) ?? { status: 'unavailable', items: [] } };
   };
   const submit = (actor: Actor, input: unknown) => {
     if (!options.failures) throw new ServiceError(503, 'MAINTENANCE_UNAVAILABLE');
@@ -119,7 +119,7 @@ export function createApp(options: Options) {
       if (quality?.blocked) return res.status(422).json({ code: 'DRAFT_CHECK_FAILED', quality_gate: quality });
       const args = { ...data.arguments };
       if (['legal_research', 'search_law', 'search_decisions'].includes(data.tool)) args.query = data.query;
-      return res.json({ status: 'success', data: await retrieve(data.tool, args, data.event_dates), quality_gate: quality });
+      return res.json({ status: 'success', data: await retrieve(data.tool, args, data.event_dates, data.query), quality_gate: quality });
     });
   }));
   app.post('/api/failures', protectedRoute(async (req, res, actor) => res.status(202).json(await work(() => submit(actor, req.body)))));
@@ -137,7 +137,7 @@ export function createApp(options: Options) {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true } },
     { name: 'get_correction_pr', description: '기존 교정 제안의 PR 생성 결과·검수 대기·머지 상태를 조회합니다. 새 PR을 만들지 않습니다.', inputSchema: correctionInputs.status,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true } },
-    { name: 'find_legal_corrections', description: '사람이 머지한 법령·해석 교정 자료를 질문 키워드로 찾습니다. 출처 최신성·사건 적용과 독립 AI 검수는 별도로 확인해야 합니다.', inputSchema: correctionInputs.search,
+    { name: 'find_legal_corrections', description: 'GitHub에서 머지된 법령·해석 교정 자료를 질문 키워드로 찾습니다. 출처 최신성·사건 적용과 독립 AI 검수는 별도로 확인해야 합니다.', inputSchema: correctionInputs.search,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } },
     { name:'check_legal_sources',description:'새 upstream 프로세스로 공식 법령 원문과 역할별 사건일 연혁을 다시 조회합니다. 부칙 해석과 예규 유효성은 별도 미검수입니다.',inputSchema:{type:'object',properties:{law_name:{type:'string'},law_id:{type:'string'},article:{type:'string'},event_dates:{type:'object'}},required:['law_name','law_id'],additionalProperties:false}},
     ...['validate_legal_draft', 'validate_tax_draft'].map(name => ({ name, description: '제출 초안의 제한된 검사. needs_info/unverified는 법률 통과가 아닙니다. 최종 답변 변경 시 재검사하세요.', inputSchema: { type: 'object' as const, properties: {

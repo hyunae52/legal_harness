@@ -14,6 +14,11 @@ export function createCorrectionRepository(options: { token: string; owner: stri
     if (Array.isArray(data) || !('content' in data) || data.encoding !== 'base64') throw new ServiceError(409, 'CORRECTION_CONTENT_CHANGED');
     return Buffer.from(data.content, 'base64').toString('utf8');
   }
+  async function validateHead(record: CorrectionRecord, head: string, signal: AbortSignal) {
+    if (await readContent(record, head, signal) !== correctionContent(record)) throw new ServiceError(409, 'CORRECTION_CONTENT_CHANGED');
+    const compared = await api.rest.repos.compareCommits({ ...scope, base: record.base_sha!, head, request: { signal } });
+    if (compared.data.status !== 'ahead' || compared.data.behind_by !== 0 || compared.data.total_commits !== 1 || compared.data.files?.length !== 1 || compared.data.files[0].filename !== correctionFile(record) || compared.data.files[0].status !== 'added') throw new ServiceError(409, 'CORRECTION_SCOPE_CHANGED');
+  }
   async function find(record: CorrectionRecord, signal: AbortSignal) {
     const { data } = await api.rest.pulls.list({ ...scope, head: `${options.owner}:${branch(record)}`, state: 'all', per_page: 100, request: { signal } });
     if (data.length > 1) throw new ServiceError(409, 'CORRECTION_PR_AMBIGUOUS');
@@ -21,15 +26,14 @@ export function createCorrectionRepository(options: { token: string; owner: stri
     const { data: pr } = await api.rest.pulls.get({ ...scope, pull_number: data[0].number, request: { signal } });
     if (pr.base.ref !== options.baseBranch || pr.head.ref !== branch(record) || pr.head.repo?.full_name !== target ||
       (record.pr && (record.pr.number !== pr.number || record.pr.head_sha !== pr.head.sha))) throw new ServiceError(409, 'CORRECTION_PR_CHANGED');
-    if (await readContent(record, pr.head.sha, signal) !== correctionContent(record)) throw new ServiceError(409, 'CORRECTION_CONTENT_CHANGED');
-    const comparison = await api.rest.repos.compareCommits({ ...scope, base: record.base_sha!, head: pr.head.sha, request: { signal } });
-    if (comparison.data.status !== 'ahead' || comparison.data.behind_by !== 0 || comparison.data.total_commits !== 1 || comparison.data.files?.length !== 1 || comparison.data.files[0].filename !== correctionFile(record) || comparison.data.files[0].status !== 'added') throw new ServiceError(409, 'CORRECTION_SCOPE_CHANGED');
+    await validateHead(record, pr.head.sha, signal);
     return pr;
   }
   return {
     target,
     async base() { return (await api.rest.git.getRef({ ...scope, ref: 'heads/' + options.baseBranch })).data.object.sha; },
     async publish(record) {
+      if (record.target_repository !== target || record.base_branch !== options.baseBranch) throw new ServiceError(409, 'CORRECTION_TARGET_CHANGED');
       const signal = AbortSignal.timeout(30000), request = { signal };
       const prior = await find(record, signal);
       if (prior) {
@@ -40,16 +44,19 @@ export function createCorrectionRepository(options: { token: string; owner: stri
       try { head = (await api.rest.git.getRef({ ...scope, ref: 'heads/' + branch(record), request })).data.object.sha; }
       catch (error) { if (!missing(error)) throw error; }
       if (head) {
-        if (await readContent(record, head, signal) !== correctionContent(record)) throw new ServiceError(409, 'CORRECTION_BRANCH_CHANGED');
-        const compared = await api.rest.repos.compareCommits({ ...scope, base: record.base_sha!, head, request });
-        if (compared.data.status !== 'ahead' || compared.data.behind_by !== 0 || compared.data.total_commits !== 1 || compared.data.files?.length !== 1 || compared.data.files[0].filename !== correctionFile(record) || compared.data.files[0].status !== 'added') throw new ServiceError(409, 'CORRECTION_SCOPE_CHANGED');
+        await validateHead(record, head, signal);
       } else {
+        let exists = false;
+        try { await api.rest.repos.getContent({ ...scope, path: correctionFile(record), ref: record.base_sha!, request }); exists = true; }
+        catch (error) { if (!missing(error)) throw error; }
+        if (exists) throw new ServiceError(409, 'CORRECTION_PATH_CONFLICT');
         const base = (await api.rest.git.getCommit({ ...scope, commit_sha: record.base_sha!, request })).data;
         const blob = (await api.rest.git.createBlob({ ...scope, content: correctionContent(record), encoding: 'utf-8', request })).data;
         const tree = (await api.rest.git.createTree({ ...scope, base_tree: base.tree.sha,
           tree: [{ path: correctionFile(record), mode: '100644', type: 'blob', sha: blob.sha }], request })).data;
         const commit = (await api.rest.git.createCommit({ ...scope, message: `docs: propose legal correction ${record.id}`, tree: tree.sha, parents: [record.base_sha!], request })).data;
         head = commit.sha;
+        await validateHead(record, head, signal);
         await api.rest.git.createRef({ ...scope, ref: 'refs/heads/' + branch(record), sha: head, request });
       }
       const p = record.proposal;
@@ -67,7 +74,14 @@ export function createCorrectionRepository(options: { token: string; owner: stri
     async inspect(record, suppliedSignal) {
       const signal = suppliedSignal ?? AbortSignal.timeout(15000);
       const pr = await find(record, signal);
-      if (!pr) return { state: 'missing' };
+      if (!pr) {
+        if (record.pr || record.target_repository !== target) return { state: 'missing' };
+        let head: string | undefined;
+        try { head = (await api.rest.git.getRef({ ...scope, ref: 'heads/' + branch(record), request: { signal } })).data.object.sha; }
+        catch (error) { if (!missing(error)) throw error; }
+        if (head) await validateHead(record, head, signal);
+        return { state: 'retry_available' };
+      }
       const identity = { number: pr.number, url: pr.html_url, head_sha: pr.head.sha };
       if (pr.merged) {
         try {
@@ -77,7 +91,7 @@ export function createCorrectionRepository(options: { token: string; owner: stri
       }
       return { state: pr.state === 'closed' ? 'closed' : 'pending_review', pr: identity };
     },
-    async merged(records, signal) {
+    async merged(records, signal, onVerified) {
       if (!records.length) return [];
       const request = { signal };
       const main = (await api.rest.git.getRef({ ...scope, ref: 'heads/' + options.baseBranch, request })).data.object.sha;
@@ -85,7 +99,7 @@ export function createCorrectionRepository(options: { token: string; owner: stri
       const tree = (await api.rest.git.getTree({ ...scope, tree_sha: commit.tree.sha, recursive: '1', request })).data;
       if (tree.truncated) throw new ServiceError(503, 'CORRECTION_TREE_INCOMPLETE');
       const files = new Map(tree.tree.map(entry => [entry.path, entry]));
-      const found: string[] = [];
+      const found: string[] = [], pending: CorrectionRecord[] = [];
       for (const record of records) {
         const content = Buffer.from(correctionContent(record), 'utf8');
         const expected = createHash('sha1').update(`blob ${content.length}\0`).update(content).digest('hex');
@@ -93,11 +107,21 @@ export function createCorrectionRepository(options: { token: string; owner: stri
         if (!record.pr || entry?.type !== 'blob' || entry.mode !== '100644' || entry.sha !== expected) continue;
         // Merge is an immutable event; main's exact file is rechecked on every refresh.
         const marker = record.merge_verified;
-        if (marker?.proposal_hash !== record.proposal_hash || marker.head_sha !== record.pr.head_sha || marker.number !== record.pr.number) {
-          const { data: pr } = await api.rest.pulls.get({ ...scope, pull_number: record.pr.number, request });
-          if (!pr.merged || pr.base.ref !== options.baseBranch || pr.head.ref !== branch(record) || pr.head.repo?.full_name !== target || pr.head.sha !== record.pr.head_sha) continue;
+        if (marker?.proposal_hash !== record.proposal_hash || marker.head_sha !== record.pr.head_sha || marker.number !== record.pr.number || marker.target_repository !== target || marker.base_branch !== options.baseBranch) pending.push(record);
+        else found.push(record.id);
+      }
+      for (const record of pending) {
+        if (signal.aborted) break;
+        const identity = record.pr!;
+        try {
+          const { data: pr } = await api.rest.pulls.get({ ...scope, pull_number: identity.number, request });
+          if (!pr.merged || pr.base.ref !== options.baseBranch || pr.head.ref !== branch(record) || pr.head.repo?.full_name !== target || pr.head.sha !== identity.head_sha) continue;
+          onVerified?.(record); // Persist each immutable event before attempting another remote request.
+          found.push(record.id);
+        } catch {
+          if (signal.aborted) break;
+          // This unverified record must not block rechecking already verified main files.
         }
-        found.push(record.id);
       }
       return found;
     },
@@ -105,8 +129,13 @@ export function createCorrectionRepository(options: { token: string; owner: stri
 }
 export function configuredCorrectionService(env: NodeJS.ProcessEnv) {
   if (env.CORRECTION_PR_ENABLED !== '1') return undefined;
-  if (!env.CORRECTION_STATE_DIR || !env.GITHUB_TOKEN || !env.GITHUB_OWNER || !env.GITHUB_REPO) throw new ServiceError(503, 'CORRECTION_CONFIG_MISSING');
-  return new CorrectionService({ directory: env.CORRECTION_STATE_DIR,
-    repository: createCorrectionRepository({ token: env.GITHUB_TOKEN, owner: env.GITHUB_OWNER, repo: env.GITHUB_REPO, baseBranch: env.GITHUB_BASE_BRANCH || 'main' }),
-    secrets: Object.entries(env).filter(([k]) => /KEY|TOKEN|SECRET|LAW_OC/.test(k)).map(([,v]) => v!).filter(Boolean) });
+  try {
+    if (!env.CORRECTION_STATE_DIR || !env.GITHUB_TOKEN || !env.GITHUB_OWNER || !env.GITHUB_REPO) throw new ServiceError(503, 'CORRECTION_CONFIG_MISSING');
+    return new CorrectionService({ directory: env.CORRECTION_STATE_DIR,
+      repository: createCorrectionRepository({ token: env.GITHUB_TOKEN, owner: env.GITHUB_OWNER, repo: env.GITHUB_REPO, baseBranch: env.GITHUB_BASE_BRANCH || 'main' }),
+      secrets: Object.entries(env).filter(([k]) => /KEY|TOKEN|SECRET|LAW_OC/.test(k)).map(([,v]) => v!).filter(Boolean) });
+  } catch {
+    console.error('CORRECTION_INITIALIZATION_UNAVAILABLE: law lookup remains enabled.');
+    return undefined;
+  }
 }

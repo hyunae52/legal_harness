@@ -4,11 +4,12 @@ import {createServer} from 'node:http';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {SSEClientTransport} from '@modelcontextprotocol/sdk/client/sse.js';
 import {createApp} from '../dist/app.js';
-import {mkdtemp,rm,readFile} from 'node:fs/promises';
+import {mkdtemp,rm,readFile,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {CorrectionService} from '../dist/corrections.js';
+import {digest} from '../dist/contracts.js';
 
 const actor={id:'user:alice',kind:'auth_user',userId:'alice'};
 const proposal=()=>({request_id:randomUUID(),title:'공포일과 시행일 구분',previous_claim:'공포일을 시행일로 안내했다.',correction:'공포일과 시행일을 구분하고 사건 기준일을 대조해야 한다.',why:'사용자가 제시한 공식 원문에서 두 날짜가 다름을 확인했다.',
@@ -87,4 +88,29 @@ test('CP-06: only verified merged records enter later lookup; changed files and 
   assert.equal(service.search('관련 없는 다른 질의').items.length,0);
   state.changed=true;await service.refresh();assert.equal(service.search('시행일 확인').items.length,0);
   state.changed=false;await service.refresh();state.offline=true;clock+=11*60000;await service.refresh();assert.equal(service.search('시행일 확인').status,'unavailable');assert.equal(service.search('시행일 확인').items.length,0);
+});
+
+test('CP-10: persisted consent cannot publish to a different configured repository after restart',async t=>{
+  const {service,state,config,directory}=await serviceFixture(t);const request=proposal(),p=await service.prepare(actor,request);
+  await service.close();
+  const changed=new CorrectionService({...config,repository:{...config.repository,target:'fixture/other'}});t.after(()=>changed.close());
+  await assert.rejects(changed.confirm(actor,consent(p)),e=>e.code==='CORRECTION_TARGET_CHANGED');
+  await assert.rejects(changed.prepare(actor,request),e=>e.code==='CORRECTION_TARGET_CHANGED');
+  assert.equal(state.writes,0);assert.equal(state.publishCalls,0);
+  const file=join(directory,p.proposal_id+'.json'),record=JSON.parse(await readFile(file,'utf8'));
+  record.target_repository='fixture/other';await writeFile(file,JSON.stringify(record));
+  await assert.rejects(changed.confirm(actor,consent(p)),e=>e.code==='CORRECTION_CONFIRMATION_MISMATCH');assert.equal(state.writes,0);
+});
+
+test('CP-10: legacy unbound consent cannot write, while an existing legacy PR remains queryable',async t=>{
+  const {service,state,config,directory}=await serviceFixture(t);const request=proposal(),p=await service.prepare(actor,request);
+  const file=join(directory,p.proposal_id+'.json'),record=JSON.parse(await readFile(file,'utf8'));
+  delete record.target_repository;record.proposal_hash=digest(p.public_preview);await writeFile(file,JSON.stringify(record));
+  const oldConsent={...consent(p),proposal_hash:record.proposal_hash};
+  await assert.rejects(service.confirm(actor,oldConsent),e=>e.code==='CORRECTION_TARGET_UNBOUND');assert.equal(state.writes,0);
+  record.pr={number:7,url:'https://github.com/fixture/legal/pull/7',head_sha:'b'.repeat(40)};record.state='published';state.remote.set(record.id,record.pr);
+  await writeFile(file,JSON.stringify(record));assert.equal((await service.confirm(actor,oldConsent)).state,'already_published');
+  assert.equal((await service.status(actor,record.id)).state,'pending_review');assert.equal(state.writes,0);
+  state.merged=true;await service.close();const changed=new CorrectionService({...config,repository:{...config.repository,target:'fixture/other'}});t.after(()=>changed.close());
+  await changed.refresh();assert.equal(changed.search('시행일').items.length,0);assert.equal((await changed.status(actor,record.id)).state,'target_unavailable');
 });
