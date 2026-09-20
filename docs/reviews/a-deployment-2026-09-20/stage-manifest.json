@@ -76,10 +76,32 @@
       "label": "cloudflared-maintenance-a.yml",
       "path": "/home/cta/cloudflared-maintenance-a.yml",
       "sha256": "48fb94034aab0eea1cd1428399fe3b50b8017da44bc6e79c3e5f59f72ed76aad"
+    },
+    {
+      "label": "verify-a-candidate.mjs",
+      "path": "/home/cta/verify-a-candidate.mjs",
+      "sha256": "6c37206ba6e3019a6aefee5fd586f660cc21354da7e95e53f602664afc440d71"
+    },
+    {
+      "label": "installed-dependencies.mjs",
+      "path": "/home/cta/installed-dependencies.mjs",
+      "sha256": "d8c7971b07e56d451b7c2fa4076de3b7c737fd309a7975dfb0201477b65b21b2"
+    },
+    {
+      "label": "freeze-legacy-cron.py",
+      "path": "/home/cta/freeze-legacy-cron.py",
+      "sha256": "b1c4854e463c5c3824dbc89b443cd34285edb22f5f342bb7f41afcc9f1c5f29b"
     }
   ],
   "runtime_profile": "retrieval_only",
   "database_migration": false,
   "public_route_changed": false,
-  "deployment_authorized": false
+  "deployment_authorized": false,
+  "installed_dependencies": {
+    "algorithm": "sha256-path-type-content-v1",
+    "sha256": "bd4653a5c3b1b77dc5624dd5cfc3bbb2d1bab44b61b650b5ae8a6feb2e95746c",
+    "files": 6679,
+    "links": 9,
+    "bytes": 107564579
+  }
 }

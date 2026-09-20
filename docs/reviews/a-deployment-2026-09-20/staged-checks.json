@@ -1,5 +1,5 @@
 {
-  "started_at": "2026-09-20T05:05:29.498Z",
+  "started_at": "2026-09-20T05:39:36.634Z",
   "law_tool_calls": 0,
   "checks": [
     {
@@ -20,6 +20,11 @@
       "name": "changed_config",
       "status": "rejected",
       "reason": "CONFIGURATION_MISMATCH"
+    },
+    {
+      "name": "installed_dependency_hash",
+      "status": "rejected",
+      "reason": "INSTALLED_DEPENDENCIES_MISMATCH"
     }
   ],
   "linux_doctor_before": {
@@ -33,10 +38,10 @@
     "tools": 14
   },
   "restart": {
-    "before": 54861,
-    "after": 55485,
+    "before": 56198,
+    "after": 56660,
     "prior_children": [
-      55202
+      56215
     ],
     "lingering": [],
     "health": {
@@ -102,7 +107,7 @@
   ],
   "identity": {
     "status": "staged_identity_verified",
-    "manifest_sha256": "edc4ce73ddd0623a0aed77921c70d6bde8b12e2d985c386dcf9d2941a94f8fd6",
+    "manifest_sha256": "cd4f56640038954f01fcafbae9dfa5781d800c375058a0537fa9922686da0514",
     "artifact_sha256": "72665b205984f213702bd36b5ebd5ce949fec7a0668dc5899aaeac45f440ae48",
     "deployment_authorized": false
   },
@@ -112,7 +117,7 @@
   },
   "units": {
     "legal-harness-a.service": {
-      "pid": 55485,
+      "pid": 56660,
       "restarts": 0,
       "memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
     },
@@ -133,5 +138,5 @@
     }
   },
   "status": "pass",
-  "finished_at": "2026-09-20T05:05:33.801Z"
+  "finished_at": "2026-09-20T05:39:44.201Z"
 }

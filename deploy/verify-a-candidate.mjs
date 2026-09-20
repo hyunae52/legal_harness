@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync,realpathSync,lstatSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {resolve,join,sep} from 'node:path';
+import {fingerprintDependencies} from './installed-dependencies.mjs';
 const [manifestPath,expectedDigest]=process.argv.slice(2);
 const hash=data=>createHash('sha256').update(data).digest('hex');
 try {
@@ -20,6 +21,8 @@ try {
     assert.equal(hash(readFileSync(file)),digest,'RUNTIME_FILE_MISMATCH: '+name);
   }
   const lock=JSON.parse(readFileSync(join(root,'npm-shrinkwrap.json')));
+  assert.ok(m.installed_dependencies,'INSTALLED_DEPENDENCIES_MISSING');
+  assert.deepEqual(fingerprintDependencies(join(root,'node_modules')),m.installed_dependencies,'INSTALLED_DEPENDENCIES_MISMATCH');
   for(const name of Object.keys(lock.packages[''].dependencies)){
     const meta=JSON.parse(readFileSync(join(root,'node_modules',name,'package.json')));
     assert.equal(meta.version,lock.packages['node_modules/'+name].version,'DEPENDENCY_MISMATCH: '+name);

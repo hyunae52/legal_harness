@@ -57,7 +57,12 @@
     "registrar_login_available": true,
     "owner_verification_required": true,
     "dnssec_ds_observed": false,
-    "configuration_changed": false
+    "configuration_changed": false,
+    "gabia_full_inventory_count": 8,
+    "cloudflare_before_count": 8,
+    "cloudflare_expected_count": 9,
+    "missing_from_cloudflare": "_dmarc.dev.taxlab.kr TXT",
+    "preserve_ttl": 600
   },
   "failure_history": [
     {
@@ -85,10 +90,13 @@
     "Final ops source commit must get its own exact-head CI and independent deployment review."
   ],
   "evidence_files": {
-    "qualification.json": "89a87ce75ebdd265224b8e64afe06ecf0de8016334b6b903a5b4c63e4e70166f",
-    "staged-checks.json": "d43e2666aaafefac8d90ddb362fe7e7f8d9a39f1f0753e5483b1528bcd663a78",
+    "clean-dependency-proof.json": "7fd3f50637bad8c80604dc261bc32a5ecbdf44014d19e9a117407476203a37d2",
     "clients.json": "a21f86a16de91cde7a654c8dcc98698ca986d508d1aa08bcfaa36b63c56ce25e",
-    "stage-manifest.json": "edc4ce73ddd0623a0aed77921c70d6bde8b12e2d985c386dcf9d2941a94f8fd6"
+    "cloudflared-binding.json": "be4c6ef6971e84bd62d0cde63d711f71c6e393bb30d346e79ee5648c1354526d",
+    "dns-inventory.json": "bda6655f629ee79a61127dc95fa15a1cd53f7cf809b0030af9f1d4c771ffd03f",
+    "qualification.json": "89a87ce75ebdd265224b8e64afe06ecf0de8016334b6b903a5b4c63e4e70166f",
+    "stage-manifest.json": "cd4f56640038954f01fcafbae9dfa5781d800c375058a0537fa9922686da0514",
+    "staged-checks.json": "f0f1c928ef3c5c2694d1b78e45418f1c9a862c8f4ff68e62c1d0fac94156418b"
   },
   "qualification_harness_sha256": "49cd3f4b3ad94d97aa15fcc13a5a79204e3909d122246aef0828ebf914c12e8f",
   "public_route_changed": false,
@@ -99,5 +107,22 @@
     "matches": 0,
     "journal_result": "No entries",
     "permission_error": false
+  },
+  "independent_pro_first_review": {
+    "verdict": "DEPLOYMENT PREPARATION REVISE",
+    "head": "c1fadedc51635acecb178f1d6ada83342e279c72",
+    "findings": [
+      "DP-1 pre-exec cron dispatch",
+      "DP-2 complete installed dependency integrity"
+    ],
+    "changes": "Fixed in current ops source; exact-head CI and follow-up Pro required"
+  },
+  "resource_scope": "Ordinary analyze/upstream/tunnel; additional freshness child concurrency was not exercised",
+  "installed_dependencies": {
+    "algorithm": "sha256-path-type-content-v1",
+    "sha256": "bd4653a5c3b1b77dc5624dd5cfc3bbb2d1bab44b61b650b5ae8a6feb2e95746c",
+    "files": 6679,
+    "links": 9,
+    "bytes": 107564579
   }
 }
