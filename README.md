@@ -2,11 +2,24 @@
 
 사용자의 LLM이 공식 `korean-law-mcp`를 조회하고, 제출한 초안의 확인 범위와 누락 사실을 구분할 수 있게 하는 Express/MCP 서버입니다. upstream은 npm 패키지를 **별도 stdio 자식 프로세스**로 실행합니다. 원본 파싱 코드를 복사하거나 포크하지 않습니다. 일반 조회에는 서버의 LLM 키가 필요 없습니다.
 
-현재 수정본은 **운영 배포 전 검수 대상**입니다. 자동 패치 전체 루프는 아직 활성화하지 않았습니다. [배포 상태](docs/DEPLOYMENT_READINESS_2026-09-19.md)와 [남은 구현·운영 전환 계획](docs/REMAINING_PLAN_2026-09-20.md)을 먼저 확인하세요.
+법령 조회 서버는 **https://law.taxlab.kr**에서 운영합니다. 대화 중 반박·새 근거로 답변을 정정하면 공개 가능한 교정 자료를 준비하고, 사용자의 동의 후 실제 draft PR을 만드는 경로를 제공합니다. 최종 검수·머지는 사람이 합니다. 실행 코드 자동 패치·독립 AI worker는 별도이며 전체 B 파이프라인의 완료를 뜻하지 않습니다. [이전 배포 준비 기록](docs/DEPLOYMENT_READINESS_2026-09-19.md)과 [남은 구현 계획](docs/REMAINING_PLAN_2026-09-20.md)은 해당 작성 시점의 기록입니다.
+
+## 사용자가 연결하는 방법
+
+[연결 안내 페이지](https://law.taxlab.kr/)에서 앱을 고르세요. 사용자에게 필요한 것은 운영자에게 받은 **TaxLab 접속키**입니다.
+
+- **Claude PC 앱**: [설치파일](https://law.taxlab.kr/downloads/taxlab-law.mcpb)을 확장 설정에서 설치하고 접속키를 입력합니다. SDK 의존성이 함께 들어 있으며 앱 내장 실행 환경을 사용합니다. 웹·모바일로 자동 연결되지 않습니다.
+- **ChatGPT**: GPT 만들기가 가능한 계정에서 [OpenAPI 설정](https://law.taxlab.kr/openapi.json)을 가져와 GPT Actions의 API Key/Bearer 인증을 설정합니다. [GPT 지침](https://law.taxlab.kr/downloads/chatgpt-instructions.txt)을 넣고 나만 사용으로 저장합니다. 현재 서버의 원격 MCP OAuth 연결을 뜻하지 않습니다.
+- **Gemini CLI**: [설정 예시](https://law.taxlab.kr/downloads/gemini-settings.json)를 기존 설정에 병합하고 `TAXLAB_API_KEY`를 로컬 환경에 설정합니다. 일반 Gemini 웹·모바일은 Google의 제공 지역·계정·언어 조건과 인증 호환 제한을 별도로 확인해야 합니다.
+- **PC 설정이 가능한 AI 에이전트**: 페이지의 ‘AI 설정 요청문’을 복사하세요. [setup.md](https://law.taxlab.kr/setup.md)에 기존 설정 보존, 비밀값 입력, 앱별 연결 범위와 확인 절차가 있습니다.
+
+다른 MCP 앱에서는 `https://law.taxlab.kr/sse`와 `Authorization: Bearer YOUR_API_KEY` 또는 `x-api-key: YOUR_API_KEY`를 사용합니다. 접속키를 URL에 붙이지 마세요. 현재 Streamable HTTP와 OAuth 로그인은 제공하지 않으므로 모든 앱에 URL만 등록해서 연결되는 것은 아닙니다. 서버 운영 절차는 아래 별도 항목을 참고하세요.
+
+`npm run build`는 `desktop/manifest.json`과 검수된 bridge 및 설치된 SDK 의존성으로 `dist/downloads/taxlab-law.mcpb`를 생성합니다. 접속키는 포함하지 않으며 Claude의 민감값 입력 설정으로 받습니다. 직접 배포한 확장은 새 버전 배포 시 다시 설치합니다. 자동 시험은 저장소 밖 빈 디렉터리에서 설치파일을 풀어 실제 stdio→SSE 호출까지 확인합니다. 실제 Claude UI 설치와 ChatGPT 계정별 GPT 편집기 동작은 별도 확인 범위입니다.
 
 게시 패키지의 의존성은 `npm-shrinkwrap.json`으로 고정합니다. 제공 설치기는 tarball 설치 후 앱 디렉터리에서 `npm ci`를 실행해 이 고정을 적용합니다. 의존성을 변경할 때 `package-lock.json`과 함께 갱신해야 하며, package 시험이 두 파일의 일치 및 실제 설치 버전을 확인합니다.
 
-## 실행과 인증
+## 서버 직접 실행과 인증
 
 Node.js 22 이상을 사용합니다.
 
@@ -28,7 +41,7 @@ npm start
 
 ## LLM의 MCP 연결
 
-원격 SSE는 `https://law.taxlab.kr/sse`입니다. 헤더 인증을 지원하지 않는 클라이언트에는 로컬 stdio bridge를 사용합니다. **bridge 파일 한 개만 복사하면 의존성이 빠지므로 작동하지 않습니다.** 검수한 npm tarball을 설치해야 합니다.
+원격 SSE는 `https://law.taxlab.kr/sse`입니다. 로컬 프로그램 실행(stdio)만 지원하는 클라이언트에서는 Node.js 기반 bridge를 사용할 수 있습니다. **bridge 파일 한 개만 복사하면 의존성이 빠지므로 작동하지 않습니다.** 이 경우에는 검수한 npm tarball을 설치해야 합니다.
 
 ```sh
 npm run build
@@ -70,6 +83,24 @@ FC-01~10의 키워드는 필요한 사실을 묻는 데만 사용합니다. 누�
 
 ## 실패 접수와 Supabase
 
+### 대화 중 법령·해석 정정 PR
+
+사용 중인 AI가 반박·새 공식 근거를 검토해 오류를 인정하면 `prepare_correction_pr`를 호출합니다. 서버가 고정한 공개 미리보기·저장소·질문을 보여주고 사용자 동의를 기다린 뒤 `create_correction_pr`로 실제 draft PR을 만듭니다. 응답을 잃으면 `get_correction_pr`로 같은 제안을 조회합니다. REST/GPT Actions에는 `/api/corrections/prepare`, `/create`, `/status` POST가 같은 계약을 제공합니다. 생성 작업은 GPT Actions에서 consequential로 표시합니다.
+
+동의 hash에는 공개 본문과 대상 저장소가 함께 들어갑니다. 저장소 설정이 바뀌거나 구형 제안에 고정된 대상 정보가 없으면 새 게시를 거부하고 새 미리보기·동의를 요구합니다. 이미 만들어진 구형 PR은 기존 링크와 상태 조회를 유지합니다. 중간 쓰기 후 PR이 없고 남은 branch가 정확한 한 파일 범위임을 확인하면 상태 API가 `retry_available`과 같은 제안의 재시도 인수를 반환합니다. 기존 동의를 바탕으로 한 번 재시도하며 새 제안이나 자동 반복을 만들지 않습니다.
+
+PR에는 기존 오류 요지·정정·공식 출처·재발 방지 점검 항목을 JSON 자료로 담습니다. 생성된 실행 코드는 이 경로에서 받거나 실행하지 않습니다. 작성 AI의 판단은 독립 AI 검수 승인이 아니며 PR에 미확인 상태를 명시합니다. GitHub에서 머지되고 main의 정확한 파일까지 일치한 교정 자료만 `find_legal_corrections` 및 관련 조회 결과에 참고 항목으로 제공합니다. 5분마다 확인하며 마지막 확인 후 10분이 지나면 사용하지 않습니다. 법률 최신성·사건 적용은 계속 미검증 상태입니다.
+
+운영 설정: `CORRECTION_PR_ENABLED=1`, `CORRECTION_STATE_DIR`(권한 제한된 영속 디렉터리), 기존 `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_BASE_BRANCH=main`. 토큰은 해당 저장소의 contents/pull requests 쓰기 권한을 사용합니다. 이 경로는 추가 LLM API 키나 Supabase 관리자 키를 요구하지 않습니다. 독립 AI 검수·코드 패치 worker에는 기존 B 조건이 적용됩니다.
+
+PR 기능의 설정·상태 디렉터리 초기화가 실패하면 비밀값 없는 경고를 남기고 해당 기능만 unavailable로 시작합니다. 법령 조회는 계속 가능하며 `/health`의 `correction_pr`로 기능 가용성을 확인합니다. 운영 배포 검증은 이 값이 available인지 별도로 확인해야 합니다.
+
+상태 저장은 단일 서비스 프로세스용입니다. intent를 GitHub 쓰기 전에 저장하고 고정 branch/본문을 대조해 중복 PR을 막습니다. 전체 일일 신규 제안 10건, 보관 1,000건 한도이며 초과 시 성공으로 표시하지 않습니다. 상태 디렉터리는 앱 교체 시 보존해야 하며, 여러 replica가 같은 디렉터리를 공유하는 운영은 지원하지 않습니다. 공유 접속키는 공유 actor입니다. 키·주민번호·기본 식별 패턴 차단은 임의 사건 자료의 완전한 익명화를 보장하지 않으므로 공개 가능한 내용의 미리보기를 반드시 확인합니다.
+
+MCP가 호출되지 않은 대화까지 볼 수는 없습니다. 도구 설명·서버 지침·GPT 지침으로 제안 시점을 알리며, 사용자가 직접 “방금 정정한 내용으로 PR 제안을 준비해줘”라고 요청할 수도 있습니다. 자세한 시험 계약은 [교정 PR 계약](docs/CORRECTION_PR_CONTRACT.md)에 있습니다.
+
+### 기존 실행 코드 개선 접수
+
 순서대로 적용할 migration:
 
 1. `supabase/migrations/202609140001_profiles_evolution_logs.sql`: 기존 profiles/과거 기록 및 Auth 트리거.
@@ -95,7 +126,7 @@ MCP `submit_failure` 또는 `POST /api/failures`는 공개 합성 사례 식별�
 
 `npm run release:verify -- manifest.json artifact.tgz <approval-comment-id>`는 GitHub에서 운영자의 정확한 manifest 승인, B/H/T, merge 부모/tree, 실제 CI job/step, artifact hash를 읽어 대조합니다. **현재는 읽기 전용 식별 검증이며 배포 허가나 배포 실행기가 아닙니다.** DB 복원·실행 환경·staging/rollback 증거가 없으면 운영 배포 준비 완료로 표시하지 않습니다. PR은 모아 최종 사람이 검수하고 merge합니다.
 
-CI 설정안은 [deploy/review.workflow.yml.example](deploy/review.workflow.yml.example)에 있습니다. 현재 GitHub 토큰의 workflow 권한 부족으로 게시가 거부되어 실행 파일로 등록하지 않았고 **Linux CI는 미실행**입니다. 운영자가 검수 후 `.github/workflows/review.yml`로 등록하면 GitHub-hosted Linux에서 읽기 권한으로 테스트하며 production secrets를 전달하지 않습니다. [GitHub workflow 권한 문서](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)를 따릅니다. 일반 CI 통과만으로 독립 AI 승인이나 배포 승인을 만들지 않습니다.
+현재 CI는 [.github/workflows/review.yml](.github/workflows/review.yml)에서 실행됩니다. Ubuntu/Node 22에서 review와 package 시험을 실행하며 production secrets를 전달하지 않습니다. 일반 CI 통과만으로 독립 AI 승인이나 배포 승인을 만들지 않습니다.
 
 ## 검증
 
@@ -103,4 +134,4 @@ CI 설정안은 [deploy/review.workflow.yml.example](deploy/review.workflow.yml.
 
 `npm run review:package`는 실제 npm tarball을 빈 prefix에 설치하고 stdio→SSE→인증 API, doctor, 포함된 rules를 검사합니다. `node scripts/source-smoke.mjs --live`는 설정된 법제처 인증으로 공개 근로기준법과 사건일 연혁을 실제 조회합니다.
 
-검증하지 않은 범위: Linux 운영 배포, 실제 Supabase migration/복원, 공개 HTTPS와 외부 3000 폐쇄, 격리된 AGY와 hosted patch executor, 무인 self-repair, 사람 승인 후 artifact 활성화/rollback 전체 흐름. 최신 상태는 배포 검수 문서에 기록합니다.
+법령 조회 A 버전은 GCE에서 공개 HTTPS로 운영하며, 기존 직접 공개 포트는 닫았습니다. 교정 자료 PR과 별개로 남은 검증 범위는 실제 Supabase 코드 개선 접수 migration/복원, 격리된 AI/patch executor, 독립 AI 검수 및 사람 승인 후 artifact 활성화/rollback 전체 흐름입니다.

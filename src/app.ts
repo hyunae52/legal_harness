@@ -1,4 +1,5 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
+import { fileURLToPath } from 'node:url';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { CallToolRequestSchema, ListToolsRequestSchema, type Tool } from '@modelcontextprotocol/sdk/types.js';
@@ -10,6 +11,10 @@ import { createAuthenticator } from './auth.js';
 import { retrievalEnvelope } from './evidence.js';
 import { type SourceVerifier } from './sourceVerifier.js';
 import { safeToolDiagnostic } from './errorDiagnostics.js';
+import { landingHeaders, landingHtml } from './landing.js';
+import { actionsSchema, geminiConfig, gptInstructions, setupMarkdown } from './setup.js';
+import { type CorrectionService } from './corrections.js';
+import { correctionInputs, correctionInstructions } from './correctionMeta.js';
 
 interface Options {
   law: Pick<KoreanLawClient, 'listTools' | 'callTool' | 'close' | 'releaseVersion'>;
@@ -18,6 +23,7 @@ interface Options {
   gates?: GateEngine;
   failures?: FailureService;
   sources?: SourceVerifier;
+  corrections?: CorrectionService;
   maxActive?: number;
   maxSessions?: number;
   sessionIdleMs?: number;
@@ -63,17 +69,42 @@ export function createApp(options: Options) {
     })().catch(error => fail(res, error));
   };
   const validate = (input: unknown) => gates.validate(DraftSchema.parse(input), version);
-  const retrieve = async (name: string, args: Record<string, unknown>, dates: Record<string, string> = {}) => {
+  const retrieve = async (name: string, args: Record<string, unknown>, dates: Record<string, string> = {}, correctionQuery = String(args.query ?? '')) => {
     const result = await options.law.callTool(name, args);
     const evidence = retrievalEnvelope(name, args, result.result, version, dates);
-    return { ...result, evidence };
+    return { ...result, evidence, corrections: options.corrections?.search(correctionQuery) ?? { status: 'unavailable', items: [] } };
   };
   const submit = (actor: Actor, input: unknown) => {
     if (!options.failures) throw new ServiceError(503, 'MAINTENANCE_UNAVAILABLE');
     return options.failures.submit(actor, input);
   };
+  app.get('/', (_req, res) => res.set(landingHeaders).type('html').send(landingHtml));
+  const corrections = () => {
+    if (!options.corrections) throw new ServiceError(503, 'CORRECTION_PR_UNAVAILABLE');
+    return options.corrections;
+  };
+  app.post('/api/corrections/prepare', protectedRoute(async (req, res, actor) => res.json(await work(() => corrections().prepare(actor, req.body)))));
+  app.post('/api/corrections/create', protectedRoute(async (req, res, actor) => res.json(await work(() => corrections().confirm(actor, req.body)))));
+  app.post('/api/corrections/status', protectedRoute(async (req, res, actor) => res.json(await work(() => corrections().status(actor, z.object({ proposal_id: z.string().uuid() }).strict().parse(req.body).proposal_id)))));
+  const publicHeaders = { 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-cache' };
+  app.get('/setup.md', (_req, res) => res.set(publicHeaders).type('text/plain').send(setupMarkdown));
+  app.get('/openapi.json', (_req, res) => res.set(publicHeaders).json(actionsSchema));
+  for (const [name, type, body] of [
+    ['gemini-settings.json', 'application/json', geminiConfig],
+    ['chatgpt-actions.json', 'application/json', JSON.stringify(actionsSchema, null, 2)],
+    ['chatgpt-instructions.txt', 'text/plain', gptInstructions],
+  ]) app.get('/downloads/' + name, (_req, res) => res.set(publicHeaders).attachment(name).type(type).send(body));
+  app.get('/downloads/taxlab-law.mcpb', (_req, res) => {
+    res.set(publicHeaders).attachment('taxlab-law.mcpb').type('application/octet-stream');
+    res.sendFile(fileURLToPath(new URL('./downloads/taxlab-law.mcpb', import.meta.url)), error => {
+      if (error && !res.headersSent) {
+        res.removeHeader('Content-Disposition');
+        res.status(503).json({ code: 'INSTALLER_UNAVAILABLE' });
+      } else if (error) res.destroy();
+    });
+  });
   app.get('/health', (_req, res) => res.json({ status: stopping ? 'stopping' : 'ok', version: '2.2.0', active_requests: active,
-    mcp_release: options.law.releaseVersion ?? null, rules_version: gates.version, maintenance: options.failures ? 'intake_only' : 'unavailable' }));
+    mcp_release: options.law.releaseVersion ?? null, rules_version: gates.version, maintenance: options.failures ? 'intake_only' : 'unavailable', correction_pr: options.corrections ? 'available' : 'unavailable' }));
   app.get('/api/tools', protectedRoute(async (_req, res) => res.json({ status: 'success', data: await work(() => options.law.listTools()) })));
   app.post('/api/validate', protectedRoute(async (req, res) => res.json(await work(async () => validate(req.body)))));
   app.post('/api/sources/check', protectedRoute(async (req,res) => {
@@ -88,7 +119,7 @@ export function createApp(options: Options) {
       if (quality?.blocked) return res.status(422).json({ code: 'DRAFT_CHECK_FAILED', quality_gate: quality });
       const args = { ...data.arguments };
       if (['legal_research', 'search_law', 'search_decisions'].includes(data.tool)) args.query = data.query;
-      return res.json({ status: 'success', data: await retrieve(data.tool, args, data.event_dates), quality_gate: quality });
+      return res.json({ status: 'success', data: await retrieve(data.tool, args, data.event_dates, data.query), quality_gate: quality });
     });
   }));
   app.post('/api/failures', protectedRoute(async (req, res, actor) => res.status(202).json(await work(() => submit(actor, req.body)))));
@@ -100,6 +131,14 @@ export function createApp(options: Options) {
   app.post('/api/evolve', protectedRoute(async () => { throw new ServiceError(410, 'USE_SUBMIT_FAILURE'); }));
 
   const custom: Tool[] = [
+    { name: 'prepare_correction_pr', description: correctionInstructions, inputSchema: correctionInputs.prepare,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false } },
+    { name: 'create_correction_pr', description: '사용자가 공개 preview와 저장소를 보고 PR 생성에 동의한 뒤에만 호출하세요. 실제 교정 자료 draft PR을 생성합니다. 수정·머지 승인이 아닙니다. 응답 유실 시 get_correction_pr로 기존 제안을 조회하세요.', inputSchema: correctionInputs.confirm,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true } },
+    { name: 'get_correction_pr', description: '기존 교정 제안의 PR 생성 결과·검수 대기·머지 상태를 조회합니다. 새 PR을 만들지 않습니다.', inputSchema: correctionInputs.status,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true } },
+    { name: 'find_legal_corrections', description: 'GitHub에서 머지된 법령·해석 교정 자료를 질문 키워드로 찾습니다. 출처 최신성·사건 적용과 독립 AI 검수는 별도로 확인해야 합니다.', inputSchema: correctionInputs.search,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } },
     { name:'check_legal_sources',description:'새 upstream 프로세스로 공식 법령 원문과 역할별 사건일 연혁을 다시 조회합니다. 부칙 해석과 예규 유효성은 별도 미검수입니다.',inputSchema:{type:'object',properties:{law_name:{type:'string'},law_id:{type:'string'},article:{type:'string'},event_dates:{type:'object'}},required:['law_name','law_id'],additionalProperties:false}},
     ...['validate_legal_draft', 'validate_tax_draft'].map(name => ({ name, description: '제출 초안의 제한된 검사. needs_info/unverified는 법률 통과가 아닙니다. 최종 답변 변경 시 재검사하세요.', inputSchema: { type: 'object' as const, properties: {
       draft_answer: { type: 'string' }, query: { type: 'string' }, facts: { type: 'object' }, skip_gates: { type: 'array', items: { type: 'string' } }, mode: { type: 'string', enum: ['strict', 'warn'] }, force: { type: 'boolean' }, bypass_reason: { type: 'string' }
@@ -110,12 +149,20 @@ export function createApp(options: Options) {
   ];
   function mcpServer(actor: Actor) {
     const server = new Server({ name: 'taxlab-legal-harness', version: '2.2.0' }, { capabilities: { tools: {} },
-      instructions: '법령 도구 결과는 조회 자료입니다. 사건 기준일·연혁·부칙·후속 해석을 확인하세요. 초안은 validate_legal_draft로 검사하고 미검수/누락 사실을 사용자에게 알리세요. 검사하지 않은 최종 답변을 검수 완료로 표시하지 마세요.' });
-    server.setRequestHandler(ListToolsRequestSchema, () => work(async () => ({ tools: [...(await options.law.listTools()).tools.filter(t => !custom.some(c => c.name === t.name)), ...custom] })));
+      instructions: '법령 도구 결과는 조회 자료입니다. 사건 기준일·연혁·부칙·후속 해석을 확인하세요. 초안은 validate_legal_draft로 검사하고 미검수/누락 사실을 사용자에게 알리세요. 검사하지 않은 최종 답변을 검수 완료로 표시하지 마세요. ' + correctionInstructions });
+    server.setRequestHandler(ListToolsRequestSchema, () => work(async () => ({ tools: [...(await options.law.listTools()).tools.filter(t => !custom.some(c => c.name === t.name)).map(t => ({...t, description: (t.description ?? '') + '\n반박·새 근거로 기존 답변을 정정하면 prepare_correction_pr로 제안 내용을 준비하고 사용자에게 PR 생성을 물어보세요.'})), ...custom] })));
     server.setRequestHandler(CallToolRequestSchema, async request => {
       try {
         return await work(async () => {
           const { name, arguments: args = {} } = request.params;
+          if (['prepare_correction_pr', 'create_correction_pr', 'get_correction_pr', 'find_legal_corrections'].includes(name)) {
+            const service = corrections();
+            const data = name === 'prepare_correction_pr' ? await service.prepare(actor, args)
+              : name === 'create_correction_pr' ? await service.confirm(actor, args)
+              : name === 'get_correction_pr' ? await service.status(actor, z.object({ proposal_id: z.string().uuid() }).strict().parse(args).proposal_id)
+              : service.search(z.object({ query: z.string().min(1).max(20000) }).strict().parse(args).query);
+            return { content: [{ type: 'text' as const, text: JSON.stringify(data) }], structuredContent: data };
+          }
           if(name==='check_legal_sources') {
             if(!options.sources) throw new ServiceError(503,'SOURCE_VERIFIER_UNAVAILABLE');
             const data=await options.sources.check(args);
@@ -127,7 +174,8 @@ export function createApp(options: Options) {
             return { content: [{ type: 'text' as const, text: JSON.stringify(data) }], structuredContent: data };
           }
           const data = await retrieve(name, args);
-          return { ...data.result, _meta: { ...data.result._meta, 'legal-harness/evidence': data.evidence } };
+          return { ...data.result, content: [...data.result.content, ...(data.corrections.items.length ? [{ type: 'text' as const, text: JSON.stringify({ merged_correction_notes: data.corrections }) }] : [])],
+            _meta: { ...data.result._meta, 'legal-harness/evidence': data.evidence, 'legal-harness/corrections': data.corrections } };
         });
       } catch (error) {
         if(error instanceof LawMcpError && error.code==='MCP_TOOL_ERROR' && error.result)return {...safeToolDiagnostic(error.result,env),_meta:{'legal-harness/error':error.code}};
