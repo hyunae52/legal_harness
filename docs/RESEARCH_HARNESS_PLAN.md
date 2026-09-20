@@ -1,6 +1,6 @@
 # 독자 연구 하네스 구현 계획
 
-상태: 리뷰 단계 Pro 응답을 기다리며 작성한 계획 초안. 제품 구현 전 별도 Pro 계획 검수를 받는다.
+상태: 리뷰 단계 REVIEW PASS 이후 제출하는 구체 계획. 제품 구현 전 별도 Pro 계획 검수를 받는다.
 
 ## 사용자에게 보이는 결과
 
@@ -25,11 +25,11 @@ REST와 MCP가 같은 서비스 메서드·엄격한 Zod 입력 계약을 사용
 ## 데이터와 상태
 
 - 연구 계획: query, issues(id/question/required_fact_ids/timing_required), facts(id/description/status/value/source), event_dates(role/value/precision/basis). 미상과 가정을 제공된 사실로 바꾸지 않는다. 유효한 달력 날짜·월·연도를 검사하고 월→임의 일자 보정을 금지한다.
-- 저장 경계: 인증 actor + 서버가 만든 임의 research_id. TTL 30분, 전체 50개/actor당 5개, 세션당 증거 32개, 세션당 1MiB/전체 8MiB 보관 상한. 상한 초과는 명시적 오류. 세션 만료는 성공 판정으로 변환하지 않는다.
-- 조회 영수증: evidence_id, 연구 revision, 쟁점 ID와 조회 목적, tool/인수 hash, 관측일, 실제 upstream 이름·버전, 응답 hash, 보관한 passage의 ID·문구·hash, 본문 범위(body_returned/discovery_only/partial/unknown), 만료 시각. 조회 시각은 법령 최신성 시각이 아니다.
+- 저장 경계: 인증 actor + 서버가 만든 임의 research_id. TTL 30분, 전체 50개/actor당 5개, 세션당 증거 32개, 세션당 1MiB/전체 8MiB 보관 상한. 계획·시도 기록·메타데이터도 바이트 상한에 포함한다. 상한 초과는 명시적 오류. 세션 만료는 성공 판정으로 변환하지 않는다.
+- 조회 영수증: evidence_id, 연구 revision, 쟁점 ID와 조회 목적, tool/인수 hash, 관측일, 실제 upstream 이름·버전, 원문 문서 ID(없으면 unknown), 원문 버전(없으면 unknown), 응답 hash, 보관한 passage의 ID·문구·hash와 원문 필드/반환 단위, 본문 범위(body_returned/discovery_only/partial/unknown), 만료 시각. 조회 시각은 법령 최신성 시각이 아니다.
 - NTS는 실제 본문 필드(사실관계/질의/회신/이유 등)를 분리한다. 법제처는 실제 반환 텍스트 단위를 보존한다. 출처 종류를 판결·예규·법령의 효력 우열로 자동 판정하지 않는다.
 - 본문 보관 상한은 영수증당 128KiB, 32 passage. 초과·upstream 잘림은 partial로 표시한다. 검색 목록, 실패 응답, 메타데이터만으로 본문 확보를 인증하지 않는다.
-- plan 갱신 중 진행 중이던 조회는 이전 revision에 저장되지 않는다. actor/세션/revision을 조회 전후 모두 확인한다. 검토 결과는 plan hash, evidence snapshot hash, draft hash, analysis hash, policy version을 묶는다.
+- plan 갱신 중 진행 중이던 조회는 이전 revision에 저장되지 않는다. actor/세션/revision을 조회 전후 모두 확인한다. 검토 결과는 plan hash, evidence snapshot hash, draft hash, analysis hash, policy version을 묶는다. 이전 revision의 검토 적용 가능성은 무효화한다. 이 구현에서는 메모리 상한을 위해 갱신 시 이전 원문 장부를 비우며 장기 감사 저장소라고 표시하지 않는다. 잘못된 인용은 현재 검토 결과에 그대로 거부 이유와 함께 반환한다.
 - 원문은 신뢰하지 않는 데이터다. 하네스는 문서 안의 지시를 실행하지 않고 프롬프트/검토 packet에서도 이 경계를 안내한다. 본문이나 사건 내용을 로그·GitHub에 자동 저장하지 않는다.
 - 기존 `check_legal_sources`도 연구 조회 안에서 사용할 수 있게 하여 새 프로세스의 현재/역할별 과거 원문을 증거로 남긴다. 성공한 역할과 실패한 역할을 각각 보존하고 일부 성공을 전체 성공으로 승격하지 않는다. 이 경로도 부칙 해석이나 후속 예규의 효력을 승인하지 않는다.
 - 기존 머지 교정 메모는 `community_correction` 자료이며 공식 원문 영수증과 섞지 않는다. 연구 증거는 upstream 원문/검색 결과에서만 발급하고 교정 검색 결과를 원문 증거로 다시 주입하지 않는다.
