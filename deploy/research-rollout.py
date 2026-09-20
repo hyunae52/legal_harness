@@ -124,6 +124,10 @@ def main(mode, packet):
         assert selected['commit'] == 'd77c94e5b64892fe85928508544366e418397c71'
         assert sha(pathlib.Path(selected['cwd']).parent / 'installed-dependencies.txt') == report['python_dependencies_sha256']
 
+    def write_override():
+        conf = '[Service]\nWorkingDirectory=' + str(new) + '\nExecStart=\nExecStart=/usr/bin/node ' + str(new / 'dist/index.js') + '\nReadOnlyPaths=' + str(new) + '\nEnvironmentFile=' + str(ENV) + '\nStateDirectory=legal-harness-corrections\nStateDirectoryMode=0700\nTimeoutStopSec=90\nEnvironment=TAXLAB_RELEASE_COMMIT=' + head + '\n'
+        (BASE / ('research-' + head[:12] + '.conf')).write_text(conf)
+
     def smoke(endpoint=None):
         import resource
         # Read the existing file inside the trusted Node process, copying only
@@ -201,10 +205,21 @@ await import('./scripts/research-smoke.mjs');"""
             candidate()
             event.update(before=before, staged_smoke=smoke(), after=resources(), artifact_sha256=config['artifact_sha256'])
             assert event['staged_smoke']['minimum_mem_available'] > 80 * 1024 * 1024
-            conf = '[Service]\nWorkingDirectory=' + str(new) + '\nExecStart=\nExecStart=/usr/bin/node ' + str(new / 'dist/index.js') + '\nReadOnlyPaths=' + str(new) + '\nEnvironmentFile=' + str(ENV) + '\nStateDirectory=legal-harness-corrections\nStateDirectoryMode=0700\nTimeoutStopSec=90\nEnvironment=TAXLAB_RELEASE_COMMIT=' + head + '\n'
-            (BASE / ('research-' + head[:12] + '.conf')).write_text(conf)
+            write_override()
+        elif mode == 'restage':
+            # A completed failed smoke may be retried on the same immutable
+            # installation. Never reuse an unknown/running operation or a
+            # modified installation, and never activate from a failed record.
+            assert report['events'][-1]['phase'] in ('stage', 'restage') and report['events'][-1]['status'] == 'failed'
+            assert not report['events'][-1].get('operation_state_unknown')
+            assert not DROPIN.exists() and prop('WorkingDirectory') == str(OLD)
+            previous(); candidate(); cron_quiet()
+            before = resources()
+            event.update(before=before, staged_smoke=smoke(), after=resources(), artifact_sha256=config['artifact_sha256'])
+            assert event['staged_smoke']['minimum_mem_available'] > 80 * 1024 * 1024
+            write_override()
         elif mode == 'fence':
-            assert report['events'][-1]['phase'] == 'stage' and report['events'][-1]['status'] == 'pass'
+            assert report['events'][-1]['phase'] in ('stage', 'restage') and report['events'][-1]['status'] == 'pass'
             candidate(); previous(); cron_quiet()
             assert not DROPIN.exists() and prop('WorkingDirectory') == str(OLD)
             assert prop('User', 'cloudflared.service') in ('', 'root')
