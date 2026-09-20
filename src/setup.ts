@@ -3,8 +3,18 @@ import { correctionActionPaths, correctionInstructions } from './correctionMeta.
 export const serviceOrigin = 'https://law.taxlab.kr';
 export const mcpEndpoint = serviceOrigin + '/sse';
 export const geminiConfig = JSON.stringify({ mcpServers: { 'taxlab-law': {
-  url: mcpEndpoint, headers: { Authorization: 'Bearer ${TAXLAB_API_KEY}' },
+  type: 'sse', url: mcpEndpoint, headers: { Authorization: 'Bearer ${TAXLAB_API_KEY}' },
 } } }, null, 2);
+export const antigravityConfig = JSON.stringify({ mcpServers: { 'taxlab-law': {
+  serverUrl: mcpEndpoint, headers: { Authorization: 'Bearer YOUR_API_KEY' },
+} } }, null, 2);
+export const desktopConfig = `[mcp_servers.taxlab-law]
+command = "REPLACE_WITH_NODE_EXECUTABLE"
+args = ["REPLACE_WITH_BRIDGE_DIRECTORY/server/bridge.mjs"]
+env_vars = ["TAXLAB_API_KEY"]
+startup_timeout_sec = 30
+tool_timeout_sec = 60
+`;
 export const cursorConfig = JSON.stringify({ mcpServers: { 'taxlab-law': {
   url: mcpEndpoint, headers: { Authorization: 'Bearer YOUR_API_KEY' },
 } } }, null, 2);
@@ -92,7 +102,7 @@ export const actionsSchema = {
 
 export const setupMarkdown = `# TaxLab 법령 연결 안내
 
-공식 안내: ${serviceOrigin}/ · 안내 확인일: 2026-09-20
+공식 안내: ${serviceOrigin}/ · 안내 확인일: 2026-09-21
 
 ## AI 설정 도우미가 할 일
 
@@ -101,6 +111,7 @@ export const setupMarkdown = `# TaxLab 법령 연결 안내
 실제 접속키는 이 문서에 없습니다. 운영자가 준 키를 사용자의 앱 비밀값 입력창이나 로컬 환경 설정에 넣게 하세요. 키를 채팅·명령 출력·URL·Git에 남기지 마세요.
 OS별 경로와 앱 설치 상태를 확인한 후 작업하세요. PC 설정 권한이 없는 일반 채팅에서는 아래 수동 안내를 제공하세요.
 설치가 끝나면 도구 목록만 확인하세요. 연결 확인을 위해 실제 사건 내용을 보내지 마세요.
+앱 이름뿐 아니라 웹/PC/CLI와 MCP 설정 메뉴 유무를 구분하세요. 설정 저장만으로 연결 성공이라고 하지 말고 실제 도구 목록을 확인하세요. 공식 문서상 지원과 실제 앱에서 시험한 결과를 구분하세요.
 
 ## Claude PC 앱 — 설치파일
 
@@ -110,32 +121,93 @@ Claude Settings → Extensions → Advanced settings → Install Extension에서
 직접 내려받은 확장 파일은 새 버전 배포 시 다시 설치합니다. 조직 정책이 확장 설치를 막으면 관리자 설정이 필요합니다.
 공식 안내: https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop
 
-## ChatGPT — GPT Actions
+## Claude 웹 — Request headers 메뉴가 있는 조직만 조건부 연결
+
+Claude 웹은 원격 MCP를 지원합니다. 다만 현재 TaxLab은 OAuth 없이 접속키 헤더 인증을 요구합니다.
+공식 문서의 Request headers 인증은 일부 조직에만 제공되는 베타입니다. 이 메뉴가 없는 계정은 현재 TaxLab에 직접 연결할 수 없습니다. OAuth Client Secret에 TaxLab 접속키를 넣거나 URL에 키를 붙이지 마세요.
+조직 관리자는 Organization settings → Connectors → Add → Custom → Web에서 ${mcpEndpoint}를 입력합니다.
+인증은 No sign-in, Request headers에 x-api-key와 접속키를 입력합니다. No sign-in은 여기서 OAuth 로그인을 하지 않는다는 뜻이며, 접속키 헤더는 필수입니다. Transport는 SSE입니다.
+저장 후 Customize → Connectors에서 연결하고 새 대화에서 도구 목록을 확인합니다. 실제 Claude 웹 계정의 베타 메뉴·실행은 아직 시험하지 않았습니다.
+공식 조건과 설정: https://claude.com/docs/connectors/custom/remote-mcp
+
+## ChatGPT 웹 — GPT Actions
 
 GPT 만들기가 가능한 계정에서 웹의 GPTs → 만들기 → 구성 → 새 작업(Action)으로 이동합니다.
 URL에서 가져오기: ${serviceOrigin}/openapi.json
 인증은 API Key, 방식은 Bearer로 선택하고 운영자에게 받은 접속키만 입력합니다(Bearer 접두사를 키에 다시 붙이지 않음).
 지침: ${serviceOrigin}/downloads/chatgpt-instructions.txt
 listTaxlabTools를 테스트하고 도구 목록이 보이면 나만 사용으로 저장합니다. 공유키를 넣은 GPT는 공개 배포하지 마세요.
-이 방식은 같은 서버의 API를 쓰는 GPT Actions입니다. 현재 서버는 OAuth 연결을 제공하지 않아 ChatGPT의 원격 MCP 앱에 URL만 넣는 방식은 지원하지 않습니다.
+이 방식은 같은 서버의 API를 쓰는 GPT Actions입니다. 현재 서버는 SSE와 접속키 헤더를 쓰며 Streamable HTTP·OAuth를 제공하지 않습니다. 원격 MCP 플러그인에 URL만 넣는 연결은 지원하지 않습니다.
+데스크톱 앱에서 이 GPT의 Actions가 실행되는지는 별도 미검증입니다. 웹에서 만든 GPT가 모든 PC 앱 버전에서 동작한다고 안내하지 마세요.
 공식 안내: https://developers.openai.com/api/docs/actions/getting-started
 인증 안내: https://developers.openai.com/api/docs/actions/authentication
+
+## ChatGPT 데스크톱 — MCP 설정이 있는 앱의 로컬 bridge
+
+최신 공식 안내의 Settings → MCP servers → Add server 메뉴가 있는 ChatGPT 데스크톱/Codex 호스트는 STDIO를 지원합니다. 이 메뉴가 없는 앱은 아래 로컬 연결을 설정할 수 없으므로 웹 GPT Actions를 안내하세요.
+TaxLab의 /sse URL을 Streamable HTTP 항목에 넣지 마세요. 아래 로컬 연결 프로그램을 STDIO로 실행합니다. Claude용 .mcpb 설치를 ChatGPT가 지원한다고 안내하지 마세요.
+
+1. ${serviceOrigin}/downloads/taxlab-bridge.zip 을 내려받아 사용자의 지속적인 로컬 도구 폴더에 풉니다. 임시 폴더를 실행 경로로 등록하지 마세요.
+2. Node 22 이상 실행 파일이 있는지 확인합니다. 없다면 공식 배포본으로 설치가 필요합니다. bridge와 의존성이 ZIP 안에 있으므로 npm install이나 저장소 clone은 필요하지 않습니다.
+3. Settings → MCP servers → Add server에서 이름 taxlab-law, STDIO, 명령은 Node 실행 파일의 절대 경로, 인수는 압축을 푼 폴더의 server/bridge.mjs 절대 경로로 설정합니다. 접속키는 환경 설정의 TAXLAB_API_KEY로 전달합니다.
+4. 파일로 설정한다면 ~/.codex/config.toml에 아래 항목을 병합합니다. 두 경로 placeholder를 실제 경로로 교체하고, 앱 실행 환경에서 TAXLAB_API_KEY를 전달합니다. Windows 경로는 TOML에서 슬래시(/)를 쓰면 이스케이프 오류를 피할 수 있습니다.
+
+\`\`\`toml
+${desktopConfig}\`\`\`
+
+5. 저장 후 Restart를 누르고 /mcp에서 연결 상태를 확인합니다. search_law 등 TaxLab 도구 목록이 나와야 성공입니다.
+
+로컬 bridge의 실제 STDIO↔인증 SSE 연결은 검사했습니다. ChatGPT 데스크톱 UI에서 설치·실행하는 전체 과정은 아직 미검증입니다. 이 설정은 ChatGPT 웹에 자동 반영되지 않습니다.
+공식 안내: https://learn.chatgpt.com/docs/extend/mcp
 
 ## Gemini CLI — PC 에이전트
 
 기존 ~/.gemini/settings.json의 mcpServers에 아래 taxlab-law 항목을 병합하세요. 이 파일 전체를 기존 설정 위에 덮어쓰지 마세요.
+type: "sse"를 유지하세요. 실제 Gemini CLI 0.60.0에서 url만 쓰면 HTTP 방식으로 연결을 시도해 실패했고, type을 지정한 뒤 운영 서버 초기 연결과 ping이 성공했습니다. LLM 답변·법령 도구 호출까지 실행한 시험은 아닙니다.
 TAXLAB_API_KEY 환경변수가 Gemini CLI 실행 환경에 전달되도록 비밀값을 로컬에서 설정하세요. 이미 실행 중인 CLI는 재시작합니다.
 
 \`\`\`json
 ${geminiConfig}
 \`\`\`
 
-/mcp list로 연결과 도구 목록을 확인합니다. trust:true를 넣어 승인을 일괄 생략하지 마세요.
+터미널에서 gemini mcp list, 대화 안에서는 /mcp list로 연결 상태를 확인합니다. /mcp desc에서 search_law 등 도구를 확인합니다. trust:true를 넣어 승인을 일괄 생략하지 마세요.
 설정 파일: ${serviceOrigin}/downloads/gemini-settings.json
 공식 안내: https://geminicli.com/docs/tools/mcp-server/
+환경변수 확장 안내: https://geminicli.com/docs/reference/configuration/
 
-Gemini 일반 웹/모바일은 CLI와 다릅니다. Google 공식 안내상 사용자 지정 MCP 앱은 미국·18세 이상·개인 계정·영어 및 Keep Activity 사용 등의 조건이 있습니다. 국내 일반 앱에 이 주소만 등록하면 된다고 안내하지 마세요. 이 서비스의 접속키 인증과 앱 인증의 호환 확인도 필요합니다.
+## Gemini 웹·모바일 — 국내 일반 계정은 현재 연결 불가
+
+Google 공식 안내상 사용자 지정 MCP 앱은 미국·18세 이상·개인 계정·영어 및 Keep Activity 사용 조건이 있습니다. 한국에서 사용하는 일반 계정의 연결 경로로 안내하지 마세요.
+조건에 해당하는 계정은 Gemini 웹 Settings → Connected Apps → Custom apps에서 등록하지만, TaxLab 접속키 인증과의 호환은 아직 미검증입니다. 연결 가능하다고 보장하지 마세요. CLI 설정 파일을 Gemini 웹에 업로드하는 방식도 아닙니다.
 공식 안내: https://support.google.com/gemini/answer/17209137?co=GENIE.Platform%3DDesktop&hl=en-GA
+
+## Antigravity — 앱·IDE·CLI
+
+Gemini CLI의 url 설정을 복사하지 마세요. Antigravity는 serverUrl을 사용합니다.
+Antigravity 2.0: Settings → Customizations → Installed MCP Servers → Open MCP Config.
+Antigravity IDE: Agent 패널의 … → MCP Servers → Manage MCP Servers → View raw config.
+Antigravity CLI: 설치된 버전의 agy mcp add --help를 확인해 등록합니다. 최신 공식 문서의 전역 경로는 ~/.gemini/config/mcp_config.json, 프로젝트 경로는 .agents/mcp_config.json이지만 구버전이 같은 파일을 읽는다고 가정하지 마세요. 앱에서 연 설정 파일이 우선입니다.
+기존 mcpServers에 아래 taxlab-law만 병합하고 YOUR_API_KEY를 로컬에서 접속키로 교체합니다. 설정 파일을 공개하거나 Git에 올리지 마세요.
+
+\`\`\`json
+${antigravityConfig}
+\`\`\`
+
+CLI에서 등록할 때는 접속키를 로컬 TAXLAB_API_KEY 환경변수로 받은 뒤 아래 명령을 사용합니다. 접속키 자체를 셸 명령 이력에 직접 입력하지 마세요. --header는 서버 이름 앞에 둡니다.
+
+Windows PowerShell:
+\`\`\`powershell
+agy mcp add --header ("Authorization: Bearer " + $env:TAXLAB_API_KEY) taxlab-law ${mcpEndpoint}
+\`\`\`
+macOS/Linux:
+\`\`\`sh
+agy mcp add --header "Authorization: Bearer $TAXLAB_API_KEY" taxlab-law ${mcpEndpoint}
+\`\`\`
+
+저장 후 MCP 화면에서 Refresh합니다. CLI는 /mcp 관리 화면에서 Reload하고 도구를 확인합니다. agy mcp list에 enabled로 보이는 것만으로 원격 인증 성공이 보장되지는 않습니다.
+원격 서버와 인증 헤더를 사용하므로 별도 로컬 bridge는 필요하지 않습니다. 설정 파일: ${serviceOrigin}/downloads/antigravity-mcp.json
+공식 안내: https://antigravity.google/docs/mcp
+Google 설정 예시: https://developers.google.com/knowledge/mcp
 
 ## Claude Code / Cursor / VS Code
 
@@ -156,7 +228,7 @@ ${vscodeConfig}
 ## 다른 앱과 연결 범위
 
 원격 주소는 ${mcpEndpoint} (SSE)이며 Bearer 또는 x-api-key 헤더 인증이 필요합니다.
-현재 Streamable HTTP 및 OAuth 로그인은 제공하지 않습니다. Codex의 HTTP MCP 설정이나 인증 헤더를 못 넣는 웹 앱에 SSE 주소만 넣고 연결 완료라고 하지 마세요.
+현재 Streamable HTTP 및 OAuth 로그인은 제공하지 않습니다. ChatGPT 데스크톱/Codex는 위의 STDIO bridge를 사용합니다. HTTP MCP 설정이나 인증 헤더를 못 넣는 웹 앱에 SSE 주소만 넣고 연결 완료라고 하지 마세요.
 지원하지 않는 앱은 사용 가능한 위 경로를 안내하세요. 서버 키·법제처 키·Supabase 관리자 키·LLM API 키는 사용자 설치에 필요하지 않습니다. 사용자에게 필요한 키는 운영자가 전달한 TaxLab 접속키 하나입니다.
 
 ## 데이터와 오류 신고

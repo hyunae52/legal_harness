@@ -9,8 +9,11 @@
 [연결 안내 페이지](https://law.taxlab.kr/)에서 앱을 고르세요. 사용자에게 필요한 것은 운영자에게 받은 **TaxLab 접속키**입니다.
 
 - **Claude PC 앱**: [설치파일](https://law.taxlab.kr/downloads/taxlab-law.mcpb)을 확장 설정에서 설치하고 접속키를 입력합니다. SDK 의존성이 함께 들어 있으며 앱 내장 실행 환경을 사용합니다. 웹·모바일로 자동 연결되지 않습니다.
-- **ChatGPT**: GPT 만들기가 가능한 계정에서 [OpenAPI 설정](https://law.taxlab.kr/openapi.json)을 가져와 GPT Actions의 API Key/Bearer 인증을 설정합니다. [GPT 지침](https://law.taxlab.kr/downloads/chatgpt-instructions.txt)을 넣고 나만 사용으로 저장합니다. 현재 서버의 원격 MCP OAuth 연결을 뜻하지 않습니다.
-- **Gemini CLI**: [설정 예시](https://law.taxlab.kr/downloads/gemini-settings.json)를 기존 설정에 병합하고 `TAXLAB_API_KEY`를 로컬 환경에 설정합니다. 일반 Gemini 웹·모바일은 Google의 제공 지역·계정·언어 조건과 인증 호환 제한을 별도로 확인해야 합니다.
+- **Claude 웹**: 일부 조직에 제공되는 Request headers 인증 베타 메뉴가 있으면 `/sse`와 `x-api-key`를 설정할 수 있습니다. 메뉴가 없는 계정은 현재 직접 연결할 수 없습니다. OAuth Client Secret에 접속키를 넣지 않습니다.
+- **ChatGPT 웹**: GPT 만들기가 가능한 계정에서 [OpenAPI 설정](https://law.taxlab.kr/openapi.json)을 가져와 GPT Actions의 API Key/Bearer 인증을 설정합니다. [GPT 지침](https://law.taxlab.kr/downloads/chatgpt-instructions.txt)을 넣고 나만 사용으로 저장합니다. 모든 데스크톱 앱에서 같은 GPT의 Actions가 실행된다고 보장하지 않습니다.
+- **ChatGPT 데스크톱**: Settings → MCP servers 메뉴가 있는 앱은 [로컬 bridge ZIP](https://law.taxlab.kr/downloads/taxlab-bridge.zip)을 풀고 STDIO로 등록합니다. 실행환경은 별도 필요하며 [설정 템플릿](https://law.taxlab.kr/downloads/chatgpt-desktop.toml)과 setup.md에 경로·접속키 전달 방법이 있습니다. `/sse` 주소를 Streamable HTTP 칸에 넣는 방식은 지원하지 않습니다. 메뉴가 없으면 웹 Actions를 사용합니다.
+- **Gemini CLI**: [설정 예시](https://law.taxlab.kr/downloads/gemini-settings.json)를 `~/.gemini/settings.json`에 병합하고 `TAXLAB_API_KEY`를 로컬 환경에 설정합니다. 일반 Gemini 웹·모바일은 국내 일반 계정에서 현재 연결 불가이며, 공식 지역 조건에 해당하더라도 TaxLab 인증 호환은 미검증입니다.
+- **Antigravity**: [전용 설정](https://law.taxlab.kr/downloads/antigravity-mcp.json)의 `serverUrl`·`headers`를 사용합니다. Gemini CLI의 `url`과 구분합니다. 앱의 Open MCP Config/View raw config에서 연 파일에 병합하고 Refresh합니다. 최신 공식 전역 경로는 `~/.gemini/config/mcp_config.json`, 프로젝트 경로는 `.agents/mcp_config.json`입니다.
 - **PC 설정이 가능한 AI 에이전트**: 페이지의 ‘AI 설정 요청문’을 복사하세요. [setup.md](https://law.taxlab.kr/setup.md)에 기존 설정 보존, 비밀값 입력, 앱별 연결 범위와 확인 절차가 있습니다.
 
 다른 MCP 앱에서는 `https://law.taxlab.kr/sse`와 `Authorization: Bearer YOUR_API_KEY` 또는 `x-api-key: YOUR_API_KEY`를 사용합니다. 접속키를 URL에 붙이지 마세요. 현재 Streamable HTTP와 OAuth 로그인은 제공하지 않으므로 모든 앱에 URL만 등록해서 연결되는 것은 아닙니다. 서버 운영 절차는 아래 별도 항목을 참고하세요.
@@ -41,7 +44,7 @@ npm start
 
 ## LLM의 MCP 연결
 
-원격 SSE는 `https://law.taxlab.kr/sse`입니다. 로컬 프로그램 실행(stdio)만 지원하는 클라이언트에서는 Node.js 기반 bridge를 사용할 수 있습니다. **bridge 파일 한 개만 복사하면 의존성이 빠지므로 작동하지 않습니다.** 이 경우에는 검수한 npm tarball을 설치해야 합니다.
+원격 SSE는 `https://law.taxlab.kr/sse`입니다. 로컬 프로그램 실행(stdio)만 지원하는 클라이언트에서는 Node.js 기반 bridge를 사용할 수 있습니다. **bridge 파일 한 개만 복사하면 의존성이 빠지므로 작동하지 않습니다.** SDK 의존성이 포함된 [bridge ZIP](https://law.taxlab.kr/downloads/taxlab-bridge.zip)을 풀거나, 아래처럼 검수한 npm tarball을 설치합니다. ZIP은 기존 Claude MCPB와 바이트가 같으며 Node 실행 파일 자체는 포함하지 않습니다.
 
 ```sh
 npm run build

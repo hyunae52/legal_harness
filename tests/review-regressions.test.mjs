@@ -41,7 +41,7 @@ test('public connection guide is readable without credentials and does not open 
   assert.equal(res.status,200);assert.match(res.headers.get('content-type'),/text\/html.*utf-8/);
   const html=await res.text();assert.match(html,/<html lang="ko">/);assert.match(html,/https:\/\/law\.taxlab\.kr\/sse/);
   assert.match(html,/YOUR_API_KEY/);assert.match(html,/OAuth/);assert.doesNotMatch(html,/Node\.js/);
-  for(const text of ['Claude 설치파일','ChatGPT 설정하기','Gemini 연결 안내','AI 설정 요청문 복사','PR로 제안할까요'])assert.ok(html.includes(text));
+  for(const text of ['Claude 설치파일','ChatGPT 설정하기','Gemini 연결 안내','Antigravity 연결 안내','AI 설정 요청문 복사','PR로 제안할까요'])assert.ok(html.includes(text));
   for(const value of [secret,'guide-private-oc','untrusted-input','untrusted.invalid'])assert.ok(!html.includes(value));
   assert.match(res.headers.get('content-security-policy'),/default-src 'none'/);
   assert.ok(!res.headers.get('content-security-policy').includes('unsafe-inline'));
@@ -51,16 +51,24 @@ test('public connection guide is readable without credentials and does not open 
 });
 test('setup downloads expose only fixed public artifacts; private paths and tool access stay closed',async t=>{
   const f=await fixture(t,{env:{TAXLAB_API_KEY:'download-private-canary',LAW_OC:'law-private-canary'}});
-  for(const path of ['/setup.md','/openapi.json','/downloads/gemini-settings.json','/downloads/chatgpt-actions.json','/downloads/chatgpt-instructions.txt']) {
+  for(const path of ['/setup.md','/openapi.json','/downloads/gemini-settings.json','/downloads/antigravity-mcp.json','/downloads/chatgpt-desktop.toml','/downloads/chatgpt-actions.json','/downloads/chatgpt-instructions.txt']) {
     const res=await fetch(f.base+path+'?key=untrusted-download');assert.equal(res.status,200);
     const body=await res.text();assert.ok(!/download-private-canary|law-private-canary|untrusted-download/.test(body));
     assert.equal(res.headers.get('x-content-type-options'),'nosniff');
     if(path.startsWith('/downloads/'))assert.match(res.headers.get('content-disposition'),/^attachment;/);
-    if(path.endsWith('.json'))JSON.parse(body);
+    if(path.endsWith('.json')) {
+      const config=JSON.parse(body);
+      if(path.endsWith('gemini-settings.json'))assert.equal(config.mcpServers['taxlab-law'].type,'sse','Gemini 0.60 defaults url-only connections to Streamable HTTP');
+      if(path.endsWith('antigravity-mcp.json'))assert.equal(config.mcpServers['taxlab-law'].serverUrl,'https://law.taxlab.kr/sse');
+    }
   }
   const installer=await fetch(f.base+'/downloads/taxlab-law.mcpb');assert.equal(installer.status,200);
   assert.match(installer.headers.get('content-disposition'),/attachment;.*taxlab-law\.mcpb/);
   assert.deepEqual(Buffer.from(await installer.arrayBuffer()),await readFile(new URL('../dist/downloads/taxlab-law.mcpb',import.meta.url)));
+  const bridge=await fetch(f.base+'/downloads/taxlab-bridge.zip');assert.equal(bridge.status,200);
+  assert.match(bridge.headers.get('content-type'),/application\/zip/);
+  assert.match(bridge.headers.get('content-disposition'),/attachment;.*taxlab-bridge\.zip/);
+  assert.deepEqual(Buffer.from(await bridge.arrayBuffer()),await readFile(new URL('../dist/downloads/taxlab-law.mcpb',import.meta.url)));
   for(const path of ['/downloads/.env','/downloads/package.json','/downloads/%2e%2e%2f.env','/downloads/taxlab-law.mcpb.json'])assert.equal((await fetch(f.base+path)).status,404);
   assert.equal((await f.request('/api/tools',undefined,null)).status,401);assert.equal(f.calls.length,0);
 });
