@@ -1,5 +1,7 @@
 # 수정본 배포 검수 자료
 
+후속 작업: [남은 구현·운영 전환 계획](REMAINING_PLAN_2026-09-20.md)에 조회 전용 HTTPS 전환과 전체 자기수정 기능 완성의 순서·증거·완료 조건을 구분했다. [별도 6 Pro의 두 차례 계획 검수](reviews/REMAINING_PLAN_PRO_REVIEW_2026-09-20.md)는 최종 PLAN PASS이며 운영 HOLD는 유지한다. 실제 운영 순서는 해당 후속 계획을 따른다.
+
 기준: main `d41e4588ecd374eedf5a7a846942ce27a17bf7f5` 이후 작업 브랜치 `fix/reviewed-deployment-20260919`.
 이 문서는 계획의 완료 선언이 아니다. 별도 Pro에는 구현·시험·환경 미확인을 구분해 제출한다.
 

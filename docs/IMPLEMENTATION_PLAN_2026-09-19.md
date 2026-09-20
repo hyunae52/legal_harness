@@ -1,5 +1,7 @@
 # Legal Harness 수정 계획
 
+후속 상태: 구현 후 받은 Pro 응답에 따른 남은 작업 순서는 [2026-09-20 남은 구현·운영 전환 계획](REMAINING_PLAN_2026-09-20.md)에서 관리한다. 아래 내용과 초기 시험 수치는 2026-09-19 계획 당시의 기록이다.
+
 상태: v2.1 — GPT-6 Pro 2차 검수의 “조건부 구현 착수 가능” 판정 후 잔여 문구 두 곳을 수정한 최종 계획. 구현·배포·머지는 아직 수행하지 않음. [검수 기록](reviews/PRO_REVIEW_2026-09-19.md), [v1 제출본](reviews/PRO_REVIEW_PACKET_2026-09-19_v1.md).
 
 기준: `hyunae52/legal_harness`, `main@d41e4588ecd374eedf5a7a846942ce27a17bf7f5`, 2026-09-19 점검.
