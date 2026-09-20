@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "proposal_id": "60ebdf98-78d0-4c5f-bbb7-64738d1566c8",
+  "proposed_at": "2026-09-20T14:18:38.684Z",
+  "review": {
+    "author": "submitting_client_ai",
+    "independent_ai": "not_verified",
+    "legal_applicability": "unverified"
+  },
+  "proposal": {
+    "title": "[운영 검증용] 동의 후 PR 생성 확인 — 실제 법령 정정 아님",
+    "previous_claim": "운영 검증용 합성 문장: PR 생성 흐름이 준비 중이라고 가정한다.",
+    "correction": "운영 검증용 합성 문장: 사용자 동의 후 실제 draft PR 링크를 반환한다. 실제 법령 해석을 제안하지 않는다.",
+    "why": "사용자 요청에 따른 운영 통합시험이다. 개인 사건이나 법률적 결론을 포함하지 않는다. 검증 후 머지하지 않고 닫는다.",
+    "sources": [
+      {
+        "url": "https://www.law.go.kr/",
+        "title": "국가법령정보센터 — 검증용 공개 URL",
+        "supporting_excerpt": "공개 출처 형식 확인용이며 특정 법령이나 해석을 인용하지 않는다."
+      }
+    ],
+    "keywords": [
+      "운영검증합성사례-20260920"
+    ],
+    "next_checks": [
+      "동의 전 게시가 없고 동의 후 실제 draft PR이 하나 생성되는지 확인한다.",
+      "닫힌 검증용 PR이 검색에 반영되지 않는지 확인한다."
+    ],
+    "public_safe": true
+  }
+}
