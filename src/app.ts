@@ -17,7 +17,7 @@ import { type CorrectionService } from './corrections.js';
 import { correctionInputs, correctionInstructions } from './correctionMeta.js';
 
 interface Options {
-  law: Pick<KoreanLawClient, 'listTools' | 'callTool' | 'close' | 'releaseVersion'>;
+  law: Pick<KoreanLawClient, 'listTools' | 'callTool' | 'close' | 'releaseVersion'> & { taxlawRelease?: { version?: string; commit: string } | null };
   env?: NodeJS.ProcessEnv;
   authenticate?: (request: Request) => Promise<Actor>;
   gates?: GateEngine;
@@ -71,7 +71,8 @@ export function createApp(options: Options) {
   const validate = (input: unknown) => gates.validate(DraftSchema.parse(input), version);
   const retrieve = async (name: string, args: Record<string, unknown>, dates: Record<string, string> = {}, correctionQuery = String(args.query ?? '')) => {
     const result = await options.law.callTool(name, args);
-    const evidence = retrievalEnvelope(name, args, result.result, version, dates);
+    const evidence = { ...retrievalEnvelope(name, args, result.result, result.server?.version ?? version, dates),
+      upstream_name: result.server?.name ?? 'unidentified' };
     return { ...result, evidence, corrections: options.corrections?.search(correctionQuery) ?? { status: 'unavailable', items: [] } };
   };
   const submit = (actor: Actor, input: unknown) => {
@@ -106,7 +107,7 @@ export function createApp(options: Options) {
     });
   });
   app.get('/health', (_req, res) => res.json({ status: stopping ? 'stopping' : 'ok', version: '2.2.0', active_requests: active,
-    mcp_release: options.law.releaseVersion ?? null, rules_version: gates.version, maintenance: options.failures ? 'intake_only' : 'unavailable', correction_pr: options.corrections ? 'available' : 'unavailable' }));
+    mcp_release: options.law.releaseVersion ?? null, taxlaw_release: options.law.taxlawRelease ?? null, rules_version: gates.version, maintenance: options.failures ? 'intake_only' : 'unavailable', correction_pr: options.corrections ? 'available' : 'unavailable' }));
   app.get('/api/tools', protectedRoute(async (_req, res) => res.json({ status: 'success', data: await work(() => options.law.listTools()) })));
   app.post('/api/validate', protectedRoute(async (req, res) => res.json(await work(async () => validate(req.body)))));
   app.post('/api/sources/check', protectedRoute(async (req,res) => {
@@ -120,7 +121,8 @@ export function createApp(options: Options) {
         skip_gates: data.skip_gates, mode: data.mode, force: data.force, bypass_reason: data.bypass_reason }) : null;
       if (quality?.blocked) return res.status(422).json({ code: 'DRAFT_CHECK_FAILED', quality_gate: quality });
       const args = { ...data.arguments };
-      if (['legal_research', 'search_law', 'search_decisions'].includes(data.tool)) args.query = data.query;
+      if (['legal_research', 'search_law', 'search_decisions', 'search_tax_interpretations', 'search_tax_decisions',
+        'search_taxlaw', 'tax_research', 'search_local_tax_interpretations', 'search_local_tax_decisions'].includes(data.tool)) args.query = data.query;
       return res.json({ status: 'success', data: await retrieve(data.tool, args, data.event_dates, data.query), quality_gate: quality });
     });
   }));
@@ -151,7 +153,7 @@ export function createApp(options: Options) {
   ];
   function mcpServer(actor: Actor) {
     const server = new Server({ name: 'taxlab-legal-harness', version: '2.2.0' }, { capabilities: { tools: {} },
-      instructions: '법령 도구 결과는 조회 자료입니다. 사건 기준일·연혁·부칙·후속 해석을 확인하세요. 초안은 validate_legal_draft로 검사하고 미검수/누락 사실을 사용자에게 알리세요. 검사하지 않은 최종 답변을 검수 완료로 표시하지 마세요. ' + correctionInstructions });
+      instructions: '법령 도구 결과는 조회 자료입니다. 사건 기준일·연혁·부칙·후속 해석을 확인하세요. 국세청 해석례는 search_tax_interpretations → get_tax_document로 사실관계·질의·회신을 읽고, 문서번호를 알면 lookup_tax_document를 쓰세요(도구가 제공되는 경우). 법제처 일련번호와 국세청 ntstDcmId를 혼용하지 마세요. 초안은 validate_legal_draft로 검사하고 미검수/누락 사실을 사용자에게 알리세요. 검사하지 않은 최종 답변을 검수 완료로 표시하지 마세요. ' + correctionInstructions });
     server.setRequestHandler(ListToolsRequestSchema, () => work(async () => ({ tools: [...(await options.law.listTools()).tools.filter(t => !custom.some(c => c.name === t.name)).map(t => ({...t, description: (t.description ?? '') + '\n반박·새 근거로 기존 답변을 정정하면 prepare_correction_pr로 제안 내용을 준비하고 사용자에게 PR 생성을 물어보세요.'})), ...custom] })));
     server.setRequestHandler(CallToolRequestSchema, async request => {
       try {

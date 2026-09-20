@@ -24,6 +24,9 @@ export interface LawMcpOptions {
   requestTimeoutMs: number;
   maxConcurrentCalls: number;
   releaseVersion?: string;
+  /** The NTS public-data provider does not use a law.go.kr OC credential. */
+  credentialPolicy?: 'law_oc' | 'none';
+  providerName?: string;
 }
 
 type Connection = {
@@ -103,7 +106,7 @@ export class KoreanLawClient {
       return connection;
     } catch (error) {
       await this.retire(connection);
-      throw new LawMcpError(503, "MCP_UNAVAILABLE", "korean-law-mcp could not start or initialize.");
+      throw new LawMcpError(503, "MCP_UNAVAILABLE", `${this.options.providerName ?? 'korean-law-mcp'} could not start or initialize.`);
     }
   }
 
@@ -132,7 +135,7 @@ export class KoreanLawClient {
   }
 
   async callTool(name: string, args: Record<string, unknown>) {
-    if (!this.options.server.env?.LAW_OC) {
+    if (this.options.credentialPolicy !== 'none' && !this.options.server.env?.LAW_OC) {
       throw new LawMcpError(503, "MCP_NOT_CONFIGURED", "Set LAW_OC on the Express server before requesting legal data.");
     }
     // Keep this slot until work ends, even if the HTTP caller disconnects.
@@ -151,7 +154,7 @@ export class KoreanLawClient {
       acquiring = this.getConnection(deadline);
       connection = await Promise.race([acquiring, expired]);
       if (!connection.tools.some(tool => tool.name === name)) {
-        throw new LawMcpError(400, "MCP_UNKNOWN_TOOL", "Tool is not advertised by korean-law-mcp. See /api/tools.");
+        throw new LawMcpError(400, "MCP_UNKNOWN_TOOL", "Tool is not advertised by the selected provider. See /api/tools.");
       }
       const remaining = Math.max(1, deadline - Date.now());
       const response = await Promise.race([connection.client.callTool({ name, arguments: args }, CallToolResultSchema, {
@@ -161,7 +164,7 @@ export class KoreanLawClient {
       }), expired]);
       const result = CallToolResultSchema.parse(response);
       if (result.isError) {
-        throw new LawMcpError(502, "MCP_TOOL_ERROR", "korean-law-mcp reported a tool failure.", result);
+        throw new LawMcpError(502, "MCP_TOOL_ERROR", "The selected provider reported a tool failure.", result);
       }
       return {
         kind: "retrieval" as const,

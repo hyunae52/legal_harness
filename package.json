@@ -14,6 +14,8 @@
   "files": [
     "dist",
     "rules",
+    "upstreams",
+    "scripts/install-taxlaw-mcp.py",
     "scripts/hermes-mcp-bridge.mjs",
     "npm-shrinkwrap.json",
     "LICENSE",
@@ -26,6 +28,8 @@
     "release:verify": "node scripts/verify-release.mjs",
     "smoke:mcp": "npm run build && node scripts/mcp-smoke.mjs",
     "mcp:update": "node scripts/mcp-update.mjs",
+    "taxlaw:install": "python scripts/install-taxlaw-mcp.py",
+    "smoke:taxlaw": "node scripts/taxlaw-smoke.mjs --live",
     "start": "node dist/index.js",
     "dev": "tsc --watch",
     "deploy": "pm2 start ecosystem.config.cjs"

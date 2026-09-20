@@ -18,6 +18,14 @@ fixtures, not evidence of external AI approval or production deployment. Default
 tests make no law API calls, create no PR, and do not change the live database.
 Explicit live public-law check: `node scripts/source-smoke.mjs --live` after build.
 
+`tests/taxlaw-client.test.mjs` covers the optional pinned NTS provider with a
+real stdio fixture and authenticated Express REST/SSE. In-band NTS errors must
+not become successful retrievals; MOLEG serials are not NTS document IDs.
+After `python scripts/install-taxlaw-mcp.py`, run
+`node scripts/taxlaw-smoke.mjs --live` to check five real public NTS documents,
+structured sections, truncation, document-number variants and negative inputs.
+Python and internet access are only required for this explicit live check.
+
 The proposed CI uses an ephemeral GitHub-hosted runner with no production secrets.
 It is stored in `deploy/review.workflow.yml.example`; publishing an executable
 workflow was blocked by the current token's missing workflow scope. Linux CI
