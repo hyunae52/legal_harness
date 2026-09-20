@@ -174,6 +174,12 @@ provider의 isError, 기존 LawMcpError, NTS 애플리케이션 오류는 failed
 
 후보 smoke는 별도 loopback 포트, 임시 상태, correction 게시자 미설정으로 실행한다. 운영 correction 디렉터리와 GitHub 게시 자격을 후보에 연결하지 않는다. 실제 NTS 읽기만 허용한다. CPU/RSS/디스크와 운영+후보 동시 실행 여유를 실측한다.
 
-전환 시 이 서비스의 Cloudflare→loopback 포트에만 임시 maintenance fence를 적용하여 새 외부 작업을 막고, 운영 health의 active_requests=0을 제한 시간 내 확인한다. 포트 전용 격리는 다른 서비스/SSH에 영향을 주지 않게 한다. 현재 cloudflared는 root, operator probe는 cta인 것을 확인했으므로 해당 포트·UID에 한정한 방식 사용을 검토한다. 사용 가능한 격리 수단이 없거나 60초 내 작업이 비워지지 않으면 전환을 중단하고 fence를 해제한다. 진행 중 correction 게시를 강제 중단하지 않는다.
+전환 불변조건은 **새 작업 진입이 차단되고, 이미 수신된 요청의 인증·디스패치 대기를 포함하여 앞으로 새 작업이 시작될 경로가 없으며, 진행 중 게시·조회가 모두 끝난 상태**다. 단일 active_requests=0 관측은 이 증명이 아니다. 기존 a9808dd는 authActive를 health에 노출하지 않으므로 이 수치만으로 전환하지 않는다. 새 코드에는 접수 차단 후 인증 완료 시에도 재확인하는 drain 경계와 auth/작업 대기의 정리 조건을 추가하고 지연 인증 회귀를 시험한다. 기존 운영본에서 동등한 조건을 입증할 수 없으면 실제 전환을 하지 않는다.
 
-rollback 기준은 전체 commit `a9808ddd629f18cb915e710bf52835fe6db400e5`와 기존 artifact SHA `c0977a5e3508d02c1340cde15307b05ba8c10413c14fb182f96809b584df1561`, 실제 파일 hash manifest, systemd 70-client-guide drop-in/환경 참조를 재확인해 고정한다. 새 전환 drop-in만 제거하여 이 상태로 돌아가며 correction 영속 파일을 과거 사본으로 덮어쓰지 않는다. 새 Python pin/실제 의존성·venv 위치, Node artifact SHA, CI/commit, health/HTTPS smoke를 배포 packet에 기록한다. 새 릴리스 실패 시 rollback 후 fence 해제가 finally에서 보장되어야 한다.
+기존본의 외부 drain은 이 서비스의 Cloudflare→loopback 포트만 차단하고 기존 ingress 연결도 정리해, 아직 요청 본문/소켓에 남은 내용에서 새 디스패치가 생기지 않게 해야 한다. 이미 진입한 인증은 고정 운영 artifact의 실제 인증/SDK 경로에서 확인한 최대 실행 한도가 끝나야 한다. 현재 로컬 코드는 단일 JWT getUser fetch에 5초 AbortSignal이며 자동 재시도/세션 갱신 경로를 사용하지 않는 것을 확인했다. 배포 전 운영 의존성·코드 일치와 이 한도를 재확인하고 해당 대기 및 event-loop 진행 확인 뒤 active 작업 0을 확인해야 한다. 네트워크 fence만 설치하거나 임의로 몇 초 잤다는 것을 drain 증거로 사용하지 않는다. 포트 전용 격리는 다른 서비스/SSH를 보존한다. 현재 cloudflared는 root, operator probe는 cta인 것을 확인했으므로 해당 포트·UID에 한정한 수단을 검토한다. 증명 조건 미충족 또는 60초 내 정리 실패면 전환 중단. 진행 중 correction 게시를 강제 중단하지 않는다.
+
+rollback 기준은 전체 commit `a9808ddd629f18cb915e710bf52835fe6db400e5`와 기존 artifact SHA `c0977a5e3508d02c1340cde15307b05ba8c10413c14fb182f96809b584df1561`, 실제 파일 hash manifest, systemd 70-client-guide drop-in/환경 참조를 재확인해 고정한다. 새 전환 drop-in만 제거하여 이 상태로 돌아가며 correction 영속 파일을 과거 사본으로 덮어쓰지 않는다. 새 Python pin/실제 의존성·venv 위치, Node artifact SHA, CI/commit, health/HTTPS smoke를 배포 packet에 기록한다.
+
+공개 재개는 cleanup과 분리한다. 전환 전 중단이면 기존 릴리스가 그대로 정상임을 확인한 뒤 해제, 전환 성공이면 새 릴리스 식별·readiness 후 해제, rollback 성공이면 이전 릴리스 식별·readiness 후 해제한다. **rollback 실패/실행 상태 불명이면 해당 서비스만 maintenance/차단 유지**하고 실패를 기록한다. finally에서 무조건 fence를 해제하지 않는다. 임시 자원 정리 때문에 실패 후보가 다시 공개되어서는 안 된다.
+
+배포 준비 시험에 (a) active=0 때 인증 대기 중인 게시 요청이 뒤늦게 완료되어도 drain이 거부하거나 안전하게 정리될 때까지 전환 금지, (b) 후보 readiness 실패+rollback 실패가 함께 발생하면 public resume 호출 0회인 두 실패 주입을 추가한다. 이 시험과 실제 기존본 drain 증거는 CODE/배포 검수 packet에서 확인한다.
