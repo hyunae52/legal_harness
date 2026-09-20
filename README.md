@@ -2,11 +2,21 @@
 
 사용자의 LLM이 공식 `korean-law-mcp`를 조회하고, 제출한 초안의 확인 범위와 누락 사실을 구분할 수 있게 하는 Express/MCP 서버입니다. upstream은 npm 패키지를 **별도 stdio 자식 프로세스**로 실행합니다. 원본 파싱 코드를 복사하거나 포크하지 않습니다. 일반 조회에는 서버의 LLM 키가 필요 없습니다.
 
-현재 수정본은 **운영 배포 전 검수 대상**입니다. 자동 패치 전체 루프는 아직 활성화하지 않았습니다. [배포 상태](docs/DEPLOYMENT_READINESS_2026-09-19.md)와 [남은 구현·운영 전환 계획](docs/REMAINING_PLAN_2026-09-20.md)을 먼저 확인하세요.
+법령 조회 서버는 **https://law.taxlab.kr**에서 운영합니다. 실패를 재현하고 수정안을 AI가 검수한 뒤 PR로 제출하는 파이프라인은 아직 활성화하지 않았습니다. 최종 검수·머지는 사람이 진행하는 구조입니다. [이전 배포 준비 기록](docs/DEPLOYMENT_READINESS_2026-09-19.md)과 [남은 구현 계획](docs/REMAINING_PLAN_2026-09-20.md)은 해당 작성 시점의 기록입니다.
+
+## 사용자가 연결하는 방법
+
+[연결 안내 페이지](https://law.taxlab.kr/)에서 사용하는 AI 앱의 설정을 확인하세요. 원격 SSE와 인증 헤더를 지원하는 앱에서는 **사용자 PC에 Node.js나 이 저장소를 설치할 필요가 없습니다.** 운영자에게 전달받은 접속키와 아래 주소만 설정합니다.
+
+- MCP 주소: `https://law.taxlab.kr/sse`
+- 인증 헤더: `Authorization: Bearer YOUR_API_KEY` 또는 `x-api-key: YOUR_API_KEY`
+- 연결 안내: Cursor, VS Code 로컬 Copilot 채팅 및 다른 원격 SSE 지원 앱
+
+접속키를 URL에 붙이지 마세요. 현재 Streamable HTTP와 OAuth 로그인은 제공하지 않으므로, 모든 AI 앱에 URL만 등록해서 연결되는 것은 아닙니다. 아래 Node.js 설치 절차는 **서버를 직접 운영하거나 로컬 stdio 연결기를 사용하는 경우**에 해당합니다.
 
 게시 패키지의 의존성은 `npm-shrinkwrap.json`으로 고정합니다. 제공 설치기는 tarball 설치 후 앱 디렉터리에서 `npm ci`를 실행해 이 고정을 적용합니다. 의존성을 변경할 때 `package-lock.json`과 함께 갱신해야 하며, package 시험이 두 파일의 일치 및 실제 설치 버전을 확인합니다.
 
-## 실행과 인증
+## 서버 직접 실행과 인증
 
 Node.js 22 이상을 사용합니다.
 
@@ -28,7 +38,7 @@ npm start
 
 ## LLM의 MCP 연결
 
-원격 SSE는 `https://law.taxlab.kr/sse`입니다. 헤더 인증을 지원하지 않는 클라이언트에는 로컬 stdio bridge를 사용합니다. **bridge 파일 한 개만 복사하면 의존성이 빠지므로 작동하지 않습니다.** 검수한 npm tarball을 설치해야 합니다.
+원격 SSE는 `https://law.taxlab.kr/sse`입니다. 로컬 프로그램 실행(stdio)만 지원하는 클라이언트에서는 Node.js 기반 bridge를 사용할 수 있습니다. **bridge 파일 한 개만 복사하면 의존성이 빠지므로 작동하지 않습니다.** 이 경우에는 검수한 npm tarball을 설치해야 합니다.
 
 ```sh
 npm run build

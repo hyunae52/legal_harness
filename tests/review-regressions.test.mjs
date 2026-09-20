@@ -32,6 +32,20 @@ async function fixture(t, opts = {}) {
 }
 
 test('native ESM app imports without starting a listener or loading environment credentials',()=>assert.equal(typeof createApp,'function'));
+test('public connection guide is readable without credentials and does not open authenticated tools',async t=>{
+  const secret='guide-private-fixture-key';
+  const f=await fixture(t,{env:{TAXLAB_API_KEY:secret,LAW_OC:'guide-private-oc'}});
+  const res=await fetch(f.base+'/?key=untrusted-input',{headers:{'x-forwarded-host':'untrusted.invalid'}});
+  assert.equal(res.status,200);assert.match(res.headers.get('content-type'),/text\/html.*utf-8/);
+  const html=await res.text();assert.match(html,/<html lang="ko">/);assert.match(html,/https:\/\/law\.taxlab\.kr\/sse/);
+  assert.match(html,/YOUR_API_KEY/);assert.match(html,/OAuth/);assert.match(html,/Node\.js/);
+  for(const value of [secret,'guide-private-oc','untrusted-input','untrusted.invalid'])assert.ok(!html.includes(value));
+  assert.match(res.headers.get('content-security-policy'),/default-src 'none'/);
+  assert.ok(!res.headers.get('content-security-policy').includes('unsafe-inline'));
+  const head=await fetch(f.base,{method:'HEAD'});assert.equal(head.status,200);assert.equal(await head.text(),'');
+  for(const path of ['/api/tools','/sse'])assert.equal((await f.request(path,undefined,null)).status,401);
+  assert.equal(f.calls.length,0);
+});
 test('unauthenticated analyze/tools/messages do no upstream work',async t=>{
   const f=await fixture(t);
   for(const [p,b] of [['/api/analyze',{query:'law'}],['/api/tools',undefined],['/messages?sessionId=00000000-0000-4000-8000-000000000001',{}]]) assert.equal((await f.request(p,b,null)).status,401);

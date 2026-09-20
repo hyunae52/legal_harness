@@ -20,6 +20,7 @@ const command=async args=>(await exec(process.execPath,[npm,...args],{cwd:root,e
 const [packed]=JSON.parse(await command(['pack','--ignore-scripts','--json','--pack-destination',work]));
 assert.ok(packed.files.every(f=>!/(^|\/)(?:\.env(?:\.|$)|docs|tests|\.git|\.runtime)/.test(f.path)),'Private files in package');
 assert.ok(packed.files.some(f=>f.path==='rules/manifest.json'));
+assert.ok(packed.files.some(f=>f.path==='dist/landing.js'),'The public connection guide must ship with the app');
 assert.ok(packed.files.some(f=>f.path==='npm-shrinkwrap.json'),'Published dependencies must be pinned');
 assert.deepEqual(JSON.parse(await readFile(join(root,'npm-shrinkwrap.json'),'utf8')),JSON.parse(await readFile(join(root,'package-lock.json'),'utf8')),'Published and development locks must agree');
 const artifact=join(work,packed.filename),prefix=join(work,'clean-prefix');

@@ -10,6 +10,7 @@ import { createAuthenticator } from './auth.js';
 import { retrievalEnvelope } from './evidence.js';
 import { type SourceVerifier } from './sourceVerifier.js';
 import { safeToolDiagnostic } from './errorDiagnostics.js';
+import { landingHeaders, landingHtml } from './landing.js';
 
 interface Options {
   law: Pick<KoreanLawClient, 'listTools' | 'callTool' | 'close' | 'releaseVersion'>;
@@ -72,6 +73,7 @@ export function createApp(options: Options) {
     if (!options.failures) throw new ServiceError(503, 'MAINTENANCE_UNAVAILABLE');
     return options.failures.submit(actor, input);
   };
+  app.get('/', (_req, res) => res.set(landingHeaders).type('html').send(landingHtml));
   app.get('/health', (_req, res) => res.json({ status: stopping ? 'stopping' : 'ok', version: '2.2.0', active_requests: active,
     mcp_release: options.law.releaseVersion ?? null, rules_version: gates.version, maintenance: options.failures ? 'intake_only' : 'unavailable' }));
   app.get('/api/tools', protectedRoute(async (_req, res) => res.json({ status: 'success', data: await work(() => options.law.listTools()) })));
