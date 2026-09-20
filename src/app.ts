@@ -15,6 +15,8 @@ import { landingHeaders, landingHtml } from './landing.js';
 import { actionsSchema, antigravityConfig, desktopConfig, geminiConfig, gptInstructions, setupMarkdown } from './setup.js';
 import { type CorrectionService } from './corrections.js';
 import { correctionInputs, correctionInstructions } from './correctionMeta.js';
+import { ResearchService, researchPolicyVersion, type ResearchOptions } from './research.js';
+import { researchTools, researchRoutes, researchSchemas, researchInstructions, type ResearchTool } from './researchContracts.js';
 
 interface Options {
   law: Pick<KoreanLawClient, 'listTools' | 'callTool' | 'close' | 'releaseVersion'> & { taxlawRelease?: { version?: string; commit: string } | null };
@@ -27,16 +29,18 @@ interface Options {
   maxActive?: number;
   maxSessions?: number;
   sessionIdleMs?: number;
+  researchOptions?: ResearchOptions;
 }
 export function createApp(options: Options) {
   const env = options.env ?? process.env;
   const auth = options.authenticate ?? createAuthenticator(env);
   const gates = options.gates ?? new GateEngine();
+  const research = new ResearchService(options.law, options.sources ? input => options.sources!.check(input) : undefined, options.researchOptions);
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json({ limit: '256kb' }));
   const sessions = new Map<string, { actor: Actor; server: Server; transport: SSEServerTransport; touched: number }>();
-  let active = 0, authActive = 0, stopping = false;
+  let active = 0, authActive = 0, dispatchActive = 0, stopping = false;
   const version = options.law.releaseVersion ?? 'unidentified';
   const maxActive = options.maxActive ?? 3;
   const work = async <T>(operation: () => Promise<T>): Promise<T> => {
@@ -59,13 +63,17 @@ export function createApp(options: Options) {
   };
   const protectedRoute = (handler: (req: Request, res: Response, actor: Actor) => Promise<unknown>) => (req: Request, res: Response) => {
     void (async () => {
-      if (stopping || authActive >= 20) throw new ServiceError(429, 'AT_CAPACITY');
+      if (stopping) throw new ServiceError(503, 'SHUTTING_DOWN');
+      if (authActive >= 20) throw new ServiceError(429, 'AT_CAPACITY');
       authActive++;
       let actor: Actor;
       try { actor = await auth(req); } finally { authActive--; }
+      // Authentication can settle after drain begins. Never dispatch that request.
+      if (stopping) throw new ServiceError(503, 'SHUTTING_DOWN');
       const origin = req.get('origin');
       if (origin && origin !== (env.PUBLIC_ORIGIN || 'https://law.taxlab.kr')) throw new ServiceError(403, 'ORIGIN_REJECTED');
-      await handler(req, res, actor);
+      dispatchActive++;
+      try { await handler(req, res, actor); } finally { dispatchActive--; }
     })().catch(error => fail(res, error));
   };
   const validate = (input: unknown) => gates.validate(DraftSchema.parse(input), version);
@@ -87,6 +95,10 @@ export function createApp(options: Options) {
   app.post('/api/corrections/prepare', protectedRoute(async (req, res, actor) => res.json(await work(() => corrections().prepare(actor, req.body)))));
   app.post('/api/corrections/create', protectedRoute(async (req, res, actor) => res.json(await work(() => corrections().confirm(actor, req.body)))));
   app.post('/api/corrections/status', protectedRoute(async (req, res, actor) => res.json(await work(() => corrections().status(actor, z.object({ proposal_id: z.string().uuid() }).strict().parse(req.body).proposal_id)))));
+  for (const [name, route] of Object.entries(researchRoutes)) {
+    app.post('/api/research/' + route, protectedRoute(async (req, res, actor) =>
+      res.json(await work(() => research.run(name as ResearchTool, actor, req.body)))));
+  }
   const publicHeaders = { 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-cache' };
   app.get('/setup.md', (_req, res) => res.set(publicHeaders).type('text/plain').send(setupMarkdown));
   app.get('/openapi.json', (_req, res) => res.set(publicHeaders).json(actionsSchema));
@@ -107,6 +119,8 @@ export function createApp(options: Options) {
     });
   });
   app.get('/health', (_req, res) => res.json({ status: stopping ? 'stopping' : 'ok', version: '2.2.0', active_requests: active,
+    active_authentications: authActive, active_dispatches: dispatchActive, release_commit: env.TAXLAB_RELEASE_COMMIT ?? null,
+    research_harness: { policy: researchPolicyVersion, tools: researchTools.length, storage: 'ephemeral' },
     mcp_release: options.law.releaseVersion ?? null, taxlaw_release: options.law.taxlawRelease ?? null, rules_version: gates.version, maintenance: options.failures ? 'intake_only' : 'unavailable', correction_pr: options.corrections ? 'available' : 'unavailable' }));
   app.get('/api/tools', protectedRoute(async (_req, res) => res.json({ status: 'success', data: await work(() => options.law.listTools()) })));
   app.post('/api/validate', protectedRoute(async (req, res) => res.json(await work(async () => validate(req.body)))));
@@ -135,6 +149,7 @@ export function createApp(options: Options) {
   app.post('/api/evolve', protectedRoute(async () => { throw new ServiceError(410, 'USE_SUBMIT_FAILURE'); }));
 
   const custom: Tool[] = [
+    ...researchTools,
     { name: 'prepare_correction_pr', description: correctionInstructions, inputSchema: correctionInputs.prepare,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false } },
     { name: 'create_correction_pr', description: '사용자가 공개 preview와 저장소를 보고 PR 생성에 동의한 뒤에만 호출하세요. 실제 교정 자료 draft PR을 생성합니다. 수정·머지 승인이 아닙니다. 응답 유실 시 get_correction_pr로 기존 제안을 조회하세요.', inputSchema: correctionInputs.confirm,
@@ -153,12 +168,16 @@ export function createApp(options: Options) {
   ];
   function mcpServer(actor: Actor) {
     const server = new Server({ name: 'taxlab-legal-harness', version: '2.2.0' }, { capabilities: { tools: {} },
-      instructions: '법령 도구 결과는 조회 자료입니다. 사건 기준일·연혁·부칙·후속 해석을 확인하세요. 국세청 해석례는 search_tax_interpretations → get_tax_document로 사실관계·질의·회신을 읽고, 문서번호를 알면 lookup_tax_document를 쓰세요(도구가 제공되는 경우). 법제처 일련번호와 국세청 ntstDcmId를 혼용하지 마세요. 초안은 validate_legal_draft로 검사하고 미검수/누락 사실을 사용자에게 알리세요. 검사하지 않은 최종 답변을 검수 완료로 표시하지 마세요. ' + correctionInstructions });
+      instructions: researchInstructions + ' 법령 도구 결과는 조회 자료입니다. 사건 기준일·연혁·부칙·후속 해석을 확인하세요. 국세청 해석례는 search_tax_interpretations → get_tax_document로 사실관계·질의·회신을 읽고, 문서번호를 알면 lookup_tax_document를 쓰세요(도구가 제공되는 경우). 법제처 일련번호와 국세청 ntstDcmId를 혼용하지 마세요. 기존 validate_legal_draft는 별도의 제한된 초안 검사입니다. ' + correctionInstructions });
     server.setRequestHandler(ListToolsRequestSchema, () => work(async () => ({ tools: [...(await options.law.listTools()).tools.filter(t => !custom.some(c => c.name === t.name)).map(t => ({...t, description: (t.description ?? '') + '\n반박·새 근거로 기존 답변을 정정하면 prepare_correction_pr로 제안 내용을 준비하고 사용자에게 PR 생성을 물어보세요.'})), ...custom] })));
     server.setRequestHandler(CallToolRequestSchema, async request => {
       try {
         return await work(async () => {
           const { name, arguments: args = {} } = request.params;
+          if (Object.hasOwn(researchSchemas, name)) {
+            const data = await research.run(name as ResearchTool, actor, args);
+            return { content: [{ type: 'text' as const, text: JSON.stringify(data) }], structuredContent: data };
+          }
           if (['prepare_correction_pr', 'create_correction_pr', 'get_correction_pr', 'find_legal_corrections'].includes(name)) {
             const service = corrections();
             const data = name === 'prepare_correction_pr' ? await service.prepare(actor, args)
@@ -209,5 +228,14 @@ export function createApp(options: Options) {
   }, Math.min(options.sessionIdleMs ?? 900_000, 30_000));
   timer.unref();
   app.use((error: {type?: string}, _req: Request, res: Response, _next: NextFunction) => fail(res, error.type === 'entity.too.large' ? new ServiceError(413, 'BODY_TOO_LARGE') : error instanceof SyntaxError ? new ServiceError(400, 'INVALID_JSON') : error));
-  return { app, close: async () => { stopping = true; clearInterval(timer); await Promise.allSettled([...sessions.values()].map(s => s.server.close())); sessions.clear(); await Promise.allSettled([options.law.close(),options.sources?.close()]); } };
+  const drain = async (timeoutMs = 60_000) => {
+    stopping = true;
+    const until = performance.now() + timeoutMs;
+    while (active || authActive || dispatchActive) {
+      if (performance.now() >= until) throw new ServiceError(503, 'DRAIN_TIMEOUT');
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    return { status: 'drained', active_requests: active, active_authentications: authActive, active_dispatches: dispatchActive };
+  };
+  return { app, drain, close: async () => { await drain(); clearInterval(timer); research.close(); await Promise.allSettled([...sessions.values()].map(s => s.server.close())); sessions.clear(); await Promise.allSettled([options.law.close(),options.sources?.close()]); } };
 }

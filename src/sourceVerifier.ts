@@ -1,10 +1,9 @@
 import {z} from 'zod';
 import {digest,ServiceError} from './contracts.js';
 import type {KoreanLawClient} from './koreanLawClient.js';
+import { CalendarDay } from './dates.js';
 
-const date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(s=>{
-  const d=new Date(s+'T00:00:00Z');return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===s;
-},'Invalid calendar date');
+const date=CalendarDay;
 export const SourceRequest=z.object({law_name:z.string().trim().min(1).max(120),law_id:z.string().regex(/^\d{1,12}$/),
   article:z.string().trim().min(1).max(40).optional(),event_dates:z.record(z.enum(['contract','transfer','management_disposal','tax_period_start']),date).default({})}).strict();
 type SourceClient=Pick<KoreanLawClient,'callTool'|'listTools'|'close'>;

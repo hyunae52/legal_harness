@@ -1,5 +1,6 @@
 // Public setup artifacts contain placeholders only; never interpolate environment credentials.
 import { correctionActionPaths, correctionInstructions } from './correctionMeta.js';
+import { researchActionPaths, researchInstructions } from './researchContracts.js';
 export const serviceOrigin = 'https://law.taxlab.kr';
 export const mcpEndpoint = serviceOrigin + '/sse';
 export const geminiConfig = JSON.stringify({ mcpServers: { 'taxlab-law': {
@@ -28,6 +29,7 @@ https://law.taxlab.kr/setup.md 를 읽고, 이 PC에서 설정할 수 있는 앱
 연결 후 도구 목록이 보이는지 확인하고 결과를 알려줘. PC 설정 권한이 없으면 내가 쓰는 앱의 수동 설정 단계를 안내해줘.`;
 
 export const gptInstructions = `TaxLab의 공식 법령 조회 도구로 한국 법령과 해석 자료를 찾아 답합니다.
+${researchInstructions}
 조회 전에 사건의 기준일과 필요한 사실을 확인하세요. listTaxlabTools로 실제 도구 이름과 입력 스키마를 확인한 뒤 queryLegalSources를 호출하세요.
 법령 검색은 tool=search_law, query=법령명, arguments={"display":3}부터 시작하세요. 원문 조회는 반환된 식별자를 사용하고 추측하지 마세요.
 국세청 해석례 도구가 목록에 있으면 search_tax_interpretations → get_tax_document로 본문을 읽으세요. 문서번호를 알면 lookup_tax_document를 사용하세요. 법제처 일련번호와 국세청 ntstDcmId는 서로 다릅니다.
@@ -49,6 +51,7 @@ export const actionsSchema = {
   components: { securitySchemes: { serviceKey: { type: 'http', scheme: 'bearer', description: 'TaxLab access key supplied by the operator. Set API Key / Bearer in the GPT editor.' } } },
   paths: {
     ...correctionActionPaths,
+    ...researchActionPaths,
     '/api/tools': { get: {
       operationId: 'listTaxlabTools', summary: 'List legal source tools and their input schemas', 'x-openai-isConsequential': false,
       responses: { '200': jsonResponse('Available upstream tools. Use their input schemas for queryLegalSources arguments.', {
@@ -231,6 +234,12 @@ ${vscodeConfig}
 원격 주소는 ${mcpEndpoint} (SSE)이며 Bearer 또는 x-api-key 헤더 인증이 필요합니다.
 현재 Streamable HTTP 및 OAuth 로그인은 제공하지 않습니다. ChatGPT 데스크톱/Codex는 위의 STDIO bridge를 사용합니다. HTTP MCP 설정이나 인증 헤더를 못 넣는 웹 앱에 SSE 주소만 넣고 연결 완료라고 하지 마세요.
 지원하지 않는 앱은 사용 가능한 위 경로를 안내하세요. 서버 키·법제처 키·Supabase 관리자 키·LLM API 키는 사용자 설치에 필요하지 않습니다. 사용자에게 필요한 키는 운영자가 전달한 TaxLab 접속키 하나입니다.
+
+## 연결 후 연구 요청
+
+AI에게 “TaxLab 연구 하네스로 쟁점을 나누고 실제 원문·반대 자료를 읽어 주장별 인용과 빠진 사실을 검사해줘”라고 요청할 수 있습니다.
+${researchInstructions}
+연구 도구의 POST Actions 경로도 openapi.json에 포함되어 있습니다. 기존에 만든 GPT는 스키마와 지침을 다시 가져와야 새 도구가 표시됩니다. MCP 클라이언트는 도구 목록을 새로고침하세요.
 
 ## 데이터와 오류 신고
 
