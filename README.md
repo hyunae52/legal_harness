@@ -2,7 +2,7 @@
 
 사용자의 LLM이 공식 `korean-law-mcp`를 조회하고, 제출한 초안의 확인 범위와 누락 사실을 구분할 수 있게 하는 Express/MCP 서버입니다. upstream은 npm 패키지를 **별도 stdio 자식 프로세스**로 실행합니다. 원본 파싱 코드를 복사하거나 포크하지 않습니다. 일반 조회에는 서버의 LLM 키가 필요 없습니다.
 
-법령 조회 서버는 **https://law.taxlab.kr**에서 운영합니다. 실패를 재현하고 수정안을 AI가 검수한 뒤 PR로 제출하는 파이프라인은 아직 활성화하지 않았습니다. 최종 검수·머지는 사람이 진행하는 구조입니다. [이전 배포 준비 기록](docs/DEPLOYMENT_READINESS_2026-09-19.md)과 [남은 구현 계획](docs/REMAINING_PLAN_2026-09-20.md)은 해당 작성 시점의 기록입니다.
+법령 조회 서버는 **https://law.taxlab.kr**에서 운영합니다. 대화 중 반박·새 근거로 답변을 정정하면 공개 가능한 교정 자료를 준비하고, 사용자의 동의 후 실제 draft PR을 만드는 경로를 제공합니다. 최종 검수·머지는 사람이 합니다. 실행 코드 자동 패치·독립 AI worker는 별도이며 전체 B 파이프라인의 완료를 뜻하지 않습니다. [이전 배포 준비 기록](docs/DEPLOYMENT_READINESS_2026-09-19.md)과 [남은 구현 계획](docs/REMAINING_PLAN_2026-09-20.md)은 해당 작성 시점의 기록입니다.
 
 ## 사용자가 연결하는 방법
 
@@ -83,6 +83,20 @@ FC-01~10의 키워드는 필요한 사실을 묻는 데만 사용합니다. 누�
 
 ## 실패 접수와 Supabase
 
+### 대화 중 법령·해석 정정 PR
+
+사용 중인 AI가 반박·새 공식 근거를 검토해 오류를 인정하면 `prepare_correction_pr`를 호출합니다. 서버가 고정한 공개 미리보기·저장소·질문을 보여주고 사용자 동의를 기다린 뒤 `create_correction_pr`로 실제 draft PR을 만듭니다. 응답을 잃으면 `get_correction_pr`로 같은 제안을 조회합니다. REST/GPT Actions에는 `/api/corrections/prepare`, `/create`, `/status` POST가 같은 계약을 제공합니다. 생성 작업은 GPT Actions에서 consequential로 표시합니다.
+
+PR에는 기존 오류 요지·정정·공식 출처·재발 방지 점검 항목을 JSON 자료로 담습니다. 생성된 실행 코드는 이 경로에서 받거나 실행하지 않습니다. 작성 AI의 판단은 독립 AI 검수 승인이 아니며 PR에 미확인 상태를 명시합니다. 사람이 머지하고 main의 정확한 파일까지 일치한 교정 자료만 `find_legal_corrections` 및 관련 조회 결과에 참고 항목으로 제공합니다. 5분마다 확인하며 마지막 확인 후 10분이 지나면 사용하지 않습니다. 법률 최신성·사건 적용은 계속 미검증 상태입니다.
+
+운영 설정: `CORRECTION_PR_ENABLED=1`, `CORRECTION_STATE_DIR`(권한 제한된 영속 디렉터리), 기존 `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_BASE_BRANCH=main`. 토큰은 해당 저장소의 contents/pull requests 쓰기 권한을 사용합니다. 이 경로는 추가 LLM API 키나 Supabase 관리자 키를 요구하지 않습니다. 독립 AI 검수·코드 패치 worker에는 기존 B 조건이 적용됩니다.
+
+상태 저장은 단일 서비스 프로세스용입니다. intent를 GitHub 쓰기 전에 저장하고 고정 branch/본문을 대조해 중복 PR을 막습니다. 전체 일일 신규 제안 10건, 보관 1,000건 한도이며 초과 시 성공으로 표시하지 않습니다. 상태 디렉터리는 앱 교체 시 보존해야 하며, 여러 replica가 같은 디렉터리를 공유하는 운영은 지원하지 않습니다. 공유 접속키는 공유 actor입니다. 키·주민번호·기본 식별 패턴 차단은 임의 사건 자료의 완전한 익명화를 보장하지 않으므로 공개 가능한 내용의 미리보기를 반드시 확인합니다.
+
+MCP가 호출되지 않은 대화까지 볼 수는 없습니다. 도구 설명·서버 지침·GPT 지침으로 제안 시점을 알리며, 사용자가 직접 “방금 정정한 내용으로 PR 제안을 준비해줘”라고 요청할 수도 있습니다. 자세한 시험 계약은 [교정 PR 계약](docs/CORRECTION_PR_CONTRACT.md)에 있습니다.
+
+### 기존 실행 코드 개선 접수
+
 순서대로 적용할 migration:
 
 1. `supabase/migrations/202609140001_profiles_evolution_logs.sql`: 기존 profiles/과거 기록 및 Auth 트리거.
@@ -116,4 +130,4 @@ MCP `submit_failure` 또는 `POST /api/failures`는 공개 합성 사례 식별�
 
 `npm run review:package`는 실제 npm tarball을 빈 prefix에 설치하고 stdio→SSE→인증 API, doctor, 포함된 rules를 검사합니다. `node scripts/source-smoke.mjs --live`는 설정된 법제처 인증으로 공개 근로기준법과 사건일 연혁을 실제 조회합니다.
 
-법령 조회 A 버전은 GCE에서 공개 HTTPS로 운영하며, 기존 직접 공개 포트는 닫았습니다. 남은 별도 검증 범위는 실제 Supabase 실패 접수 migration/복원, 격리된 AI/patch executor, PR 자동 생성과 사람 승인 후 artifact 활성화/rollback 전체 흐름입니다. 접수·AI 검수·PR 생성이 운영에서 활성화된 것으로 표시하지 않습니다.
+법령 조회 A 버전은 GCE에서 공개 HTTPS로 운영하며, 기존 직접 공개 포트는 닫았습니다. 교정 자료 PR과 별개로 남은 검증 범위는 실제 Supabase 코드 개선 접수 migration/복원, 격리된 AI/patch executor, 독립 AI 검수 및 사람 승인 후 artifact 활성화/rollback 전체 흐름입니다.

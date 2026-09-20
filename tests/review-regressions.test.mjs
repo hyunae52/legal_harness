@@ -41,7 +41,7 @@ test('public connection guide is readable without credentials and does not open 
   assert.equal(res.status,200);assert.match(res.headers.get('content-type'),/text\/html.*utf-8/);
   const html=await res.text();assert.match(html,/<html lang="ko">/);assert.match(html,/https:\/\/law\.taxlab\.kr\/sse/);
   assert.match(html,/YOUR_API_KEY/);assert.match(html,/OAuth/);assert.doesNotMatch(html,/Node\.js/);
-  for(const text of ['Claude 설치파일','ChatGPT 설정하기','Gemini 연결 안내','AI 설정 요청문 복사','준비 중'])assert.ok(html.includes(text));
+  for(const text of ['Claude 설치파일','ChatGPT 설정하기','Gemini 연결 안내','AI 설정 요청문 복사','PR로 제안할까요'])assert.ok(html.includes(text));
   for(const value of [secret,'guide-private-oc','untrusted-input','untrusted.invalid'])assert.ok(!html.includes(value));
   assert.match(res.headers.get('content-security-policy'),/default-src 'none'/);
   assert.ok(!res.headers.get('content-security-policy').includes('unsafe-inline'));
@@ -69,7 +69,9 @@ test('published GPT Actions schemas match authenticated read and draft-check rou
   const schema=await(await fetch(f.base+'/openapi.json')).json();
   assert.equal(schema.openapi,'3.1.0');assert.equal(schema.servers[0].url,'https://law.taxlab.kr');
   assert.deepEqual(schema.security,[{serviceKey:[]}]);assert.equal(schema.components.securitySchemes.serviceKey.scheme,'bearer');
-  assert.deepEqual(Object.keys(schema.paths).sort(),['/api/analyze','/api/tools','/api/validate']);
+  assert.deepEqual(Object.keys(schema.paths).sort(),['/api/analyze','/api/corrections/create','/api/corrections/prepare','/api/corrections/status','/api/tools','/api/validate']);
+  assert.equal(schema.paths['/api/corrections/create'].post['x-openai-isConsequential'],true);
+  assert.equal(schema.paths['/api/corrections/prepare'].post['x-openai-isConsequential'],false);
   const ajv=new Ajv2020({strict:false});
   const examples=[['/api/tools',undefined],['/api/analyze',{query:'fixture',tool:'search_law',arguments:{display:3}}],['/api/validate',{draft_answer:'공개 합성 초안'}]];
   for(const [path,body] of examples) {
