@@ -24,8 +24,8 @@ LLM을 서버에 종속시키지 않고 REST와 MCP에서 같은 연구 세션�
 | 검증 | 관측 결과 |
 | --- | --- |
 | 구현 전 기준 | 기존 review 103개 통과 |
-| 새 하네스·배포 경계 표적 시험 | 최초 22개, CODE 반례 3개 추가 후 총 25개 통과 |
-| 전체 회귀 | CODE 수정 후 `npm run review` 128개 통과, 실패·skip 0 (50.5초) |
+| 새 하네스·배포 경계 표적 시험 | 최초 22개, CODE 반례·원격 완료 경계 추가 후 총 27개 통과 |
+| 전체 회귀 | 원격 완료 경계 추가 후 `npm run review` 130개 통과, 실패·skip 0 (50.1초) |
 | 설치 패키지 | clean install, 설치된 패키지에서 앱 import, 실제 stdio→SSE 연구 호출 포함 7개 통과 |
 | 실패 주입 | 인용 대조·actor 검사·필수 사실 검사를 각각 제거한 격리 빌드 3개 모두 assertion으로 실패. 작업 빌드 hash 불변 |
 | 실제 원문 조회 | REST+MCP SSE 35개 도구; `서면-2020-부동산-4503` 실제 반환 본문 4개 passage |
@@ -45,7 +45,7 @@ CODE 수정 후 패키지 시험 artifact SHA-256: `d63b301deaeea5d48c9719da7918
 
 - REVIEW: PASS. 인용 삭제 후 검증, 최종 답변 변경 후 미검증, 독립 검수 과장 문제를 참조 리뷰에 반영했다.
 - PLAN: PASS. PH-01~06 입력·동시성·adapter·날짜·시험·drain/rollback 계약까지 검수했다.
-- CODE: 최초 검수 REVISE의 CR-01~03을 아래와 같이 수정했다. 고정 수정본 재검수 대기. 실제 실행은 Codex가 수행하며 Pro의 정적 검토와 구분한다.
+- CODE: `084097f79e14038aa664a4d4953b644a17b4abcc`에서 Pro PASS, CR-01~03 CLOSED. Pro가 같은 SHA의 Linux CI 로그(128 pass, 패키지 7개)를 확인했다. 이후 아래 원격 완료 불명 보호를 추가해 한정 재확인한다.
 - DEPLOYMENT: 미실행. CODE 지적 해소 및 고정 릴리스 준비 후 기존 사용자 승인 범위에서 진행한다.
 
 ### CODE 검수 반영
@@ -57,3 +57,9 @@ CR-02: `timing.status=unresolved`는 필수 날짜 역할 등록 여부와 무�
 CR-03: 공개 재개 요청의 외부 효과와 성공 응답을 구분한다. `resume`을 시도한 뒤 오류가 나면 자동 rollback/재시도를 하지 않고 검증된 릴리스를 유지하며 `public_state_unknown`, `public_resumed=null`을 반환한다. 작업자가 실제 ingress 상태를 확인해야 한다. 후보·이전 릴리스 공개 모두에서 공개 효과 후 응답 유실을 주입했고, 이후 교체 호출 0회 및 공개 상태를 거짓으로 차단 판정하지 않는지 검사한다. 최초 fence조차 확인되지 않은 경우도 차단 유지라고 보고하지 않는다.
 
 세 반례는 수정 전 실제 assertion 실패로 재현했다. 첫 두 반례의 잘못된 결과는 structurally_complete, 마지막 반례는 publicOpen=true인데 maintenance_required를 반환했다. 수정 후 전체 128개·패키지 7개·guard 변형 3개를 다시 통과했다. 운영 절차는 `deploy/research-rollout.py`와 `deploy/run-research-rollout.mjs`에서 같은 시험된 gate를 사용한다.
+
+### 원격 작업 완료 여부 보호
+
+배포 호출의 SSH 단절/timeout을 원격 작업 종료로 간주하지 않는다. `deploy/remote-phase.mjs`는 원격 helper가 끝까지 기록한 실패 응답과 전송 오류를 구분한다. helper 내부 systemctl 등의 timeout도 완료 불명으로 표기한다. fence/drain/activate/verify/rollback 중 완료 불명은 `operation_state_unknown`으로 멈추고 후속 rollback/공개 재개/재시도를 실행하지 않는다. 확인된 fence만 false로 보고하고, fence 자체가 미확인이면 공개 여부는 null이다. 원격 작업이 나중에 완료해도 반대 작업이 겹쳐 실행되지 않는다.
+
+SSH 응답 유실 뒤 지연 활성화가 끝나는 반례를 RED로 확인했다(기존 코드는 previous_restored_verified로 처리). 추가 adapter+gate 시험은 SSH exit 255, timeout, 빈/깨진 성공 응답, 원격 내부 timeout 및 완료된 일반 실패를 구분한다. 작업자 복구 시에는 원격 프로세스/시스템 작업의 종료와 실행 릴리스·fence를 읽기로 먼저 확인해야 하며, 완료 불명 상태에서 호출기를 자동 재실행하면 안 된다.

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createApp } from '../dist/app.js';
 import { performRollout } from '../scripts/rollout-gate.mjs';
+import { runRemotePhase } from '../deploy/remote-phase.mjs';
 
 test('PH-06-A: authentication that completes after drain cannot start a publication or SSE session', async t => {
   const entered = Promise.withResolvers(), release = Promise.withResolvers(); let publications = 0;
@@ -72,4 +73,37 @@ test('CR-03: a resume effect followed by an error never triggers a replacement o
   const uncertainFence = await performRollout({ fence: async () => { throw Error('Fence unconfirmed'); },
     verifyPrevious: async () => { throw Error('Identity unconfirmed'); } });
   assert.equal(uncertainFence.status, 'public_state_unknown'); assert.equal(uncertainFence.public_resumed, null);
+});
+
+test('remote completion uncertainty stops all follow-up mutations even if activation finishes later', async () => {
+  const release = Promise.withResolvers(); let remoteFinished = false, publicOpen = true;
+  const delayed = release.promise.then(() => { remoteFinished = true; });
+  const calls = [];
+  const result = await performRollout({
+    fence: async () => { publicOpen = false; }, drain: async () => {},
+    activate: async () => { calls.push('activate'); throw Object.assign(Error('SSH acknowledgement lost'), { operation_state_unknown: true, phase: 'activate' }); },
+    verifyCandidate: async () => { calls.push('verifyCandidate'); }, rollback: async () => { calls.push('rollback'); },
+    verifyPrevious: async () => { calls.push('verifyPrevious'); }, resume: async () => { calls.push('resume'); publicOpen = true; },
+  });
+  assert.equal(result.status, 'operation_state_unknown'); assert.equal(result.public_resumed, false);
+  assert.deepEqual(calls, ['activate']); assert.equal(publicOpen, false);
+  release.resolve(); await delayed; assert.equal(remoteFinished, true); assert.equal(publicOpen, false);
+});
+
+test('remote adapter distinguishes finished failures from SSH loss, timeout and malformed success', async () => {
+  const completed = (status, extra = {}) => JSON.stringify({ phase: 'activate', status, finished_at: '2026-09-21T00:00:00Z', ...extra });
+  assert.equal((await runRemotePhase('activate', async () => ({ stdout: completed('pass') }))).status, 'pass');
+  await assert.rejects(runRemotePhase('activate', async () => { throw { code: 1, stdout: completed('failed') }; }), e => !e.operation_state_unknown);
+  for (const error of [{ code: 255, stdout: '' }, { code: 'ETIMEDOUT', killed: true },
+    { code: 1, stdout: '' }, { code: 1, stdout: completed('failed', { operation_state_unknown: true }) }]) {
+    await assert.rejects(runRemotePhase('activate', async () => { throw error; }), e => e.operation_state_unknown && e.phase === 'activate');
+  }
+  await assert.rejects(runRemotePhase('activate', async () => ({ stdout: 'not a completion record' })), e => e.operation_state_unknown);
+  const calls = [], release = Promise.withResolvers();
+  let activatedLater = false; const pending = release.promise.then(() => { activatedLater = true; });
+  const result = await performRollout({ fence: async () => {}, drain: async () => {},
+    activate: () => runRemotePhase('activate', async () => { throw { code: 255, stdout: '' }; }),
+    rollback: async () => { calls.push('rollback'); }, verifyPrevious: async () => { calls.push('verifyPrevious'); }, resume: async () => { calls.push('resume'); } });
+  assert.equal(result.status, 'operation_state_unknown'); assert.deepEqual(calls, []);
+  release.resolve(); await pending; assert.equal(activatedLater, true); assert.equal(result.public_resumed, false);
 });

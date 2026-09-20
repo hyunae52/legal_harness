@@ -3,17 +3,19 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { writeFile } from 'node:fs/promises';
 import { performRollout } from '../scripts/rollout-gate.mjs';
+import { runRemotePhase } from './remote-phase.mjs';
 const exec = promisify(execFile);
 const [key, host, packet, report] = process.argv.slice(2);
 if (!key || host !== 'cta@136.67.179.84' || !/^\/home\/cta\/research-[0-9a-f]{12}-packet\.json$/.test(packet) || !report) throw Error('Invalid fixed-target rollout arguments');
 const events = [];
 async function phase(name) {
   try {
-    const result = await exec('ssh', ['-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=yes', '-i', key,
-      host, 'python3', '/home/cta/research-rollout.py', name, packet], { timeout: 180000, windowsHide: true, maxBuffer: 1024 * 1024 });
-    const event = JSON.parse(result.stdout.trim()); events.push(event); console.log(JSON.stringify(event));
-  } catch {
-    events.push({ phase: name, status: 'failed' }); console.log(JSON.stringify(events.at(-1))); throw Error('Rollout phase failed');
+    const event = await runRemotePhase(name, () => exec('ssh', ['-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=yes', '-i', key,
+      host, 'python3', '/home/cta/research-rollout.py', name, packet], { timeout: 180000, windowsHide: true, maxBuffer: 1024 * 1024 }));
+    events.push(event); console.log(JSON.stringify(event));
+  } catch (error) {
+    events.push({ phase: name, status: error.operation_state_unknown ? 'operation_state_unknown' : 'failed' });
+    console.log(JSON.stringify(events.at(-1))); throw error;
   }
 }
 const result = await performRollout({ fence: () => phase('fence'), drain: () => phase('drain'), activate: () => phase('activate'),

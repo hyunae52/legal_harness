@@ -271,6 +271,8 @@ await import('./scripts/research-smoke.mjs');"""
         event['status'] = 'pass'
     except Exception as error:
         event.update(status='failed', error_type=type(error).__name__)
+        # systemctl/SSH timeout does not establish that the systemd job stopped.
+        if isinstance(error, subprocess.TimeoutExpired): event['operation_state_unknown'] = True
         raise
     finally:
         event['finished_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()

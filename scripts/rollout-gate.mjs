@@ -9,12 +9,16 @@ export async function performRollout(operations) {
     await operations.activate();
     await operations.verifyCandidate();
     status = 'candidate_active_verified';
-  } catch {
+  } catch (error) {
+    if (error?.operation_state_unknown) return { status: 'operation_state_unknown', phase: error.phase,
+      public_resumed: fenceConfirmed ? false : null, operator_check_required: true };
     try {
       if (activationStarted) await operations.rollback();
       await operations.verifyPrevious();
       status = activationStarted ? 'previous_restored_verified' : 'aborted_previous_verified';
-    } catch {
+    } catch (error) {
+      if (error?.operation_state_unknown) return { status: 'operation_state_unknown', phase: error.phase,
+        public_resumed: fenceConfirmed ? false : null, operator_check_required: true };
       // No finally resume. The service-specific maintenance fence must survive failure.
       return { status: fenceConfirmed ? 'maintenance_required' : 'public_state_unknown', public_resumed: fenceConfirmed ? false : null };
     }
