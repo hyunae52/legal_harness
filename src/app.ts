@@ -1,4 +1,5 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
+import { fileURLToPath } from 'node:url';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { CallToolRequestSchema, ListToolsRequestSchema, type Tool } from '@modelcontextprotocol/sdk/types.js';
@@ -11,6 +12,7 @@ import { retrievalEnvelope } from './evidence.js';
 import { type SourceVerifier } from './sourceVerifier.js';
 import { safeToolDiagnostic } from './errorDiagnostics.js';
 import { landingHeaders, landingHtml } from './landing.js';
+import { actionsSchema, geminiConfig, gptInstructions, setupMarkdown } from './setup.js';
 
 interface Options {
   law: Pick<KoreanLawClient, 'listTools' | 'callTool' | 'close' | 'releaseVersion'>;
@@ -74,6 +76,23 @@ export function createApp(options: Options) {
     return options.failures.submit(actor, input);
   };
   app.get('/', (_req, res) => res.set(landingHeaders).type('html').send(landingHtml));
+  const publicHeaders = { 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-cache' };
+  app.get('/setup.md', (_req, res) => res.set(publicHeaders).type('text/plain').send(setupMarkdown));
+  app.get('/openapi.json', (_req, res) => res.set(publicHeaders).json(actionsSchema));
+  for (const [name, type, body] of [
+    ['gemini-settings.json', 'application/json', geminiConfig],
+    ['chatgpt-actions.json', 'application/json', JSON.stringify(actionsSchema, null, 2)],
+    ['chatgpt-instructions.txt', 'text/plain', gptInstructions],
+  ]) app.get('/downloads/' + name, (_req, res) => res.set(publicHeaders).attachment(name).type(type).send(body));
+  app.get('/downloads/taxlab-law.mcpb', (_req, res) => {
+    res.set(publicHeaders).attachment('taxlab-law.mcpb').type('application/octet-stream');
+    res.sendFile(fileURLToPath(new URL('./downloads/taxlab-law.mcpb', import.meta.url)), error => {
+      if (error && !res.headersSent) {
+        res.removeHeader('Content-Disposition');
+        res.status(503).json({ code: 'INSTALLER_UNAVAILABLE' });
+      } else if (error) res.destroy();
+    });
+  });
   app.get('/health', (_req, res) => res.json({ status: stopping ? 'stopping' : 'ok', version: '2.2.0', active_requests: active,
     mcp_release: options.law.releaseVersion ?? null, rules_version: gates.version, maintenance: options.failures ? 'intake_only' : 'unavailable' }));
   app.get('/api/tools', protectedRoute(async (_req, res) => res.json({ status: 'success', data: await work(() => options.law.listTools()) })));

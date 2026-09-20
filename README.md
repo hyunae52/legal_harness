@@ -6,13 +6,16 @@
 
 ## 사용자가 연결하는 방법
 
-[연결 안내 페이지](https://law.taxlab.kr/)에서 사용하는 AI 앱의 설정을 확인하세요. 원격 SSE와 인증 헤더를 지원하는 앱에서는 **사용자 PC에 Node.js나 이 저장소를 설치할 필요가 없습니다.** 운영자에게 전달받은 접속키와 아래 주소만 설정합니다.
+[연결 안내 페이지](https://law.taxlab.kr/)에서 앱을 고르세요. 사용자에게 필요한 것은 운영자에게 받은 **TaxLab 접속키**입니다.
 
-- MCP 주소: `https://law.taxlab.kr/sse`
-- 인증 헤더: `Authorization: Bearer YOUR_API_KEY` 또는 `x-api-key: YOUR_API_KEY`
-- 연결 안내: Cursor, VS Code 로컬 Copilot 채팅 및 다른 원격 SSE 지원 앱
+- **Claude PC 앱**: [설치파일](https://law.taxlab.kr/downloads/taxlab-law.mcpb)을 확장 설정에서 설치하고 접속키를 입력합니다. SDK 의존성이 함께 들어 있으며 앱 내장 실행 환경을 사용합니다. 웹·모바일로 자동 연결되지 않습니다.
+- **ChatGPT**: GPT 만들기가 가능한 계정에서 [OpenAPI 설정](https://law.taxlab.kr/openapi.json)을 가져와 GPT Actions의 API Key/Bearer 인증을 설정합니다. [GPT 지침](https://law.taxlab.kr/downloads/chatgpt-instructions.txt)을 넣고 나만 사용으로 저장합니다. 현재 서버의 원격 MCP OAuth 연결을 뜻하지 않습니다.
+- **Gemini CLI**: [설정 예시](https://law.taxlab.kr/downloads/gemini-settings.json)를 기존 설정에 병합하고 `TAXLAB_API_KEY`를 로컬 환경에 설정합니다. 일반 Gemini 웹·모바일은 Google의 제공 지역·계정·언어 조건과 인증 호환 제한을 별도로 확인해야 합니다.
+- **PC 설정이 가능한 AI 에이전트**: 페이지의 ‘AI 설정 요청문’을 복사하세요. [setup.md](https://law.taxlab.kr/setup.md)에 기존 설정 보존, 비밀값 입력, 앱별 연결 범위와 확인 절차가 있습니다.
 
-접속키를 URL에 붙이지 마세요. 현재 Streamable HTTP와 OAuth 로그인은 제공하지 않으므로, 모든 AI 앱에 URL만 등록해서 연결되는 것은 아닙니다. 아래 Node.js 설치 절차는 **서버를 직접 운영하거나 로컬 stdio 연결기를 사용하는 경우**에 해당합니다.
+다른 MCP 앱에서는 `https://law.taxlab.kr/sse`와 `Authorization: Bearer YOUR_API_KEY` 또는 `x-api-key: YOUR_API_KEY`를 사용합니다. 접속키를 URL에 붙이지 마세요. 현재 Streamable HTTP와 OAuth 로그인은 제공하지 않으므로 모든 앱에 URL만 등록해서 연결되는 것은 아닙니다. 서버 운영 절차는 아래 별도 항목을 참고하세요.
+
+`npm run build`는 `desktop/manifest.json`과 검수된 bridge 및 설치된 SDK 의존성으로 `dist/downloads/taxlab-law.mcpb`를 생성합니다. 접속키는 포함하지 않으며 Claude의 민감값 입력 설정으로 받습니다. 직접 배포한 확장은 새 버전 배포 시 다시 설치합니다. 자동 시험은 저장소 밖 빈 디렉터리에서 설치파일을 풀어 실제 stdio→SSE 호출까지 확인합니다. 실제 Claude UI 설치와 ChatGPT 계정별 GPT 편집기 동작은 별도 확인 범위입니다.
 
 게시 패키지의 의존성은 `npm-shrinkwrap.json`으로 고정합니다. 제공 설치기는 tarball 설치 후 앱 디렉터리에서 `npm ci`를 실행해 이 고정을 적용합니다. 의존성을 변경할 때 `package-lock.json`과 함께 갱신해야 하며, package 시험이 두 파일의 일치 및 실제 설치 버전을 확인합니다.
 
@@ -105,7 +108,7 @@ MCP `submit_failure` 또는 `POST /api/failures`는 공개 합성 사례 식별�
 
 `npm run release:verify -- manifest.json artifact.tgz <approval-comment-id>`는 GitHub에서 운영자의 정확한 manifest 승인, B/H/T, merge 부모/tree, 실제 CI job/step, artifact hash를 읽어 대조합니다. **현재는 읽기 전용 식별 검증이며 배포 허가나 배포 실행기가 아닙니다.** DB 복원·실행 환경·staging/rollback 증거가 없으면 운영 배포 준비 완료로 표시하지 않습니다. PR은 모아 최종 사람이 검수하고 merge합니다.
 
-CI 설정안은 [deploy/review.workflow.yml.example](deploy/review.workflow.yml.example)에 있습니다. 현재 GitHub 토큰의 workflow 권한 부족으로 게시가 거부되어 실행 파일로 등록하지 않았고 **Linux CI는 미실행**입니다. 운영자가 검수 후 `.github/workflows/review.yml`로 등록하면 GitHub-hosted Linux에서 읽기 권한으로 테스트하며 production secrets를 전달하지 않습니다. [GitHub workflow 권한 문서](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)를 따릅니다. 일반 CI 통과만으로 독립 AI 승인이나 배포 승인을 만들지 않습니다.
+현재 CI는 [.github/workflows/review.yml](.github/workflows/review.yml)에서 실행됩니다. Ubuntu/Node 22에서 review와 package 시험을 실행하며 production secrets를 전달하지 않습니다. 일반 CI 통과만으로 독립 AI 승인이나 배포 승인을 만들지 않습니다.
 
 ## 검증
 
@@ -113,4 +116,4 @@ CI 설정안은 [deploy/review.workflow.yml.example](deploy/review.workflow.yml.
 
 `npm run review:package`는 실제 npm tarball을 빈 prefix에 설치하고 stdio→SSE→인증 API, doctor, 포함된 rules를 검사합니다. `node scripts/source-smoke.mjs --live`는 설정된 법제처 인증으로 공개 근로기준법과 사건일 연혁을 실제 조회합니다.
 
-검증하지 않은 범위: Linux 운영 배포, 실제 Supabase migration/복원, 공개 HTTPS와 외부 3000 폐쇄, 격리된 AGY와 hosted patch executor, 무인 self-repair, 사람 승인 후 artifact 활성화/rollback 전체 흐름. 최신 상태는 배포 검수 문서에 기록합니다.
+법령 조회 A 버전은 GCE에서 공개 HTTPS로 운영하며, 기존 직접 공개 포트는 닫았습니다. 남은 별도 검증 범위는 실제 Supabase 실패 접수 migration/복원, 격리된 AI/patch executor, PR 자동 생성과 사람 승인 후 artifact 활성화/rollback 전체 흐름입니다. 접수·AI 검수·PR 생성이 운영에서 활성화된 것으로 표시하지 않습니다.

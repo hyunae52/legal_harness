@@ -1,6 +1,8 @@
 ﻿import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import Ajv2020 from 'ajv/dist/2020.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { createApp } from '../dist/app.js';
@@ -38,13 +40,46 @@ test('public connection guide is readable without credentials and does not open 
   const res=await fetch(f.base+'/?key=untrusted-input',{headers:{'x-forwarded-host':'untrusted.invalid'}});
   assert.equal(res.status,200);assert.match(res.headers.get('content-type'),/text\/html.*utf-8/);
   const html=await res.text();assert.match(html,/<html lang="ko">/);assert.match(html,/https:\/\/law\.taxlab\.kr\/sse/);
-  assert.match(html,/YOUR_API_KEY/);assert.match(html,/OAuth/);assert.match(html,/Node\.js/);
+  assert.match(html,/YOUR_API_KEY/);assert.match(html,/OAuth/);assert.doesNotMatch(html,/Node\.js/);
+  for(const text of ['Claude 설치파일','ChatGPT 설정하기','Gemini 연결 안내','AI 설정 요청문 복사','준비 중'])assert.ok(html.includes(text));
   for(const value of [secret,'guide-private-oc','untrusted-input','untrusted.invalid'])assert.ok(!html.includes(value));
   assert.match(res.headers.get('content-security-policy'),/default-src 'none'/);
   assert.ok(!res.headers.get('content-security-policy').includes('unsafe-inline'));
   const head=await fetch(f.base,{method:'HEAD'});assert.equal(head.status,200);assert.equal(await head.text(),'');
   for(const path of ['/api/tools','/sse'])assert.equal((await f.request(path,undefined,null)).status,401);
   assert.equal(f.calls.length,0);
+});
+test('setup downloads expose only fixed public artifacts; private paths and tool access stay closed',async t=>{
+  const f=await fixture(t,{env:{TAXLAB_API_KEY:'download-private-canary',LAW_OC:'law-private-canary'}});
+  for(const path of ['/setup.md','/openapi.json','/downloads/gemini-settings.json','/downloads/chatgpt-actions.json','/downloads/chatgpt-instructions.txt']) {
+    const res=await fetch(f.base+path+'?key=untrusted-download');assert.equal(res.status,200);
+    const body=await res.text();assert.ok(!/download-private-canary|law-private-canary|untrusted-download/.test(body));
+    assert.equal(res.headers.get('x-content-type-options'),'nosniff');
+    if(path.startsWith('/downloads/'))assert.match(res.headers.get('content-disposition'),/^attachment;/);
+    if(path.endsWith('.json'))JSON.parse(body);
+  }
+  const installer=await fetch(f.base+'/downloads/taxlab-law.mcpb');assert.equal(installer.status,200);
+  assert.match(installer.headers.get('content-disposition'),/attachment;.*taxlab-law\.mcpb/);
+  assert.deepEqual(Buffer.from(await installer.arrayBuffer()),await readFile(new URL('../dist/downloads/taxlab-law.mcpb',import.meta.url)));
+  for(const path of ['/downloads/.env','/downloads/package.json','/downloads/%2e%2e%2f.env','/downloads/taxlab-law.mcpb.json'])assert.equal((await fetch(f.base+path)).status,404);
+  assert.equal((await f.request('/api/tools',undefined,null)).status,401);assert.equal(f.calls.length,0);
+});
+test('published GPT Actions schemas match authenticated read and draft-check routes',async t=>{
+  const f=await fixture(t,{realAuth:true});
+  const schema=await(await fetch(f.base+'/openapi.json')).json();
+  assert.equal(schema.openapi,'3.1.0');assert.equal(schema.servers[0].url,'https://law.taxlab.kr');
+  assert.deepEqual(schema.security,[{serviceKey:[]}]);assert.equal(schema.components.securitySchemes.serviceKey.scheme,'bearer');
+  assert.deepEqual(Object.keys(schema.paths).sort(),['/api/analyze','/api/tools','/api/validate']);
+  const ajv=new Ajv2020({strict:false});
+  const examples=[['/api/tools',undefined],['/api/analyze',{query:'fixture',tool:'search_law',arguments:{display:3}}],['/api/validate',{draft_answer:'공개 합성 초안'}]];
+  for(const [path,body] of examples) {
+    const op=schema.paths[path][body?'post':'get'];assert.equal(op['x-openai-isConsequential'],false);
+    if(body)assert.equal(ajv.compile(op.requestBody.content['application/json'].schema)(body),true);
+    assert.equal((await f.request(path,body,null)).status,401);
+    const res=await f.request(path,body,'Bearer fixture-key');assert.equal(res.status,200);
+    const check=ajv.compile(op.responses['200'].content['application/json'].schema);assert.equal(check(res.body),true,JSON.stringify(check.errors));
+  }
+  assert.deepEqual(f.calls,[{name:'search_law',args:{display:3,query:'fixture'}}]);
 });
 test('unauthenticated analyze/tools/messages do no upstream work',async t=>{
   const f=await fixture(t);
