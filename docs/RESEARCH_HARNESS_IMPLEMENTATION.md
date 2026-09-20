@@ -45,8 +45,8 @@ CODE 수정 후 패키지 시험 artifact SHA-256: `d63b301deaeea5d48c9719da7918
 
 - REVIEW: PASS. 인용 삭제 후 검증, 최종 답변 변경 후 미검증, 독립 검수 과장 문제를 참조 리뷰에 반영했다.
 - PLAN: PASS. PH-01~06 입력·동시성·adapter·날짜·시험·drain/rollback 계약까지 검수했다.
-- CODE: `084097f79e14038aa664a4d4953b644a17b4abcc`에서 Pro PASS, CR-01~03 CLOSED. Pro가 같은 SHA의 Linux CI 로그(128 pass, 패키지 7개)를 확인했다. 이후 아래 원격 완료 불명 보호를 추가해 한정 재확인한다.
-- DEPLOYMENT: 미실행. CODE 지적 해소 및 고정 릴리스 준비 후 기존 사용자 승인 범위에서 진행한다.
+- CODE: 최종 `5f5ee328cdce448c6854ef2b99edffee3d96b203`에서 Pro PASS, CR-01~03 CLOSED 및 원격 완료 불명 보호 확인. Pro가 같은 SHA의 Linux CI 로그(130 pass, 패키지 7개)를 확인했다.
+- DEPLOYMENT: GCE 전환 및 공개 HTTPS REST/MCP 원문 검증 완료. 최초 Pro 검수의 원본 결합 증거 DR-01을 보완해 한정 재검수한다. [배포 기록](RESEARCH_HARNESS_DEPLOYMENT.md) 참고.
 
 ### CODE 검수 반영
 

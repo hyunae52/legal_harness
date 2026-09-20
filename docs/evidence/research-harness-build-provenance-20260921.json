@@ -1,0 +1,150 @@
+{
+  "observed_at": "2026-09-20T20:29:10.713057+00:00",
+  "application_commit": "75314179eb1d2fbf17ad5eb2ad367031d99749dc",
+  "source_tree": "c8c47d338adb4401811f16f7a811b53c190d0f58",
+  "source_checkout_clean": true,
+  "platform": "win32",
+  "git_core_autocrlf": "true",
+  "commands": [
+    "git worktree add --detach <isolated_directory> 75314179eb1d2fbf17ad5eb2ad367031d99749dc",
+    "npm run build",
+    "npm pack --ignore-scripts --json"
+  ],
+  "build_dependency_origin": "Copy of existing local node_modules; no install or version change during this check",
+  "versions": {
+    "node": "v24.13.1",
+    "npm": "11.8.0",
+    "typescript": "5.9.3",
+    "jszip": "3.10.2",
+    "@modelcontextprotocol/sdk": "1.30.0"
+  },
+  "lock_sha256": "cf6ff9f72a26ba6e7bf25cdb07546f27d4869660c5a30821227fb2ac3628af1e",
+  "deployed_artifact_sha256": "d63b301deaeea5d48c9719da7918b23cb3cff6216abae4a83d8de603f9464ce6",
+  "rebuilt_artifact_sha256": "a5b584df7b82179a11cc0dea5620596cf7aba80f44c81bccef66524a4d2c597d",
+  "packed_files": {
+    "LICENSE": "612c9bd87c7fa02969a6558f3f84b7ea9b10c3e2fa00edcb881c2c44a7a37640",
+    "dist/app.js": "7f8e4c393c0f1da1b29a3cf6f803bf1b2827df36b10aa872bd97464db073340f",
+    "dist/auth.js": "f515f8054c9f738a720bb7b650865e6b4ac7ab63929dda9f53a7f53276410699",
+    "dist/contracts.js": "7c9514c33b52b4b45d80aa30a49454db6a8f9dde57f5d9c5b2c774236ca3354f",
+    "dist/correctionGitHub.js": "1bbcafc5461af9612d228a5b497327c3253ef57936112f82d8f6565938bc0e77",
+    "dist/correctionMeta.js": "d532032cdd95f02458b649c08327141aff4c349483d29d2f6851170e6f1c2dc3",
+    "dist/corrections.js": "abf06e004c44b049b9af61b398a1a74c369295c725fea73859468f506f960d36",
+    "dist/dates.js": "181e2e45ce8bb87af8626a0368ab153529f6380a103425a4290080d46051f9be",
+    "dist/errorDiagnostics.js": "5a8d1a0244e2e8b6a6e533129148af799e6e7a98567adfbae0b3b04c89bb65b5",
+    "dist/evidence.js": "e517755c8fc25df7ee4ca0b3985b1e256758b419b8db8b49f6393d114010c838",
+    "dist/evolution.js": "bb74e0698182a25bc59ae852109233bac3bf0e46402dcb9f80e1d2f35a4fb77f",
+    "dist/failures.js": "d5496dd7a89481aba88b4fc764a5b5fa55953817b9d5378f0f76ff79d1205839",
+    "dist/gates.js": "615b6cc71dcbfc7454001641d0606c342a48ad6dfbbb492fc8dbcac5d9649d4b",
+    "dist/gitOps.js": "3c3d796d418301c13dd00b253a8052c5599d76dde6a515a4e60b0e7fd2d2116c",
+    "dist/index.js": "1e7163ade6a27e78603a91eb2034c303e938366fff23958e941b7ea8a70aeb0f",
+    "dist/koreanLawClient.js": "1f769a20ea319fbce24bf4dd771c178b166cda30b4b264034376eeac62897609",
+    "dist/landing.js": "54e486f3a30e77977a428e34ba63f056cb7d7c059ce8f03637a98db2b8030c63",
+    "dist/releaseGate.js": "750956637065183d378fa1252ee376b1240cc75c02489982de3007d25f989cbf",
+    "dist/research.js": "46fcac83284099a05cb194302ee75401e3aec27f18c05a426b2e15bc8695a9ba",
+    "dist/researchContracts.js": "d35b953ccf5b3d37fc198c738ec030f5b32454e3d2bbbe89b9063fd2462e663c",
+    "dist/researchEvidence.js": "a7f00bf5619653286f40cd90500d1da048748ceb14f9211775191d7fdd5098a0",
+    "dist/researchReview.js": "77d9cc2391adfd846409ac7c72fed62a3d5c03016de80ff9e530d34c2f743609",
+    "dist/setup.js": "3a74ddf06e2e50cc56aaaa51a8fede774eee5f3bee6204e181f7dad7e06fc96b",
+    "dist/sourceVerifier.js": "30d2ff0edac3c848abfaf3ca739405f66f4aea8c3f5987d1e72ed1a36b4b3103",
+    "dist/supremeJudge.js": "794a7c958f39439c6297993447b36f43030a91ac4b09297e95beb10f52750034",
+    "dist/taxLawClient.js": "a0a12e3107ff31383b324e87ee5d2eb967fee64239245c60ec804dd2fa8cbbd1",
+    "upstreams/korean-taxlaw-mcp.json": "9c18149d5330f070f9bff110380d23cdd8ed3305a2786003e6c219d4efa109b7",
+    "upstreams/korean-taxlaw-mcp.tools.json": "481b6f6af624bdffc56a1e9f4f8cd7002c26c9ba4989a9b62f57511cb3571d72",
+    "rules/manifest.json": "12df64a53752d7b0bf2d823cd6b9cd7c41b6e6be9bea15842bf8a48aeca2c973",
+    "npm-shrinkwrap.json": "cf6ff9f72a26ba6e7bf25cdb07546f27d4869660c5a30821227fb2ac3628af1e",
+    "package.json": "d12e004aa95393c8f67eb9836b70dde4635b0ae718b93df3917cf2693d87b7a9",
+    "rules/QG-COST-01.json": "ea9145c0eb642a220b0fcbeea06eac484ec78607abefd7162ac5c0fc9070d57e",
+    "rules/QG-COST-02.json": "d74561a76a363a3e837a4a8a18db699808d99690169b182394ba18a9b6200b45",
+    "rules/QG-COST-03.json": "650837f6c288922b8018a5795a6017cecfe5de1d79b88090786bc6c423256f36",
+    "rules/QG-EXCEPTION-02.json": "32974dcb16aaf07757b4268297ef2d0575cec2c1792da2d9b99d4f9894114a03",
+    "rules/QG-FACT-02.json": "fc639f99ba0fb3118462de1e3266fa25fb8d20694ed6a1492ff915c693dfb701",
+    "rules/QG-MATH-01.json": "c00ca33cdaf9bdcd96ecd47ef48419765da48c64b27ebd221473681f0d0883da",
+    "rules/QG-PRECEDENT-03.json": "b61b5818da71f9a0c279c2bd802a01784e7bed11b2984745edd79d80f22d78e1",
+    "rules/QG-TIME-02.json": "cfba01fb9bb0fa1cae119115b808c39c391a01e962b2280377292ac4cdb78717",
+    "rules/QG-TIME-03.json": "95873177c173f28e0fa64f3a0d53f07645b2515d3bfba60d7f3a5d0f4db52345",
+    "rules/QG-VALUATION-01.json": "d20db8853dbf23b1cc336ec1242f0d3802bda70603c41b85ed46b1ef60c53d97",
+    "dist/downloads/taxlab-law.mcpb.json": "7aec492dabbc896728938a500f62c683bfd43b0654026df7eb89653ac7f06626",
+    "upstreams/korean-taxlaw-mcp.LICENSE": "5c8f83e685f134252c0ec3815301234f369894f9242f8c059da83d74d77c1953",
+    "dist/downloads/taxlab-law.mcpb": "1cb172c33223b11b5810068ebe4536bfca36ab636ca72c4d649a120a4b1ad53f",
+    "README.md": "0aff80f0a0deec368e35ba13bf25ad7310333718499e8f039f32a14658e930d7",
+    "scripts/hermes-mcp-bridge.mjs": "75ce4e51f7465006946ed51617389051cfab45159f212f8aea47acea40581d20",
+    "scripts/install-taxlaw-mcp.py": "5efdb251d719be8abb00c4b96a65d0f275e5a2c793963f5404ce996dca900e1c"
+  },
+  "differing_payload_files": [
+    "LICENSE",
+    "upstreams/korean-taxlaw-mcp.tools.json"
+  ],
+  "payload_identical": false,
+  "archive_identical": false,
+  "scope": "Post-deployment isolated rebuild of the fixed application commit; not the original CI archive",
+  "ci_reported_artifact_sha256": "a5b584df7b82179a11cc0dea5620596cf7aba80f44c81bccef66524a4d2c597d",
+  "rebuild_matches_ci_archive_sha256": true,
+  "exactly_matching_payload_files": 45,
+  "payload_differences": [
+    {
+      "path": "LICENSE",
+      "deployed_sha256": "be574f6dfbaa949e7c37efab86e714130d0b44313e1d16806d6de3960c924891",
+      "rebuilt_sha256": "612c9bd87c7fa02969a6558f3f84b7ea9b10c3e2fa00edcb881c2c44a7a37640",
+      "deployed_bytes": 1086,
+      "rebuilt_bytes": 1065,
+      "deployed_crlf_count": 21,
+      "rebuilt_crlf_count": 0,
+      "difference": "CRLF versus LF only",
+      "equal_after_crlf_to_lf": true
+    },
+    {
+      "path": "upstreams/korean-taxlaw-mcp.tools.json",
+      "deployed_sha256": "2459bc0e9783ffa179aaac466bae84a9f92a309c319721617276ba8635f7e546",
+      "rebuilt_sha256": "481b6f6af624bdffc56a1e9f4f8cd7002c26c9ba4989a9b62f57511cb3571d72",
+      "deployed_bytes": 30906,
+      "rebuilt_bytes": 29776,
+      "deployed_crlf_count": 1130,
+      "rebuilt_crlf_count": 0,
+      "difference": "CRLF versus LF only",
+      "equal_after_crlf_to_lf": true,
+      "parsed_json_identical": true
+    }
+  ],
+  "all_executable_files_byte_identical": true,
+  "all_payload_files_identical_after_text_eol_normalization": true,
+  "original_deployed_package_smoke": {
+    "status": "pass",
+    "sha256": "d63b301deaeea5d48c9719da7918b23cb3cff6216abae4a83d8de603f9464ce6",
+    "files": 47,
+    "checks": [
+      "clean_install",
+      "stdio_sse_authenticated_call",
+      "doctor",
+      "packaged_rules",
+      "published_lock",
+      "installed_dependency_versions",
+      "installed_research_app_and_bridge"
+    ],
+    "versions": {
+      "@modelcontextprotocol/sdk": "1.30.0",
+      "@octokit/rest": "21.1.1",
+      "@supabase/supabase-js": "2.116.0",
+      "dotenv": "16.6.1",
+      "express": "4.22.2",
+      "js-yaml": "5.4.2",
+      "korean-law-mcp": "4.13.0",
+      "zod": "3.25.76",
+      "zod-to-json-schema": "3.25.2"
+    },
+    "fixture_only": true
+  },
+  "ci_log_observations": [
+    {
+      "job": 106139702401,
+      "artifact_sha256": "a5b584df7b82179a11cc0dea5620596cf7aba80f44c81bccef66524a4d2c597d",
+      "package_checks": 7,
+      "observed_at": "2026-09-20T20:33:29.621216+00:00"
+    },
+    {
+      "job": 106141358964,
+      "artifact_sha256": "a5b584df7b82179a11cc0dea5620596cf7aba80f44c81bccef66524a4d2c597d",
+      "package_checks": 7,
+      "observed_at": "2026-09-20T20:33:31.081495+00:00"
+    }
+  ]
+}

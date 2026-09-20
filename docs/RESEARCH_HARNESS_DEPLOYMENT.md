@@ -45,4 +45,21 @@ Debian에 venv 모듈은 있었지만 ensurepip 구성요소가 없어 설치가
 
 ## 검수 상태
 
-REVIEW PASS / PLAN PASS / CODE PASS (`5f5ee328cdce448c6854ef2b99edffee3d96b203`, CR-01~03 및 원격 완료 불명 보호 확인). 전체 130개·설치 패키지 7개 통과. 실제 배포 결과의 Pro DEPLOYMENT 검수 진행 중.
+REVIEW PASS / PLAN PASS / CODE PASS (`5f5ee328cdce448c6854ef2b99edffee3d96b203`, CR-01~03 및 원격 완료 불명 보호 확인). 전체 130개·설치 패키지 7개 통과. 최초 DEPLOYMENT 검수는 원본 결합 자료 누락 DR-01로 REVISE였으며 아래 자료를 보완해 한정 재검수한다. 제품 결함·전환 순서 모순·rollback 필요 판정은 아니었다.
+
+## DR-01: 실제 배포 파일과 고정 소스의 대응
+
+[실제 설치 결합 기록](evidence/research-harness-installation-binding-20260921.json)은 helper가 사용한 release packet 전체를 포함한다. `head`, `tree`, tarball hash, 47개 경로별 hash, `operator_files`, helper hash, CI 참조가 원본 입력과 일치한다. 기존 설치 보고의 Python 선택 파일·전체 freeze 69개 항목과 hash도 포함했다. 환경파일은 역할·경로·hash만 공개한다.
+
+배포 이후 읽기 전용 점검에서 운영 tarball과 설치된 47개 파일·보조 파일을 packet과 다시 대조했다. 실제 새 앱·보존한 이전 앱·별도 법제처 프로세스가 쓰는 세 `node_modules` 경로의 전체 지문은 모두 기록된 `bd4653a5…95746c`였다. 실행 중인 Node PID 81286과 자식 법제처·NTS 프로세스의 경로, 선택된 Python interpreter/cwd, 실제 pip freeze 일치도 확인했다. systemd의 유효한 unit/drop-in 참조·hash, 새 drop-in 전문, 실제 `TimeoutStopSec=90`, `MemoryMax=671088640`, 영속 교정 디렉터리 및 안전한 환경 항목을 함께 기록했다. 서비스와 ingress는 변경하지 않았다.
+
+[고정 커밋의 격리 재빌드 기록](evidence/research-harness-build-provenance-20260921.json)에는 앱 커밋 `75314179…`의 깨끗한 별도 checkout에서 `npm run build`와 `npm pack --ignore-scripts --json`을 실행한 도구 버전·lock hash·47개 payload hash를 기록했다. 재빌드 tarball SHA는 `a5b584df7b82179a11cc0dea5620596cf7aba80f44c81bccef66524a4d2c597d`로 두 Linux CI 로그의 값과 정확히 같다. 이 작업은 배포 후의 소스 대응 확인이며 원래 CI artifact를 다운로드했다고 주장하지 않는다.
+
+운영 tarball `d63b301d…9464ce6`과 재빌드 tarball은 45개 파일이 바이트 단위로 같고, 아래 두 파일만 줄바꿈이 다르다. 모든 실행 코드와 MCPB는 같다. 두 파일 모두 CRLF를 LF로 바꾸면 정확히 일치하며 도구 목록의 파싱된 JSON도 같다. 원래 배포 tarball 자체에 대한 clean-install/stdio/SSE 등 7개 통과 기록도 해당 hash에 결합했다.
+
+| 경로 | 운영 파일 | 고정 소스 재빌드 | 차이 |
+| --- | --- | --- | --- |
+| `LICENSE` | 1,086 bytes, CRLF 21개 | 1,065 bytes, CRLF 0개 | 줄바꿈만 다름 |
+| `upstreams/korean-taxlaw-mcp.tools.json` | 30,906 bytes, CRLF 1,130개 | 29,776 bytes, CRLF 0개 | 줄바꿈만 다름, JSON 값 동일 |
+
+마지막 정리 점검에서는 이번 작업의 실패 후보 폴더 두 개만 제거했고, 운영·이전 릴리스·실제 공유 법제처 경로를 보존했다. 작업 소유 fence가 없고 같은 운영 PID와 release_commit이 유지되며 디스크 여유는 2,036,600,832 bytes였다. 원본 실행 기록과 사후 대조의 시점은 각 JSON에 구분되어 있다. Pro의 공개 HTTPS 직접 조회는 웹 도구 접근 실패로 확인되지 않았으며, HTTPS 실조회는 Codex 실행 증거다.

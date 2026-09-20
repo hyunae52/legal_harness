@@ -464,5 +464,23 @@
   "limitations": [
     "single-document live smoke; not a sustained-load or legal-correctness test",
     "Default Python-urllib user agent receives Cloudflare 1010; node, python-httpx/0.28.1 and browser user agents returned 200."
-  ]
+  ],
+  "final_cleanup_audit": {
+    "status": "pass",
+    "removed_only_failed_candidates": [
+      "legal-harness-research-084097f79e14",
+      "legal-harness-research-5f5ee328cdce"
+    ],
+    "task_fence_absent": true,
+    "active_release": "75314179eb1d2fbf17ad5eb2ad367031d99749dc",
+    "old_release_preserved": true,
+    "disk_free": 2036600832,
+    "service_main_pid": "81286",
+    "service_memory": 203776000
+  },
+  "binding_evidence": {
+    "installation": "research-harness-installation-binding-20260921.json",
+    "build": "research-harness-build-provenance-20260921.json",
+    "original_remote_binding_report_sha256": "0375bb8e4fd14eb065a6081ede0e6628cefad485146946448836ec60a6033eda"
+  }
 }
