@@ -12,7 +12,7 @@ import { retrievalEnvelope } from './evidence.js';
 import { type SourceVerifier } from './sourceVerifier.js';
 import { safeToolDiagnostic } from './errorDiagnostics.js';
 import { landingHeaders, landingHtml } from './landing.js';
-import { actionsSchema, geminiConfig, gptInstructions, setupMarkdown } from './setup.js';
+import { actionsSchema, antigravityConfig, desktopConfig, geminiConfig, gptInstructions, setupMarkdown } from './setup.js';
 import { type CorrectionService } from './corrections.js';
 import { correctionInputs, correctionInstructions } from './correctionMeta.js';
 
@@ -91,11 +91,13 @@ export function createApp(options: Options) {
   app.get('/openapi.json', (_req, res) => res.set(publicHeaders).json(actionsSchema));
   for (const [name, type, body] of [
     ['gemini-settings.json', 'application/json', geminiConfig],
+    ['antigravity-mcp.json', 'application/json', antigravityConfig],
+    ['chatgpt-desktop.toml', 'text/plain', desktopConfig],
     ['chatgpt-actions.json', 'application/json', JSON.stringify(actionsSchema, null, 2)],
     ['chatgpt-instructions.txt', 'text/plain', gptInstructions],
   ]) app.get('/downloads/' + name, (_req, res) => res.set(publicHeaders).attachment(name).type(type).send(body));
-  app.get('/downloads/taxlab-law.mcpb', (_req, res) => {
-    res.set(publicHeaders).attachment('taxlab-law.mcpb').type('application/octet-stream');
+  for (const name of ['taxlab-law.mcpb', 'taxlab-bridge.zip']) app.get('/downloads/' + name, (_req, res) => {
+    res.set(publicHeaders).attachment(name).type(name.endsWith('.zip') ? 'application/zip' : 'application/octet-stream');
     res.sendFile(fileURLToPath(new URL('./downloads/taxlab-law.mcpb', import.meta.url)), error => {
       if (error && !res.headersSent) {
         res.removeHeader('Content-Disposition');
