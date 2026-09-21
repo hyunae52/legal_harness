@@ -1,5 +1,16 @@
 # Legal Harness
 
+2.3의 새 MCP 주소는 `https://law.taxlab.kr/mcp`입니다. Streamable HTTP와
+접속키 헤더를 지원하는 클라이언트에서 사용하며 기존 `/sse`와 설치파일도
+유지합니다. 사건 연구는 빠진 필수 사실을 하나씩 묻고 `answer_legal_question`으로
+답변·모름을 기록합니다. 추가 서버 LLM 키는 필요 없습니다.
+
+보호 한도는 유지됩니다. 기본값은 실제 작업 3개, 전송 연결 전체 20개/인증 주체별
+5개, 연구 전체 50개/주체별 5개(30분)입니다. 새 요청별 전송은 응답이 끝나면
+연결 자원을 반환합니다. 요청 토큰은 전체 600/주체별 180, 조회 토큰은 120/60의
+용량과 분당 충전량을 사용합니다. 공유키를 쓰는 사람들은 한 주체로 계산됩니다.
+가입자 수를 세는 정책은 아닙니다. [구현·검증 계약](docs/TRANSPORT_INTERVIEW_PLAN.md)을 참고하세요.
+
 사용자의 LLM이 공식 `korean-law-mcp`를 조회하고, 제출한 초안의 확인 범위와 누락 사실을 구분할 수 있게 하는 Express/MCP 서버입니다. upstream은 npm 패키지를 **별도 stdio 자식 프로세스**로 실행합니다. 원본 파싱 코드를 복사하거나 포크하지 않습니다. 일반 조회에는 서버의 LLM 키가 필요 없습니다.
 
 법령 조회 서버는 **https://law.taxlab.kr**에서 운영합니다. 대화 중 반박·새 근거로 답변을 정정하면 공개 가능한 교정 자료를 준비하고, 사용자의 동의 후 실제 draft PR을 만드는 경로를 제공합니다. 최종 검수·머지는 사람이 합니다. 실행 코드 자동 패치·독립 AI worker는 별도이며 전체 B 파이프라인의 완료를 뜻하지 않습니다. [이전 배포 준비 기록](docs/DEPLOYMENT_READINESS_2026-09-19.md)과 [남은 구현 계획](docs/REMAINING_PLAN_2026-09-20.md)은 해당 작성 시점의 기록입니다.
@@ -16,7 +27,7 @@
 - **Antigravity**: [전용 설정](https://law.taxlab.kr/downloads/antigravity-mcp.json)의 `serverUrl`·`headers`를 사용합니다. Gemini CLI의 `url`과 구분합니다. 앱의 Open MCP Config/View raw config에서 연 파일에 병합하고 Refresh합니다. 최신 공식 전역 경로는 `~/.gemini/config/mcp_config.json`, 프로젝트 경로는 `.agents/mcp_config.json`입니다.
 - **PC 설정이 가능한 AI 에이전트**: 페이지의 ‘AI 설정 요청문’을 복사하세요. [setup.md](https://law.taxlab.kr/setup.md)에 기존 설정 보존, 비밀값 입력, 앱별 연결 범위와 확인 절차가 있습니다.
 
-다른 MCP 앱에서는 `https://law.taxlab.kr/sse`와 `Authorization: Bearer YOUR_API_KEY` 또는 `x-api-key: YOUR_API_KEY`를 사용합니다. 접속키를 URL에 붙이지 마세요. 현재 Streamable HTTP와 OAuth 로그인은 제공하지 않으므로 모든 앱에 URL만 등록해서 연결되는 것은 아닙니다. 서버 운영 절차는 아래 별도 항목을 참고하세요.
+다른 MCP 앱에서는 Streamable HTTP 주소 `https://law.taxlab.kr/mcp` 또는 기존 SSE 주소 `https://law.taxlab.kr/sse`와 `Authorization: Bearer YOUR_API_KEY` / `x-api-key: YOUR_API_KEY` 헤더를 사용합니다. 접속키를 URL에 붙이지 마세요. OAuth 로그인은 제공하지 않으므로 앱에서 헤더 인증을 설정할 수 있어야 합니다. 서버 운영 절차는 아래 별도 항목을 참고하세요.
 
 `npm run build`는 `desktop/manifest.json`과 검수된 bridge 및 설치된 SDK 의존성으로 `dist/downloads/taxlab-law.mcpb`를 생성합니다. 접속키는 포함하지 않으며 Claude의 민감값 입력 설정으로 받습니다. 직접 배포한 확장은 새 버전 배포 시 다시 설치합니다. 자동 시험은 저장소 밖 빈 디렉터리에서 설치파일을 풀어 실제 stdio→SSE 호출까지 확인합니다. 실제 Claude UI 설치와 ChatGPT 계정별 GPT 편집기 동작은 별도 확인 범위입니다.
 

@@ -3,6 +3,7 @@ import { correctionActionPaths, correctionInstructions } from './correctionMeta.
 import { researchActionPaths, researchInstructions } from './researchContracts.js';
 export const serviceOrigin = 'https://law.taxlab.kr';
 export const mcpEndpoint = serviceOrigin + '/sse';
+export const streamableEndpoint = serviceOrigin + '/mcp';
 export const geminiConfig = JSON.stringify({ mcpServers: { 'taxlab-law': {
   type: 'sse', url: mcpEndpoint, headers: { Authorization: 'Bearer ${TAXLAB_API_KEY}' },
 } } }, null, 2);
@@ -141,7 +142,7 @@ URL에서 가져오기: ${serviceOrigin}/openapi.json
 인증은 API Key, 방식은 Bearer로 선택하고 운영자에게 받은 접속키만 입력합니다(Bearer 접두사를 키에 다시 붙이지 않음).
 지침: ${serviceOrigin}/downloads/chatgpt-instructions.txt
 listTaxlabTools를 테스트하고 도구 목록이 보이면 나만 사용으로 저장합니다. 공유키를 넣은 GPT는 공개 배포하지 마세요.
-이 방식은 같은 서버의 API를 쓰는 GPT Actions입니다. 현재 서버는 SSE와 접속키 헤더를 쓰며 Streamable HTTP·OAuth를 제공하지 않습니다. 원격 MCP 플러그인에 URL만 넣는 연결은 지원하지 않습니다.
+이 방식은 같은 서버의 API를 쓰는 GPT Actions입니다. 서버는 SSE와 Streamable HTTP를 제공하며 접속키 헤더 인증이 필요합니다. OAuth는 제공하지 않으므로, 헤더를 설정할 수 없는 원격 MCP 메뉴에 URL만 넣는 연결은 지원하지 않습니다.
 데스크톱 앱에서 이 GPT의 Actions가 실행되는지는 별도 미검증입니다. 웹에서 만든 GPT가 모든 PC 앱 버전에서 동작한다고 안내하지 마세요.
 공식 안내: https://developers.openai.com/api/docs/actions/getting-started
 인증 안내: https://developers.openai.com/api/docs/actions/authentication
@@ -232,12 +233,13 @@ ${vscodeConfig}
 ## 다른 앱과 연결 범위
 
 원격 주소는 ${mcpEndpoint} (SSE)이며 Bearer 또는 x-api-key 헤더 인증이 필요합니다.
-현재 Streamable HTTP 및 OAuth 로그인은 제공하지 않습니다. ChatGPT 데스크톱/Codex는 위의 STDIO bridge를 사용합니다. HTTP MCP 설정이나 인증 헤더를 못 넣는 웹 앱에 SSE 주소만 넣고 연결 완료라고 하지 마세요.
+Streamable HTTP 주소는 ${streamableEndpoint}입니다. 이 방식과 Authorization: Bearer <접속키> 헤더를 지원하는 클라이언트에서 사용할 수 있습니다. 프로토콜 기준은 2025-11-25이며 POST 요청별 JSON 응답을 제공합니다. OAuth, GET 알림 스트림, 요청 간 취소·응답 재생은 제공하지 않습니다. 위의 STDIO bridge와 기존 SSE 설정도 유지됩니다. 개별 앱 UI의 HTTP 연결은 별도 검증 전까지 지원 완료라고 하지 마세요.
 지원하지 않는 앱은 사용 가능한 위 경로를 안내하세요. 서버 키·법제처 키·Supabase 관리자 키·LLM API 키는 사용자 설치에 필요하지 않습니다. 사용자에게 필요한 키는 운영자가 전달한 TaxLab 접속키 하나입니다.
 
 ## 연결 후 연구 요청
 
 AI에게 “TaxLab 연구 하네스로 쟁점을 나누고 실제 원문·반대 자료를 읽어 주장별 인용과 빠진 사실을 검사해줘”라고 요청할 수 있습니다.
+사건에 필요한 사실이 빠져 있으면 핵심 질문 하나씩 확인합니다. 이미 알려준 사실은 재사용하고, 모르는 내용은 미확인으로 남겨 조건부 검토를 이어갑니다. 답변 기록 도구는 answer_legal_question이며 REST와 MCP가 같은 연구 상태를 사용합니다.
 ${researchInstructions}
 연구 도구의 POST Actions 경로도 openapi.json에 포함되어 있습니다. 기존에 만든 GPT는 스키마와 지침을 다시 가져와야 새 도구가 표시됩니다. MCP 클라이언트는 도구 목록을 새로고침하세요.
 
