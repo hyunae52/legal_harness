@@ -1,0 +1,6 @@
+# Debian cron uses the host timezone. Install only after confirming Etc/UTC.
+# 18:30 UTC = 03:30 Asia/Seoul next day. Check metadata; never install or restart.
+SHELL=/bin/bash
+PATH=/usr/bin:/bin
+MAILTO=""
+30 18 * * * cta /usr/bin/flock --nonblock --conflict-exit-code 0 /home/cta/.local/state/legal-harness-upstreams/check.lock /usr/bin/timeout --kill-after=5s 120s /usr/bin/node --max-old-space-size=96 /usr/local/lib/legal-harness/check-upstreams.mjs --service legal-harness-a.service --state-dir /home/cta/.local/state/legal-harness-upstreams >> /home/cta/.local/state/legal-harness-upstreams/check.log 2>&1

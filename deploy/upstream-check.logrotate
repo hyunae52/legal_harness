@@ -1,0 +1,10 @@
+/home/cta/.local/state/legal-harness-upstreams/check.log {
+    weekly
+    maxsize 1M
+    rotate 4
+    compress
+    missingok
+    notifempty
+    su cta cta
+    create 0600 cta cta
+}
