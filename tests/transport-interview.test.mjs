@@ -79,8 +79,8 @@ test('TI-01/02: stateless SDK client, repeated IDs, authentication and legacy SS
 
 test('TI-03: SSE and in-flight HTTP share admission; disconnection holds real work until settled', async t => {
   const pending = Promise.withResolvers(); let entered = false;
-  const f = await fixture(t, { maxSessions: 1, maxActive: 1, operation: async () => { entered = true; await pending.promise; } });
   t.after(() => pending.resolve());
+  const f = await fixture(t, { maxSessions: 1, maxActive: 1, operation: async () => { entered = true; await pending.promise; } });
   const sse = await f.client('alice', 'sse');
   assert.equal((await f.request('/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/list' })).status, 429);
   await sse.close();
@@ -153,8 +153,8 @@ test('TI-05/06/07: one question, reuse known facts, revision bound answers and c
 
 test('TI-06/07: answers reject busy/stale state and do not replenish attempts or preserve old receipts', async t => {
   const pending = Promise.withResolvers(); let entered = false;
-  const f = await fixture(t, { operation: async () => { entered = true; await pending.promise; } });
   t.after(() => pending.resolve());
+  const f = await fixture(t, { operation: async () => { entered = true; await pending.promise; } });
   let state = (await ask(f, 'start', { plan: plan() })).body;
   assert.ok(state.interview, 'research start must supply an interview next action');
   const oldAnswer = answer(state, { kind: 'fact', value: '공동 부담', source: '합성 진술' });
@@ -180,5 +180,80 @@ test('TI-09: interview works through a real stateless MCP call and advertised Ac
   assert.equal(result.structuredContent.interview.next_question.target.id, 'amount');
   const schema = (await f.request('/openapi.json')).body;
   assert.equal(schema.paths['/api/research/answer'].post.operationId, 'answer_legal_question');
+  assert.equal(f.calls(), 0);
+});
+
+test('TI-04A: initialization/unknown requests use bounded ingress tokens and expired actor buckets recover', async t => {
+  let now = 0;
+  const f = await fixture(t, { resourceOptions: { now: () => now, limits: { requestRpm: 3, actorRequestRpm: 2, maxActors: 1 } } });
+  const list = { jsonrpc: '2.0', id: 1, method: 'tools/list' };
+  assert.equal((await f.request('/mcp', list)).status, 200);
+  assert.equal((await f.request('/mcp', list)).status, 200);
+  const limited = await f.request('/mcp', list);
+  assert.equal(limited.status, 429); assert.equal(limited.headers.get('retry-after'), '5');
+  assert.equal((await f.request('/mcp', list, 'bob')).status, 429);
+  now = 60_001;
+  assert.equal((await f.request('/mcp', list, 'bob')).status, 200);
+  assert.equal(f.calls(), 0);
+});
+
+test('TI-02/03: same request IDs cannot mix actors; research survives transport changes; per-actor leases stay finite', async t => {
+  const f = await fixture(t);
+  const a = (await ask(f, 'start', { plan: plan() })).body;
+  const b = (await ask(f, 'start', { plan: { ...plan(), query: '다른 합성 사건' } }, 'bob')).body;
+  const [ra, rb, foreign] = await Promise.all([
+    f.request('/mcp', rpc('get_legal_research', { research_id: a.research_id }, 17)),
+    f.request('/mcp', rpc('get_legal_research', { research_id: b.research_id }, 17), 'bob'),
+    f.request('/mcp', rpc('get_legal_research', { research_id: a.research_id }, 17), 'bob'),
+  ]);
+  for (const response of [ra, rb, foreign]) assert.equal(response.status, 200);
+  assert.equal(ra.body.result.structuredContent.plan.query, '합성 공동취득 사례');
+  assert.equal(rb.body.result.structuredContent.plan.query, '다른 합성 사건');
+  assert.equal(foreign.body.result.isError, true); assert.match(foreign.body.result.content[0].text, /RESEARCH_NOT_FOUND/);
+  const sessions = [];
+  for (let i = 0; i < 5; i++) sessions.push(await f.client('alice', 'sse'));
+  assert.equal((await f.request('/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/list' })).status, 429);
+  assert.equal((await f.request('/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/list' }, 'bob')).status, 200);
+  const state = await sessions[0].callTool({ name: 'get_legal_research', arguments: { research_id: a.research_id } });
+  assert.equal(state.structuredContent.research_id, a.research_id);
+});
+
+test('TI-03: authentication finishing after drain never enters the new transport', async t => {
+  const gate = Promise.withResolvers(); let entered = false;
+  t.after(() => gate.resolve());
+  const f = await fixture(t, { authenticate: async () => { entered = true; await gate.promise; return { id: 'alice', kind: 'auth_user' }; } });
+  const call = f.request('/mcp', rpc('search_law'));
+  await eventually(() => entered);
+  let complete = false; const drained = f.runtime.drain(2000).then(() => { complete = true; });
+  await new Promise(r => setTimeout(r, 20)); assert.equal(complete, false);
+  gate.resolve(); assert.equal((await call).status, 503); await drained;
+  assert.equal(f.calls(), 0);
+});
+
+test('TI-07: storage rejection is atomic and repeated reads keep the same pending question', async t => {
+  const f = await fixture(t, { researchOptions: { limits: { maxSessionBytes: 1200 } } });
+  const p = { query: '합성', issues: [{ id: 'x', question: '합성 요건', required_fact_ids: ['f'], required_date_roles: [] }],
+    facts: [{ id: 'f', description: '합성 미상 사실', status: 'unknown', value: null, source: '' }], event_dates: [] };
+  const created = await ask(f, 'start', { plan: p }); assert.equal(created.status, 200);
+  const initial = created.body; assert.ok(initial.interview);
+  for (const value of [{ kind: 'fact', value: 'X'.repeat(2000), source: '합성 사용자 입력' }, { kind: 'unknown', reason: 'X'.repeat(1000) }]) {
+    const failed = await ask(f, 'answer', answer(initial, value));
+    assert.equal(failed.status, 429); assert.equal(failed.body.code, 'RESEARCH_CAPACITY');
+    const stored = (await ask(f, 'status', { research_id: initial.research_id })).body;
+    assert.equal(stored.state_version, initial.state_version);
+    assert.deepEqual(stored.plan, p); assert.deepEqual(stored.interview, initial.interview);
+  }
+});
+
+test('TI-05/08: no registered fact gaps does not promise source or legal completeness', async t => {
+  const f = await fixture(t), p = plan();
+  p.issues[0].required_fact_ids = ['known']; p.issues[1].required_fact_ids = [];
+  p.issues.forEach(i => { i.required_date_roles = []; });
+  const state = (await ask(f, 'start', { plan: p })).body;
+  assert.ok(state.interview);
+  assert.equal(state.interview.next_question, null); assert.equal(state.interview.unresolved_count, 0);
+  assert.equal(state.interview.next_action, 'research_sources_and_review');
+  assert.equal(state.interview.coverage, 'registered_requirements_only');
+  assert.equal(state.legal_verification, 'unverified');
   assert.equal(f.calls(), 0);
 });
