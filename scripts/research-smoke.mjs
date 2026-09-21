@@ -25,9 +25,10 @@ if (!origin) {
 const url = new URL(origin);
 assert.ok(url.protocol === 'https:' || (url.protocol === 'http:' && url.hostname === '127.0.0.1'));
 if (!publicMode) assert.ok(key, 'Missing operator access key');
-const headers = { ...(!publicMode ? { authorization: 'Bearer ' + key } : {}), 'content-type': 'application/json' };
+const contentHeaders = { 'content-type': 'application/json', accept: 'application/json, text/event-stream' };
+const headers = { ...(!publicMode ? { authorization: 'Bearer ' + key } : {}), ...contentHeaders };
 const request = async (path, body, authenticated = true) => {
-  const response = await fetch(origin + path, { method: body ? 'POST' : 'GET', headers: authenticated ? headers : { 'content-type': 'application/json' },
+  const response = await fetch(origin + path, { method: body ? 'POST' : 'GET', headers: authenticated ? headers : contentHeaders,
     body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(60_000) });
   const data = await response.json(); return { status: response.status, data };
 };
