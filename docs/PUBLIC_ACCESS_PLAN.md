@@ -25,7 +25,7 @@ The public session is a bearer capability handled by the AI, not a setup credent
 
 Verification order: focused RED, minimal implementation, same focused GREEN, full review and package gates, public-safe Pro review, staged anonymous SDK/bridge checks, controlled release and public HTTPS verification. No production cutover until deployment checks and the requested review are satisfied.
 
-Pro status: Chrome available; trusted connector probe and its one retry both returned connector_picker_unavailable in this turn. No review request was sent and no Pro approval is claimed. Local implementation can proceed independently.
+Pro review: the fresh Pro conversation on 2026-09-22 reviewed commit `dc83bde52c1fbf8079010052b2ef494180a241fc` and reported one P2 finding, PA-C1: word boundaries let a valid session escape content detection when joined to letters, digits or underscores. Its initial verdict was CODE FAIL / DEPLOY HOLD. The finding was independently reproduced in the retrieval guard, correction service and diagnostic sanitizer, then corrected by removing content-pattern word boundaries while retaining the anchored authentication pattern. The current review record is in PR #11; the initial verdict is not approval of a later candidate.
 
 ## Implementation evidence (2026-09-21)
 
@@ -42,4 +42,10 @@ The anonymous tool catalog excludes legacy authenticated `submit_failure`; anony
 
 Read-only live verification is available through `node scripts/research-smoke.mjs --live --public`. It checks anonymous REST/SSE/HTTP, an actual NTS document, exact/forged quotation behavior and an unknown interview answer without a GitHub publication. Its report deliberately omits client_session.
 
-Release status: implementation ready for review; Pro review and production activation are pending. Local and fixture evidence must not be presented as a deployed public endpoint or a legal judgment approval.
+## PA-C1 regression evidence (2026-09-22)
+
+The added boundary regression failed on the reviewed code, then passed with the shared detection pattern corrected. It covers bare and concatenated capabilities through REST, real MCP and research lookup; correction routes and direct persistence; multiple capabilities in error text; and rejection of decorated authentication tokens. Provider calls, stored proposals and GitHub writes remain zero for rejected content. A normal session continues to authorize its own research.
+
+After the runtime correction, the full review passed 162 tests without skips. The final expanded boundary checks and all ten public-access tests also passed. All nine installed-package checks passed with artifact SHA-256 `76c6625dec581a7596b1ab050603a15031625961b87e7f4d87dbec85168ff6a0`. CI and focused Pro re-review evidence must bind the exact revised candidate rather than reuse the original artifact's approval status.
+
+Release status is tracked separately from code review. Production activation requires a persisted signing secret, verified loopback proxy trust, correction-service readiness, controlled drain/rollback and anonymous public HTTPS checks. Local and fixture evidence must not be presented as a deployed public endpoint or a legal judgment approval.

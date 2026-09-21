@@ -7,7 +7,8 @@ export const publicSessionSchema = { type: 'string', maxLength: 200,
   description: 'Automatically returned client_session from start_legal_research or prepare_correction_pr. Carry it unchanged for follow-up state operations; never ask the user to obtain a key or include this value in sources or public PR content.' };
 export const publicSessionInstructions = '접속키나 로그인 없이 조회할 수 있습니다. 익명 연구·PR 준비 응답의 client_session은 AI가 후속 상태 도구 인수로 그대로 전달하세요. 사용자가 발급받거나 입력할 값이 아닙니다. 다른 대화의 세션을 섞거나 이 값을 답변·출처·PR에 공개하지 마세요. 첫 응답을 잃어 세션을 모르면 작업을 자동 재생성하지 말고 결과 불명을 알리세요. ';
 export const actorBudgetKey = (actor: Actor) => actor.kind + ':' + (actor.rateLimitId ?? actor.id);
-export const publicSessionPattern = /\bv1\.\d{13}\.[a-f0-9]{64}\.[a-f0-9]{64}\b/;
+// Capabilities remain private even when concatenated with letters or other text.
+export const publicSessionPattern = /v1\.\d{13}\.[a-f0-9]{64}\.[a-f0-9]{64}/;
 /** Catch accidental inclusion in evidence, provider queries or public proposal text. */
 export function assertNoPublicSession(value: unknown) {
   const text = JSON.stringify(value) ?? '';

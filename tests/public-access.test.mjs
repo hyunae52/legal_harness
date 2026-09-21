@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createServer } from 'node:http';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -33,7 +33,7 @@ async function fixture(t, extra={}) {
   t.after(async()=>{await Promise.all(clients.map(c=>c.close()));await runtime.close();await corrections.close();server.closeAllConnections();await new Promise(r=>server.close(r));await rm(directory,{recursive:true,force:true});});
   const request=async(path,body,headers={})=>{const r=await fetch(base+path,{method:body?'POST':'GET',headers:{'content-type':'application/json',...headers},body:body?JSON.stringify(body):undefined});return {status:r.status,body:await r.json()};};
   const mcp=async(kind='http')=>{const c=new Client({name:'public-test',version:'1'});clients.push(c);await c.connect(kind==='http'?new StreamableHTTPClientTransport(new URL(base+'/mcp')):new SSEClientTransport(new URL(base+'/sse')),{timeout:2000});return c;};
-  return {base,request,mcp,calls,publications,runtime};
+  return {base,request,mcp,calls,publications,runtime,corrections};
 }
 
 test('PA-01: header-free REST, HTTP MCP and SSE retrieve through the real public app',async t=>{
@@ -73,6 +73,33 @@ test('PA-03: capabilities accidentally included in sources or proposals never le
   assert.equal(f.calls.length,0);assert.equal(f.publications.length,0);
   const diagnostic=safeToolDiagnostic({isError:true,content:[{type:'text',text:'Bad value '+a.client_session}],structuredContent:{client_session:a.client_session,message:a.client_session}},{});
   assert.equal(JSON.stringify(diagnostic).includes(a.client_session),false);assert.equal(diagnostic.structuredContent.client_session,undefined);
+});
+
+test('PA-03: session capabilities embedded in larger strings are blocked and redacted',async t=>{
+  const f=await fixture(t), c=await f.mcp(), a=(await f.request('/api/research/start',{plan})).body;
+  const b=(await f.request('/api/research/start',{plan})).body;
+  assert.deepEqual(await readdir(f.corrections.directory),[]);
+  for(const [prefix,suffix] of [['',''],['prefix',''],['','suffix'],['prefix','suffix'],['memo_','_memo'],['a','a']]) {
+    const value=prefix+a.client_session+suffix;
+    const lookup=await f.request('/api/analyze',{query:value,tool:'search_law'});
+    assert.equal(lookup.status,422);assert.equal(lookup.body.code,'PRIVATE_SESSION_IN_CONTENT');
+    const mcp=await c.callTool({name:'search_law',arguments:{query:value}});
+    assert.equal(mcp.isError,true);assert.match(mcp.content[0].text,/PRIVATE_SESSION_IN_CONTENT/);
+    const research=await f.request('/api/research/retrieve',{research_id:a.research_id,expected_revision:a.revision,client_session:a.client_session,
+      issue_ids:['rule'],purpose:'support',tool:'search_law',arguments:{query:value}});
+    assert.equal(research.status,422);assert.equal(research.body.code,'PRIVATE_SESSION_IN_CONTENT');
+    const correction=await f.request('/api/corrections/prepare',{...proposal,why:value,client_session:a.client_session});
+    assert.equal(correction.status,422);assert.equal(correction.body.code,'PRIVATE_SESSION_IN_CONTENT');
+    await assert.rejects(f.corrections.prepare({kind:'anonymous',id:'synthetic-owner'},{...proposal,why:value}),e=>e.code==='PRIVATE_CONTENT_BLOCKED');
+    const message=value+'memo_'+b.client_session+'_tail';
+    const diagnostic=safeToolDiagnostic({isError:true,content:[{type:'text',text:message}],structuredContent:{message}},{});
+    for(const token of [a.client_session,b.client_session]) assert.equal(JSON.stringify(diagnostic).includes(token),false);
+    const status=await f.request('/api/research/status',{research_id:a.research_id,client_session:value});
+    assert.equal(status.status,prefix||suffix?401:200);
+    if(prefix||suffix)assert.equal(status.body.code,'PUBLIC_SESSION_INVALID');
+  }
+  assert.deepEqual(await readdir(f.corrections.directory),[]);
+  assert.equal(f.calls.length,0);assert.equal(f.publications.length,0);
 });
 
 const publicEnv={TAXLAB_PUBLIC_ACCESS:'1',TAXLAB_PUBLIC_SESSION_SECRET:secret};
