@@ -40,7 +40,7 @@ test('public connection guide is readable without credentials and does not open 
   const res=await fetch(f.base+'/?key=untrusted-input',{headers:{'x-forwarded-host':'untrusted.invalid'}});
   assert.equal(res.status,200);assert.match(res.headers.get('content-type'),/text\/html.*utf-8/);
   const html=await res.text();assert.match(html,/<html lang="ko">/);assert.match(html,/https:\/\/law\.taxlab\.kr\/sse/);
-  assert.match(html,/YOUR_API_KEY/);assert.match(html,/OAuth/);assert.doesNotMatch(html,/Node\.js/);
+  assert.doesNotMatch(html,/YOUR_API_KEY/);assert.match(html,/접속키 없이 바로 연결/);assert.match(html,/OAuth/);assert.doesNotMatch(html,/Node\.js/);
   assert.match(html,/https:\/\/law\.taxlab\.kr\/mcp/);assert.match(html,/사건 조건이 빠졌으면/);
   assert.doesNotMatch(html,/OAuth 로그인과 Streamable HTTP는 제공하지 않습니다/);
   for(const text of ['Claude 설치파일','ChatGPT 설정하기','Gemini 연결 안내','Antigravity 연결 안내','AI 설정 요청문 복사','PR로 제안할까요'])assert.ok(html.includes(text));
@@ -61,7 +61,8 @@ test('setup downloads expose only fixed public artifacts; private paths and tool
     if(path.endsWith('.json')) {
       const config=JSON.parse(body);
       if(path.endsWith('gemini-settings.json'))assert.equal(config.mcpServers['taxlab-law'].type,'sse','Gemini 0.60 defaults url-only connections to Streamable HTTP');
-      if(path.endsWith('antigravity-mcp.json'))assert.equal(config.mcpServers['taxlab-law'].serverUrl,'https://law.taxlab.kr/sse');
+      if(path.endsWith('antigravity-mcp.json'))assert.equal(config.mcpServers['taxlab-law'].serverUrl,'https://law.taxlab.kr/mcp');
+      if(config.mcpServers)for(const server of Object.values(config.mcpServers))assert.equal(server.headers,undefined);
     }
   }
   const installer=await fetch(f.base+'/downloads/taxlab-law.mcpb');assert.equal(installer.status,200);
@@ -74,11 +75,11 @@ test('setup downloads expose only fixed public artifacts; private paths and tool
   for(const path of ['/downloads/.env','/downloads/package.json','/downloads/%2e%2e%2f.env','/downloads/taxlab-law.mcpb.json'])assert.equal((await fetch(f.base+path)).status,404);
   assert.equal((await f.request('/api/tools',undefined,null)).status,401);assert.equal(f.calls.length,0);
 });
-test('published GPT Actions schemas match authenticated read and draft-check routes',async t=>{
+test('public GPT Actions schemas retain compatibility with private authenticated read and draft-check routes',async t=>{
   const f=await fixture(t,{realAuth:true});
   const schema=await(await fetch(f.base+'/openapi.json')).json();
   assert.equal(schema.openapi,'3.1.0');assert.equal(schema.servers[0].url,'https://law.taxlab.kr');
-  assert.deepEqual(schema.security,[{serviceKey:[]}]);assert.equal(schema.components.securitySchemes.serviceKey.scheme,'bearer');
+  assert.deepEqual(schema.security,[]);assert.equal(schema.components?.securitySchemes,undefined);
   assert.deepEqual(Object.keys(schema.paths).sort(),['/api/analyze','/api/corrections/create','/api/corrections/prepare','/api/corrections/status',
     '/api/research/answer','/api/research/retrieve','/api/research/review','/api/research/start','/api/research/status','/api/research/update','/api/tools','/api/validate']);
   assert.equal(schema.paths['/api/corrections/create'].post['x-openai-isConsequential'],true);

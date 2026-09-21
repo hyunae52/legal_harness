@@ -14,7 +14,7 @@ import {resolve} from 'node:path';
 import {access} from 'node:fs/promises';
 const bridge=resolve(process.argv[2],'node_modules/k-tax-agent-backend/scripts/hermes-mcp-bridge.mjs');
 await access(bridge);
-console.log(JSON.stringify({mcpServers:{'taxlab-legal':{command:'node',args:[bridge],env:{TAXLAB_SERVER_URL:'https://law.taxlab.kr',TAXLAB_API_KEY:'<your existing server key>'}}}},null,2));
+console.log(JSON.stringify({mcpServers:{'taxlab-legal':{command:'node',args:[bridge],env:{TAXLAB_SERVER_URL:'https://law.taxlab.kr'}}}},null,2));
 console.log('Add this entry to your MCP client. Existing configurations have not been overwritten.');
 console.log('Set the key in your client environment, then run the installed bridge with --doctor.');
 NODE

@@ -11,8 +11,7 @@ if ((origin.protocol !== 'https:' && !(loopback && process.env.TAXLAB_ALLOW_LOOP
   throw new Error('TAXLAB_SERVER_URL must be an HTTPS origin without credentials or query parameters.');
 }
 const token = process.env.TAXLAB_API_KEY || process.env.TAXLAB_AUTH_TOKEN;
-if (!token) throw new Error('Set TAXLAB_API_KEY or TAXLAB_AUTH_TOKEN in the MCP client environment.');
-const headers = process.env.TAXLAB_AUTH_TOKEN ? {authorization:'Bearer '+process.env.TAXLAB_AUTH_TOKEN} : {'x-api-key':token};
+const headers = process.env.TAXLAB_AUTH_TOKEN ? {authorization:'Bearer '+process.env.TAXLAB_AUTH_TOKEN} : token ? {'x-api-key':token} : {};
 const connectTimeout=Number(process.env.TAXLAB_CONNECT_TIMEOUT_MS||15000);
 if(!Number.isInteger(connectTimeout)||connectTimeout<250||connectTimeout>30000)throw new Error('Invalid bridge connection timeout.');
 const safeFetch = (url, init) => {
@@ -25,7 +24,7 @@ async function getRemote() {
   if (remote) return remote;
   if (connecting) return connecting;
   connecting=(async()=>{
-    const client=new Client({name:'taxlab-stdio-bridge',version:'2.2.0'});
+    const client=new Client({name:'taxlab-stdio-bridge',version:'2.4.0'});
     client.onclose=()=>{if(remote===client) remote=undefined;};
     const transport=new SSEClientTransport(new URL('/sse',origin),{requestInit:{headers},fetch:safeFetch});
     // SDK request timeout starts after transport.start(). Bound the full SSE
@@ -41,7 +40,7 @@ async function getRemote() {
   })();
   try{return await connecting;}finally{connecting=undefined;}
 }
-const local=new Server({name:'taxlab-legal-bridge',version:'2.2.0'},{capabilities:{tools:{}}});
+const local=new Server({name:'taxlab-legal-bridge',version:'2.4.0'},{capabilities:{tools:{}}});
 local.setRequestHandler(ListToolsRequestSchema,async()=>await(await getRemote()).listTools(undefined,{timeout:20000}));
 // A lost response may already have committed a failure receipt. Do not replay.
 local.setRequestHandler(CallToolRequestSchema,async request=>{

@@ -10,15 +10,14 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { createApp } from '../dist/app.js';
 
-test('Claude bundle contains a private key input and runs from a clean directory without installing dependencies',async t=>{
+test('PA-08: Claude bundle needs no key and runs from a clean directory without installing dependencies',async t=>{
   const archive=await readFile(new URL('../dist/downloads/taxlab-law.mcpb',import.meta.url));
   const record=JSON.parse(await readFile(new URL('../dist/downloads/taxlab-law.mcpb.json',import.meta.url),'utf8'));
   assert.equal(createHash('sha256').update(archive).digest('hex'),record.sha256);
   const zip=await JSZip.loadAsync(archive);
   const manifest=JSON.parse(await zip.file('manifest.json').async('string'));
-  assert.equal(manifest.manifest_version,'0.3');assert.equal(manifest.user_config.api_key.sensitive,true);
-  assert.equal(manifest.user_config.api_key.required,true);assert.equal(manifest.user_config.api_key.default,undefined);
-  assert.deepEqual(manifest.server.mcp_config.env,{TAXLAB_SERVER_URL:'https://law.taxlab.kr',TAXLAB_API_KEY:'${user_config.api_key}'});
+  assert.equal(manifest.manifest_version,'0.3');assert.equal(manifest.user_config,undefined);
+  assert.deepEqual(manifest.server.mcp_config.env,{TAXLAB_SERVER_URL:'https://law.taxlab.kr'});
   assert.equal(manifest.server.entry_point,'server/bridge.mjs');
   const bridge=(await readFile(new URL('../scripts/hermes-mcp-bridge.mjs',import.meta.url),'utf8')).replaceAll('\r\n','\n');
   assert.equal(await zip.file('server/bridge.mjs').async('string'),bridge);
@@ -33,13 +32,13 @@ test('Claude bundle contains a private key input and runs from a clean directory
     await mkdir(dirname(target),{recursive:true});await writeFile(target,await entry.async('nodebuffer'));
   }
   const calls=[];
-  const runtime=createApp({env:{TAXLAB_API_KEY:'bundle-fixture'},law:{releaseVersion:'fixture',listTools:async()=>({tools:[{name:'search_law',inputSchema:{type:'object'}}]}),
+  const runtime=createApp({env:{TAXLAB_PUBLIC_ACCESS:'1',TAXLAB_PUBLIC_SESSION_SECRET:'bundle-fixture-signing-secret-0123456789abcdef'},law:{releaseVersion:'fixture',listTools:async()=>({tools:[{name:'search_law',inputSchema:{type:'object'}}]}),
     callTool:async(name,args)=>{calls.push({name,args});return {result:{content:[{type:'text',text:'bundle-fixture-result'}]}};},close:async()=>{}}});
   const server=createServer(runtime.app);await new Promise(r=>server.listen(0,'127.0.0.1',r));
   t.after(async()=>{await runtime.close();server.closeAllConnections();await new Promise(r=>server.close(r));});
   const env=Object.fromEntries(['PATH','Path','SystemRoot','SYSTEMROOT','TEMP','TMP','HOME','USERPROFILE'].filter(k=>process.env[k]).map(k=>[k,process.env[k]]));
   const transport=new StdioClientTransport({command:process.execPath,args:[join(temp,'server/bridge.mjs')],cwd:temp,
-    env:{...env,NODE_PATH:'',NODE_OPTIONS:'',TAXLAB_API_KEY:'bundle-fixture',TAXLAB_SERVER_URL:'http://127.0.0.1:'+server.address().port,TAXLAB_ALLOW_LOOPBACK_HTTP:'1'},stderr:'pipe'});
+    env:{...env,NODE_PATH:'',NODE_OPTIONS:'',TAXLAB_SERVER_URL:'http://127.0.0.1:'+server.address().port,TAXLAB_ALLOW_LOOPBACK_HTTP:'1'},stderr:'pipe'});
   transport.stderr?.on('data',()=>{});
   const client=new Client({name:'desktop-bundle-check',version:'1'});
   try {

@@ -39,7 +39,7 @@ export const AnalyzeSchema = z.object({
   event_dates: z.record(CalendarDay).default({}),
 }).strict();
 
-export interface Actor { id: string; kind: 'auth_user' | 'api_client'; userId?: string }
+export interface Actor { id: string; kind: 'auth_user' | 'api_client' | 'anonymous'; userId?: string; rateLimitId?: string }
 export interface FailureService {
   submit(actor: Actor, input: unknown): Promise<Record<string, unknown>>;
   status(actor: Actor, id: string): Promise<Record<string, unknown>>;

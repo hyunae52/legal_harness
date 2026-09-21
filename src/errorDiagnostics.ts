@@ -1,4 +1,5 @@
 import type {CallToolResult} from '@modelcontextprotocol/sdk/types.js';
+import { publicSessionPattern } from './publicAccess.js';
 /** Only expected upstream tool-result diagnostics enter this sanitizer. Never
  * pass an exception, stderr, stack or arbitrary server object to it. */
 export function safeToolDiagnostic(result:CallToolResult,env:NodeJS.ProcessEnv):CallToolResult {
@@ -7,6 +8,7 @@ export function safeToolDiagnostic(result:CallToolResult,env:NodeJS.ProcessEnv):
   const scrub=(input:string,max=2000)=>{
     let text=input;
     for(const secret of secrets)text=text.split(secret).join('[REDACTED]');
+    text=text.replace(new RegExp(publicSessionPattern.source, 'g'),'[REDACTED]');
     text=text.replace(/([?&](?:OC|apiKey|key|token|password)=)[^&#\s]+/gi,'$1[REDACTED]')
       .replace(/\bBearer\s+[^\s"']+/gi,'Bearer [REDACTED]')
       .replace(/\b((?:[A-Z_]*(?:SECRET|TOKEN|PASSWORD|API_KEY)|Authorization|OC))\s*["']?\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;}]+)/gi,'$1=[REDACTED]')
@@ -40,7 +42,7 @@ export function safeToolDiagnostic(result:CallToolResult,env:NodeJS.ProcessEnv):
     if(typeof value==='number'&&secrets.includes(String(value)))return '[REDACTED]';
     if(value===null||typeof value==='boolean'||typeof value==='number')return value;
     if(Array.isArray(value))return value.slice(0,20).map(v=>clean(v,depth+1));
-    if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([key])=>!/(?:token|password|secret|headers?|authorization|cookie|stack|stderr|environment|^env$|api.?key|(?:^|_)oc$|__proto__|constructor)/i.test(key)).slice(0,20).map(([k,v])=>[cleanText(k,100,depth+1),clean(v,depth+1)]));
+    if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([key])=>!/(?:client_session|token|password|secret|headers?|authorization|cookie|stack|stderr|environment|^env$|api.?key|(?:^|_)oc$|__proto__|constructor)/i.test(key)).slice(0,20).map(([k,v])=>[cleanText(k,100,depth+1),clean(v,depth+1)]));
     return null;
   };
   const content=result.content.filter(c=>c.type==='text').slice(0,3).map(c=>({type:'text' as const,text:cleanText(c.text,3000,0)}));

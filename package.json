@@ -1,6 +1,6 @@
 {
   "name": "k-tax-agent-backend",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Production Backend for K-Tax Agent (GCE + Supabase + Express)",
   "main": "dist/index.js",
   "bin": {
