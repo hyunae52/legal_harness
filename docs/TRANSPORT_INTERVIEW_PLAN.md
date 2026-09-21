@@ -23,10 +23,11 @@ does not change the previous release's completed review history.
 
 | ID | Observable contract | Verification |
 | --- | --- | --- |
-| TI-01 | Authenticated POST `/mcp` creates a fresh SDK server/transport per request, JSON response, no MCP session cookie/header. Initialize, notifications, tools/list and tools/call work. GET/DELETE return authenticated 405. Unsupported protocol, malformed body and batch are rejected. | Real SDK client and HTTP integration |
+| TI-01 | Authenticated POST `/mcp` creates a fresh SDK 1.30.0 server/transport per request, JSON response, no MCP session cookie/header. Target protocol 2025-11-25 with the SDK's advertised older versions; not a promise of 2026-07-28 compliance. Initialize, notifications, tools/list and tools/call work. GET/DELETE return authenticated 405. Unsupported protocol, malformed body and batch are rejected. | Real SDK client and HTTP integration |
 | TI-02 | Existing SSE and `/messages` keep working. Auth and Origin checks apply equally. Research ownership derives from authenticated actor, never transport/request IDs. | Both transports, REST cross-actor tests |
 | TI-03 | Global actual work remains 3. Live SSE connections plus in-flight `/mcp` requests share global 20 / actor 5 admission; completed stateless requests release their slot. Disconnect does not release actual work early. Drain includes unfinished work/auth/dispatch. | Concurrent delayed provider, abort, drain, release-on-error tests |
 | TI-04 | Source lookup attempts share a bounded per-process rate budget across REST, SSE and `/mcp`: global 120 / actor 60 per rolling token replenishment minute. Budget applies to direct source calls, source verification and research retrieval. Initialize, listing, interview/status and local review do not consume lookup tokens. Shared API key remains one actor. Limits are positive validated operator settings, not a count of registered people. | Controlled-clock budget test plus cross-path integration |
+| TI-04A | Authenticated protected requests, including initialize, notifications and unknown methods, also share a short-request budget (global 600 / actor 180 tokens, replenished per minute). At most 1,024 actor buckets; fully refilled idle buckets can expire after a minute. Overflow fails closed. Auth in-flight 20 and body 256 KiB remain. This does not claim protection from network/body-parser floods before authentication. | Controlled clock, bounded map, no-work exhaustion tests |
 | TI-05 | Research responses expose at most one next question from registered required facts/dates. Provided facts and exact provided dates are skipped; shared requirements are deduplicated. Client orders issues/requirements by significance after preliminary source research. Server does not infer all legal requirements. | Synthetic multi-issue cases, no provider work |
 | TI-06 | `answer_legal_question` (REST `/api/research/answer`) accepts only the current question/revision/state and authenticated owner. Answers carry source; unknown remains unresolved and is deferred without repeatedly asking. Partial provided dates remain a gap and are deferred. | Replay/stale/foreign/wrong-target/busy/invalid-date tests |
 | TI-07 | A fact/date answer replaces only the selected requirement, advances revision/state, clears evidence and prior review. Unknown/defer advances state and invalidates review. TTL and lifetime attempts never reset; no new LLM/API/GitHub call is made. Explicit full plan update resets deferrals and retains its existing invalidation policy. | Ledger, budget, review-binding assertions |
@@ -68,4 +69,16 @@ the previous release for rollback. Record the artifact, actual runtime selection
 public HTTPS smoke and Pro's evidence boundary. PR remains for human merge;
 the previous authorization to merge through PR9 does not authorize merging this PR.
 
-Pro status: REVIEW pending; PLAN pending; IMPLEMENTATION not started; DEPLOYMENT not started.
+Transport disconnect has no promise of cancelling or rolling back work. Do not
+advertise resumable streams or cross-request cancellation. A lost mutation
+response requires status lookup, especially PR publication. Shutdown waits for
+actual work, even after a request transport has closed. Lookup token charging
+counts attempted calls, including later validation failures; it is not an exact
+billable upstream-request counter.
+
+Pro status: REVIEW PASS (2026-09-21); PLAN pending; IMPLEMENTATION not started;
+DEPLOYMENT not started. Accepted SH-01–04 and SI-01–04: shared service/work,
+bounded transport and short-request ingress, protocol version boundary,
+single question/deferred state, atomic stale-answer rejection, invalidation and
+separate source/interpretation gaps. No replay automatically resubmits an answer;
+stale replays return 409 and the client reads current state.
