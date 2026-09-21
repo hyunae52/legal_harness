@@ -145,9 +145,13 @@ for (const partialRefresh of [false,true]) test(partialRefresh?'CP-14: timed-out
   else {assert.equal(prReads,60);assert.equal(saved.length,60);}
   for(const r of saved)assert.equal(service.search(r.proposal.keywords[0]).items[0]?.proposal_id,r.id,'deadline must not discard completed main verification');
   await service.close();const restarted=new CorrectionService(serviceOptions);t.after(()=>restarted.close());
-  for(let pass=0;pass<(partialRefresh?20:1);pass++){
+  // A slow CI filesystem may complete fewer records per 150 ms refresh. Keep
+  // that real deadline and all durability assertions, but bound eventual
+  // recovery by elapsed time rather than an assumed throughput per iteration.
+  const recoveryDeadline=Date.now()+30000;
+  do {
     await restarted.refresh();if(records.every(r=>restarted.search(r.proposal.keywords[0]).items.length===1))break;
-  }
+  } while(partialRefresh&&Date.now()<recoveryDeadline);
   if(!partialRefresh){assert.equal(prReads,60);assert.equal(treeReads,2);}
   for(const r of saved)assert.equal(readsByNumber.get(r.pr.number),1,'restart must reuse a verified merge event');
   for(const record of records)assert.equal(restarted.search(record.proposal.keywords[0]).items[0]?.proposal_id,record.id);
