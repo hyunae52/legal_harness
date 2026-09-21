@@ -4,7 +4,10 @@ Scope is the [approved contract](TRANSPORT_INTERVIEW_PLAN.md). Pro REVIEW passed
 PLAN TP-01–03 closed at `a7e24424e7d84b0c363a6444a72c69260f3941b6`.
 Pro CODE passed at `b1fe256d514c68adea66a2b98a522350f2576dd0`.
 Deployment preflight TRD-01 is closed. Public deployment and runtime checks have
-passed; the final Pro evidence review is pending in this record.
+passed. Pro DEPLOYMENT passed on evidence ref
+`a61751c085cb377d2fac933324fae7de6f93679b`; no required changes or redeployment.
+All four review stages are complete. Pro independently read public code and CI
+logs; authenticated host/MCP execution remains Codex evidence, not a Pro run.
 
 ## Behavior
 

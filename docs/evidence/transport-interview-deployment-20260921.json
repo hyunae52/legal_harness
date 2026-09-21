@@ -518,7 +518,7 @@
     "old_pid": "81286",
     "fenced_monotonic": 186390.687461103
   },
-  "status": "public_deployment_verified_pending_final_pro_review",
+  "status": "public_deployment_verified_pro_pass",
   "scope": "Codex execution evidence; Pro did not operate the host.",
   "initial_packet": {
     "head": "85f81cb118b55e251cd5c585d8aa8ae5eec7ade9",
@@ -1275,6 +1275,9 @@
     "plan": "PASS",
     "code": "PASS",
     "deployment_preflight": "TRD-01 CLOSED; operator accepted subject to successful CI, bound packet and verify-stage",
-    "deployment_final": "pending"
+    "deployment_final": "PASS",
+    "deployment_evidence_commit": "a61751c085cb377d2fac933324fae7de6f93679b",
+    "conversation": "https://chatgpt.com/c/6ab023ff-1d48-83ee-b465-31894bedbd22",
+    "scope": "Pro read public source, evidence and original CI logs; host and authenticated MCP execution are Codex evidence. No required changes or redeployment. PR10 merge is separate."
   }
 }

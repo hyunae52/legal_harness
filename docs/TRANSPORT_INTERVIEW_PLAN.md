@@ -130,13 +130,13 @@ Additional executable/fault-test contracts (besides the original six RED cases):
 | Atomic answers | Two concurrent answers to the same state (including different values): one applies, other 409. Ignore successful response, recover exact value/deferral/revision via status. Invalid kind/date/over-capacity preserve complete prior state. |
 | Oversize response | Provider fixture returns an oversized result; new HTTP returns bounded explicit RPC error, no partial successful result; later request works. |
 
-Tests added at `443495c` already cover auth drain, same-ID actor isolation,
-shared SSE/HTTP actor leases, bounded ingress/expiry, capacity rejection,
-response deadline and invalid configuration. Remaining focused tests above are
-part of implementation acceptance, not claims of completed GREEN coverage.
+The focused contracts above are implemented and verified. See
+[implementation and deployment evidence](TRANSPORT_INTERVIEW_IMPLEMENTATION.md)
+for the RED/GREEN, mutation, package, Linux CI and actual source checks.
 
-Pro status: REVIEW PASS (2026-09-21); PLAN PASS / TP-01–03 CLOSED at a7e2442; IMPLEMENTATION in CODE review preparation;
-DEPLOYMENT not started. Accepted SH-01–04 and SI-01–04: shared service/work,
+Pro status: REVIEW PASS (2026-09-21); PLAN PASS / TP-01–03 CLOSED at a7e2442;
+CODE PASS at b1fe256; DEPLOYMENT PASS on evidence a61751c, TRD-01 CLOSED.
+PR10 remains unmerged. Accepted SH-01–04 and SI-01–04: shared service/work,
 bounded transport and short-request ingress, protocol version boundary,
 single question/deferred state, atomic stale-answer rejection, invalidation and
 separate source/interpretation gaps. No replay automatically resubmits an answer;
