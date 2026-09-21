@@ -17,6 +17,8 @@ import { type CorrectionService } from './corrections.js';
 import { correctionInputs, correctionInstructions } from './correctionMeta.js';
 import { ResearchService, researchPolicyVersion, type ResearchOptions } from './research.js';
 import { researchTools, researchRoutes, researchSchemas, researchInstructions, type ResearchTool } from './researchContracts.js';
+import { ResourceBudgets, positiveLimit, type ResourceOptions } from './resourceBudgets.js';
+import { serveStateless, type RequestGuard } from './statelessHttp.js';
 
 interface Options {
   law: Pick<KoreanLawClient, 'listTools' | 'callTool' | 'close' | 'releaseVersion'> & { taxlawRelease?: { version?: string; commit: string } | null };
@@ -30,9 +32,14 @@ interface Options {
   maxSessions?: number;
   sessionIdleMs?: number;
   researchOptions?: ResearchOptions;
+  resourceOptions?: ResourceOptions;
 }
 export function createApp(options: Options) {
   const env = options.env ?? process.env;
+  const budgets = new ResourceBudgets(env, options.resourceOptions);
+  const maxActive = positiveLimit(options.maxActive ?? env.TAXLAB_MAX_ACTIVE, 3);
+  const maxTransports = positiveLimit(options.maxSessions ?? env.TAXLAB_MAX_TRANSPORTS, 20);
+  const maxTransportsPerActor = positiveLimit(env.TAXLAB_MAX_TRANSPORTS_PER_ACTOR, 5);
   const auth = options.authenticate ?? createAuthenticator(env);
   const gates = options.gates ?? new GateEngine();
   const research = new ResearchService(options.law, options.sources ? input => options.sources!.check(input) : undefined, options.researchOptions);
@@ -41,8 +48,21 @@ export function createApp(options: Options) {
   app.use(express.json({ limit: '256kb' }));
   const sessions = new Map<string, { actor: Actor; server: Server; transport: SSEServerTransport; touched: number }>();
   let active = 0, authActive = 0, dispatchActive = 0, stopping = false;
+  let transportActive = 0;
+  const transportActors = new Map<string, number>();
+  const admitTransport = (actor: Actor) => {
+    const key = actor.kind + ':' + actor.id, current = transportActors.get(key) ?? 0;
+    if (transportActive >= maxTransports || current >= maxTransportsPerActor) throw new ServiceError(429, 'SESSION_CAPACITY');
+    transportActive++; transportActors.set(key, current + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true; transportActive--;
+      const remaining = (transportActors.get(key) ?? 1) - 1;
+      if (remaining) transportActors.set(key, remaining); else transportActors.delete(key);
+    };
+  };
   const version = options.law.releaseVersion ?? 'unidentified';
-  const maxActive = options.maxActive ?? 3;
   const work = async <T>(operation: () => Promise<T>): Promise<T> => {
     if (stopping) throw new ServiceError(503, 'SHUTTING_DOWN');
     if (active >= maxActive) throw new ServiceError(429, 'AT_CAPACITY');
@@ -72,12 +92,14 @@ export function createApp(options: Options) {
       if (stopping) throw new ServiceError(503, 'SHUTTING_DOWN');
       const origin = req.get('origin');
       if (origin && origin !== (env.PUBLIC_ORIGIN || 'https://law.taxlab.kr')) throw new ServiceError(403, 'ORIGIN_REJECTED');
+      budgets.consume(actor, 'request');
       dispatchActive++;
       try { await handler(req, res, actor); } finally { dispatchActive--; }
     })().catch(error => fail(res, error));
   };
   const validate = (input: unknown) => gates.validate(DraftSchema.parse(input), version);
-  const retrieve = async (name: string, args: Record<string, unknown>, dates: Record<string, string> = {}, correctionQuery = String(args.query ?? '')) => {
+  const retrieve = async (actor: Actor, name: string, args: Record<string, unknown>, dates: Record<string, string> = {}, correctionQuery = String(args.query ?? '')) => {
+    budgets.consume(actor, 'lookup');
     const result = await options.law.callTool(name, args);
     const evidence = { ...retrievalEnvelope(name, args, result.result, result.server?.version ?? version, dates),
       upstream_name: result.server?.name ?? 'unidentified' };
@@ -86,6 +108,15 @@ export function createApp(options: Options) {
   const submit = (actor: Actor, input: unknown) => {
     if (!options.failures) throw new ServiceError(503, 'MAINTENANCE_UNAVAILABLE');
     return options.failures.submit(actor, input);
+  };
+  const runResearch = (name: ResearchTool, actor: Actor, input: unknown) => {
+    if (name === 'research_legal_sources') budgets.consume(actor, 'lookup');
+    return research.run(name, actor, input);
+  };
+  const checkSources = (actor: Actor, input: unknown) => {
+    if (!options.sources) throw new ServiceError(503, 'SOURCE_VERIFIER_UNAVAILABLE');
+    budgets.consume(actor, 'lookup');
+    return options.sources.check(input);
   };
   app.get('/', (_req, res) => res.set(landingHeaders).type('html').send(landingHtml));
   const corrections = () => {
@@ -97,7 +128,7 @@ export function createApp(options: Options) {
   app.post('/api/corrections/status', protectedRoute(async (req, res, actor) => res.json(await work(() => corrections().status(actor, z.object({ proposal_id: z.string().uuid() }).strict().parse(req.body).proposal_id)))));
   for (const [name, route] of Object.entries(researchRoutes)) {
     app.post('/api/research/' + route, protectedRoute(async (req, res, actor) =>
-      res.json(await work(() => research.run(name as ResearchTool, actor, req.body)))));
+      res.json(await work(() => runResearch(name as ResearchTool, actor, req.body)))));
   }
   const publicHeaders = { 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-cache' };
   app.get('/setup.md', (_req, res) => res.set(publicHeaders).type('text/plain').send(setupMarkdown));
@@ -118,17 +149,18 @@ export function createApp(options: Options) {
       } else if (error) res.destroy();
     });
   });
-  app.get('/health', (_req, res) => res.json({ status: stopping ? 'stopping' : 'ok', version: '2.2.0', active_requests: active,
+  app.get('/health', (_req, res) => res.json({ status: stopping ? 'stopping' : 'ok', version: '2.3.0', active_requests: active,
     active_authentications: authActive, active_dispatches: dispatchActive, release_commit: env.TAXLAB_RELEASE_COMMIT ?? null,
     research_harness: { policy: researchPolicyVersion, tools: researchTools.length, storage: 'ephemeral' },
+    mcp_transport: { endpoint: '/mcp', mode: 'stateless', protocol: '2025-11-25', legacy_endpoint: '/sse',
+      active: transportActive, max_transports: maxTransports, max_per_actor: maxTransportsPerActor, max_work: maxActive, budgets: budgets.limits },
     mcp_release: options.law.releaseVersion ?? null, taxlaw_release: options.law.taxlawRelease ?? null, rules_version: gates.version, maintenance: options.failures ? 'intake_only' : 'unavailable', correction_pr: options.corrections ? 'available' : 'unavailable' }));
   app.get('/api/tools', protectedRoute(async (_req, res) => res.json({ status: 'success', data: await work(() => options.law.listTools()) })));
   app.post('/api/validate', protectedRoute(async (req, res) => res.json(await work(async () => validate(req.body)))));
-  app.post('/api/sources/check', protectedRoute(async (req,res) => {
-    if(!options.sources) throw new ServiceError(503,'SOURCE_VERIFIER_UNAVAILABLE');
-    res.json(await work(()=>options.sources!.check(req.body)));
+  app.post('/api/sources/check', protectedRoute(async (req,res,actor) => {
+    res.json(await work(()=>checkSources(actor, req.body)));
   }));
-  app.post('/api/analyze', protectedRoute(async (req, res) => {
+  app.post('/api/analyze', protectedRoute(async (req, res, actor) => {
     const data = AnalyzeSchema.parse(req.body);
     return work(async () => {
       const quality = data.draft_answer ? validate({ draft_answer: data.draft_answer, query: data.query, facts: data.facts,
@@ -137,7 +169,7 @@ export function createApp(options: Options) {
       const args = { ...data.arguments };
       if (['legal_research', 'search_law', 'search_decisions', 'search_tax_interpretations', 'search_tax_decisions',
         'search_taxlaw', 'tax_research', 'search_local_tax_interpretations', 'search_local_tax_decisions'].includes(data.tool)) args.query = data.query;
-      return res.json({ status: 'success', data: await retrieve(data.tool, args, data.event_dates, data.query), quality_gate: quality });
+      return res.json({ status: 'success', data: await retrieve(actor, data.tool, args, data.event_dates, data.query), quality_gate: quality });
     });
   }));
   app.post('/api/failures', protectedRoute(async (req, res, actor) => res.status(202).json(await work(() => submit(actor, req.body)))));
@@ -166,16 +198,17 @@ export function createApp(options: Options) {
       request_id: { type: 'string', format: 'uuid' }, case_id: { type: 'string' }, category: { type: 'string', enum: ['retrieval', 'validation', 'transport'] }, expected: { type: 'string', enum: ['needs_info', 'retrieval', 'reject_invalid_input'] }, actual: { type: 'string', enum: ['passed', 'empty', 'error', 'accepted_invalid_input'] }
     }, required: ['request_id', 'case_id', 'category', 'expected', 'actual'], additionalProperties: false } },
   ];
-  function mcpServer(actor: Actor) {
-    const server = new Server({ name: 'taxlab-legal-harness', version: '2.2.0' }, { capabilities: { tools: {} },
+  function mcpServer(actor: Actor, guard: RequestGuard = operation => operation()) {
+    const mcpWork = <T>(operation: () => Promise<T>) => guard(() => work(operation));
+    const server = new Server({ name: 'taxlab-legal-harness', version: '2.3.0' }, { capabilities: { tools: {} },
       instructions: researchInstructions + ' 법령 도구 결과는 조회 자료입니다. 사건 기준일·연혁·부칙·후속 해석을 확인하세요. 국세청 해석례는 search_tax_interpretations → get_tax_document로 사실관계·질의·회신을 읽고, 문서번호를 알면 lookup_tax_document를 쓰세요(도구가 제공되는 경우). 법제처 일련번호와 국세청 ntstDcmId를 혼용하지 마세요. 기존 validate_legal_draft는 별도의 제한된 초안 검사입니다. ' + correctionInstructions });
-    server.setRequestHandler(ListToolsRequestSchema, () => work(async () => ({ tools: [...(await options.law.listTools()).tools.filter(t => !custom.some(c => c.name === t.name)).map(t => ({...t, description: (t.description ?? '') + '\n반박·새 근거로 기존 답변을 정정하면 prepare_correction_pr로 제안 내용을 준비하고 사용자에게 PR 생성을 물어보세요.'})), ...custom] })));
+    server.setRequestHandler(ListToolsRequestSchema, () => mcpWork(async () => ({ tools: [...(await options.law.listTools()).tools.filter(t => !custom.some(c => c.name === t.name)).map(t => ({...t, description: (t.description ?? '') + '\n반박·새 근거로 기존 답변을 정정하면 prepare_correction_pr로 제안 내용을 준비하고 사용자에게 PR 생성을 물어보세요.'})), ...custom] })));
     server.setRequestHandler(CallToolRequestSchema, async request => {
       try {
-        return await work(async () => {
+        return await mcpWork(async () => {
           const { name, arguments: args = {} } = request.params;
           if (Object.hasOwn(researchSchemas, name)) {
-            const data = await research.run(name as ResearchTool, actor, args);
+            const data = await runResearch(name as ResearchTool, actor, args);
             return { content: [{ type: 'text' as const, text: JSON.stringify(data) }], structuredContent: data };
           }
           if (['prepare_correction_pr', 'create_correction_pr', 'get_correction_pr', 'find_legal_corrections'].includes(name)) {
@@ -187,8 +220,7 @@ export function createApp(options: Options) {
             return { content: [{ type: 'text' as const, text: JSON.stringify(data) }], structuredContent: data };
           }
           if(name==='check_legal_sources') {
-            if(!options.sources) throw new ServiceError(503,'SOURCE_VERIFIER_UNAVAILABLE');
-            const data=await options.sources.check(args);
+            const data=await checkSources(actor, args);
             return {content:[{type:'text' as const,text:JSON.stringify(data)}],structuredContent:data};
           }
           if (name === 'propose_tax_rule') throw new ServiceError(410, 'USE_SUBMIT_FAILURE');
@@ -196,7 +228,7 @@ export function createApp(options: Options) {
             const data = name === 'submit_failure' ? await submit(actor, args) : validate(args);
             return { content: [{ type: 'text' as const, text: JSON.stringify(data) }], structuredContent: data };
           }
-          const data = await retrieve(name, args);
+          const data = await retrieve(actor, name, args);
           return { ...data.result, content: [...data.result.content, ...(data.corrections.items.length ? [{ type: 'text' as const, text: JSON.stringify({ merged_correction_notes: data.corrections }) }] : [])],
             _meta: { ...data.result._meta, 'legal-harness/evidence': data.evidence, 'legal-harness/corrections': data.corrections } };
         });
@@ -208,13 +240,19 @@ export function createApp(options: Options) {
     return server;
   }
   app.get('/sse', protectedRoute(async (_req, res, actor) => {
-    if (sessions.size >= (options.maxSessions ?? 20) || [...sessions.values()].filter(s => s.actor.id === actor.id).length >= 5) throw new ServiceError(429, 'SESSION_CAPACITY');
+    const release = admitTransport(actor);
     const transport = new SSEServerTransport('/messages', res);
     const server = mcpServer(actor);
     sessions.set(transport.sessionId, { actor, server, transport, touched: Date.now() });
-    res.once('close', () => { sessions.delete(transport.sessionId); void server.close(); });
-    try { await server.connect(transport); } catch (error) { sessions.delete(transport.sessionId); await server.close(); throw error; }
+    res.once('close', () => { release(); sessions.delete(transport.sessionId); void server.close(); });
+    try { await server.connect(transport); } catch (error) { release(); sessions.delete(transport.sessionId); await server.close(); throw error; }
   }));
+  app.post('/mcp', protectedRoute(async (req, res, actor) => {
+    if (Array.isArray(req.body)) throw new ServiceError(400, 'BATCH_NOT_SUPPORTED');
+    const release = admitTransport(actor);
+    await serveStateless(req, res, guard => mcpServer(actor, guard), { ...budgets.limits, release });
+  }));
+  app.all('/mcp', protectedRoute(async (_req, res) => res.set('Allow', 'POST').status(405).json({ code: 'METHOD_NOT_ALLOWED' })));
   app.post('/messages', protectedRoute(async (req, res, actor) => {
     const id = z.string().uuid().parse(req.query.sessionId);
     const session = sessions.get(id);

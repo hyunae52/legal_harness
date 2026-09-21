@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+import Ajv2020 from 'ajv/dist/2020.js';
 import { createApp } from '../dist/app.js';
 import { ServiceError } from '../dist/contracts.js';
 
@@ -20,7 +21,7 @@ async function fixture(t, opts = {}) {
   let calls = 0;
   const law = { releaseVersion: 'fixture', close: async () => {},
     listTools: async () => ({ tools: [{ name: 'search_law', inputSchema: { type: 'object' } }] }),
-    callTool: async () => { calls++; await opts.operation?.(); return { result: { content: [{ type: 'text', text: '합성 본문' }] } }; } };
+    callTool: async () => { calls++; await opts.operation?.(); return opts.result ?? { result: { content: [{ type: 'text', text: '합성 본문' }] } }; } };
   const runtime = createApp({ law, authenticate: async req => {
     if (!['Bearer alice', 'Bearer bob'].includes(req.get('authorization'))) throw new ServiceError(401, 'UNAUTHORIZED');
     return { id: req.get('authorization').slice(7), kind: 'auth_user' };
@@ -180,6 +181,9 @@ test('TI-09: interview works through a real stateless MCP call and advertised Ac
   assert.equal(result.structuredContent.interview.next_question.target.id, 'amount');
   const schema = (await f.request('/openapi.json')).body;
   assert.equal(schema.paths['/api/research/answer'].post.operationId, 'answer_legal_question');
+  const validate = new Ajv2020({ strict: false, validateFormats: false }).compile(schema.paths['/api/research/answer'].post.requestBody.content['application/json'].schema);
+  const valid = answer(state, { kind: 'unknown', reason: '합성 미상' });
+  assert.equal(validate(valid), true); assert.equal(validate({ ...valid, answer: { kind: 'unknown', reason: '', value: 'forbidden' } }), false);
   assert.equal(f.calls(), 0);
 });
 
@@ -280,5 +284,91 @@ test('TI-05/08: no registered fact gaps does not promise source or legal complet
   assert.equal(state.interview.next_action, 'research_sources_and_review');
   assert.equal(state.interview.coverage, 'registered_requirements_only');
   assert.equal(state.legal_verification, 'unverified');
+  assert.equal(f.calls(), 0);
+});
+
+const withheldReview = state => ({ research_id: state.research_id, expected_revision: state.revision, expected_state_version: state.state_version,
+  draft_answer: '합성 사건의 결론은 추가 사실과 원문 확인까지 유보합니다.', correction_needed: false,
+  analysis: state.plan.issues.map(issue => ({ issue_id: issue.id, conclusion_mode: 'withheld', withholding_reason: '원문과 반론 검토 부족',
+    claims: [], counter_evidence: [], unknowns: ['합성 자료 부족'], next_queries: ['관련 원문과 반대 해석 검색'],
+    timing: { status: 'unresolved', date_roles: [], reason: '적용 시점 해석 미확인' }, exceptions: { status: 'unresolved', reason: '예외 미검토' } })) });
+
+test('TI-07/08: fact, date and unknown answers invalidate an existing current review; evidence gaps remain', async t => {
+  const f = await fixture(t);
+  for (const variant of ['fact', 'date', 'unknown']) {
+    const p = plan();
+    if (variant === 'date') p.issues.forEach(i => { i.required_fact_ids = []; });
+    let state = (await ask(f, 'start', { plan: p })).body;
+    const reviewed = await ask(f, 'review', withheldReview(state)); assert.equal(reviewed.status, 200);
+    state = (await ask(f, 'status', { research_id: state.research_id })).body;
+    assert.equal(state.last_review.current, true);
+    const value = variant === 'date' ? { kind: 'date', value: '2024-09-01', precision: 'day', source: '합성 사용자 진술' }
+      : variant === 'fact' ? { kind: 'fact', value: '합성 공동 부담', source: '합성 사용자 진술' }
+      : { kind: 'unknown', reason: '사용자가 확인 불가로 답함' };
+    const accepted = await ask(f, 'answer', answer(state, value)); assert.equal(accepted.status, 200);
+    const after = (await ask(f, 'status', { research_id: state.research_id })).body;
+    assert.equal(after.last_review, null); assert.equal(after.expires_at, state.expires_at);
+    assert.equal(after.remaining_attempts, state.remaining_attempts);
+    const review = (await ask(f, 'review', withheldReview(after))).body;
+    assert.equal(review.status, 'needs_info');
+    assert.ok(review.findings.some(i => i.code === 'COUNTER_RESEARCH_REQUIRED'));
+    assert.ok(review.findings.some(i => i.code === 'TIMING_REVIEW_REQUIRED'));
+    if (variant === 'date') assert.equal(review.interview.next_question, null, 'interpretation gap must not ask for known day again');
+  }
+});
+
+test('TI-06: concurrent different answers apply once; ignored response recovers through status without replay', async t => {
+  const f = await fixture(t), state = (await ask(f, 'start', { plan: plan() })).body;
+  const first = answer(state, { kind: 'fact', value: '합성 A 답변', source: 'A 진술' });
+  const second = answer(state, { kind: 'fact', value: '합성 B 답변', source: 'B 진술' });
+  const results = await Promise.all([ask(f, 'answer', first), ask(f, 'answer', second)]);
+  assert.deepEqual(results.map(r => r.status).sort(), [200, 409]);
+  // Do not use the successful response's state to recover; only the next GET-like status call.
+  const stored = (await ask(f, 'status', { research_id: state.research_id })).body;
+  assert.equal(stored.state_version, state.state_version + 1); assert.equal(stored.revision, 2);
+  assert.equal(stored.plan.facts[1].value, results[0].status === 200 ? first.answer.value : second.answer.value);
+  const snapshot = structuredClone(stored);
+  assert.equal((await ask(f, 'answer', first)).status, 409);
+  assert.deepEqual((await ask(f, 'status', { research_id: state.research_id })).body, snapshot);
+});
+
+test('TI-04: every source entry shares one lookup debit; rejected research creates no attempt', async t => {
+  let now = 0, checked = 0;
+  const f = await fixture(t, { resourceOptions: { now: () => now, limits: { lookupRpm: 1, actorLookupRpm: 1 } },
+    sources: { check: async () => { checked++; return {}; }, close: async () => {} } });
+  const state = (await ask(f, 'start', { plan: plan() })).body;
+  const read = { research_id: state.research_id, expected_revision: state.revision,
+    issue_ids: ['cost'], purpose: 'support', tool: 'search_law', arguments: { query: '합성' } };
+  assert.equal((await ask(f, 'retrieve', read)).status, 200); assert.equal(f.calls(), 1, 'one allowed call must not be double charged');
+  assert.equal((await ask(f, 'retrieve', read)).status, 429);
+  assert.equal((await f.request('/api/sources/check', {})).status, 429);
+  const denied = await f.request('/mcp', rpc('check_legal_sources'));
+  assert.match(denied.body.result.content[0].text, /LOOKUP_RATE_LIMIT/);
+  assert.equal((await ask(f, 'status', { research_id: state.research_id })).body.attempts.length, 1);
+  assert.equal(f.calls(), 1); assert.equal(checked, 0);
+  now = 60_001;
+  assert.equal((await f.request('/api/sources/check', {})).status, 200); assert.equal(checked, 1);
+  assert.equal((await f.request('/api/analyze', { query: '합성' })).status, 429);
+});
+
+test('TI-01: oversized wire response is an explicit bounded error and later request can use the slot', async t => {
+  const f = await fixture(t, { resourceOptions: { limits: { responseBytes: 1024 } }, result: { result: { content: [{ type: 'text', text: 'X'.repeat(2000) }] } } });
+  const large = await f.request('/mcp', rpc('search_law'));
+  assert.equal(large.status, 200); assert.equal(large.body.error.message, 'RESPONSE_TOO_LARGE');
+  assert.ok(JSON.stringify(large.body).length < 200); assert.equal(large.body.result, undefined);
+  const ping = await f.request('/mcp', { jsonrpc: '2.0', id: 2, method: 'ping' });
+  assert.deepEqual(ping.body.result, {});
+});
+
+test('TI-04A: init, notification and unknown method exhaust the same ingress budget as REST and SSE', async t => {
+  const f = await fixture(t, { resourceOptions: { now: () => 0, limits: { requestRpm: 3, actorRequestRpm: 3 } } });
+  const init = await f.request('/mcp', { jsonrpc: '2.0', id: 1, method: 'initialize', params: {
+    protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'fixture', version: '1' } } });
+  assert.equal(init.status, 200); assert.equal(init.body.result.protocolVersion, '2025-11-25');
+  assert.equal((await f.request('/mcp', { jsonrpc: '2.0', method: 'notifications/initialized' })).status, 202);
+  const unknown = await f.request('/mcp', { jsonrpc: '2.0', id: 2, method: 'unknown' });
+  assert.equal(unknown.body.error.code, -32601);
+  assert.equal((await f.request('/api/tools')).status, 429);
+  assert.equal((await f.request('/sse')).status, 429);
   assert.equal(f.calls(), 0);
 });

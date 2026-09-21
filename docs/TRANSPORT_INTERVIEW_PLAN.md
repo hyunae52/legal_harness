@@ -135,7 +135,7 @@ shared SSE/HTTP actor leases, bounded ingress/expiry, capacity rejection,
 response deadline and invalid configuration. Remaining focused tests above are
 part of implementation acceptance, not claims of completed GREEN coverage.
 
-Pro status: REVIEW PASS (2026-09-21); PLAN TP-01–03 revisions submitted; IMPLEMENTATION not started;
+Pro status: REVIEW PASS (2026-09-21); PLAN PASS / TP-01–03 CLOSED at a7e2442; IMPLEMENTATION in CODE review preparation;
 DEPLOYMENT not started. Accepted SH-01–04 and SI-01–04: shared service/work,
 bounded transport and short-request ingress, protocol version boundary,
 single question/deferred state, atomic stale-answer rejection, invalidation and

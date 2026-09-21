@@ -78,7 +78,7 @@ test('published GPT Actions schemas match authenticated read and draft-check rou
   assert.equal(schema.openapi,'3.1.0');assert.equal(schema.servers[0].url,'https://law.taxlab.kr');
   assert.deepEqual(schema.security,[{serviceKey:[]}]);assert.equal(schema.components.securitySchemes.serviceKey.scheme,'bearer');
   assert.deepEqual(Object.keys(schema.paths).sort(),['/api/analyze','/api/corrections/create','/api/corrections/prepare','/api/corrections/status',
-    '/api/research/retrieve','/api/research/review','/api/research/start','/api/research/status','/api/research/update','/api/tools','/api/validate']);
+    '/api/research/answer','/api/research/retrieve','/api/research/review','/api/research/start','/api/research/status','/api/research/update','/api/tools','/api/validate']);
   assert.equal(schema.paths['/api/corrections/create'].post['x-openai-isConsequential'],true);
   assert.equal(schema.paths['/api/corrections/prepare'].post['x-openai-isConsequential'],false);
   const ajv=new Ajv2020({strict:false});
