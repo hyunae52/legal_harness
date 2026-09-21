@@ -245,6 +245,31 @@ test('TI-07: storage rejection is atomic and repeated reads keep the same pendin
   }
 });
 
+test('TI-03: total response timeout releases transport but still accounts for unfinished provider work', async t => {
+  const gate = Promise.withResolvers(); let entered = false;
+  t.after(() => gate.resolve());
+  const f = await fixture(t, { maxActive: 1, resourceOptions: { limits: { responseMs: 70 } },
+    operation: async () => { entered = true; await gate.promise; } });
+  const request = f.request('/mcp', rpc('search_law')).catch(() => null);
+  await eventually(() => entered); await request;
+  const health = (await f.request('/health')).body;
+  assert.equal(health.mcp_transport.active, 0);
+  assert.equal(health.active_requests, 1);
+  assert.equal((await f.request('/api/analyze', { query: '합성' }, 'bob')).status, 429);
+  gate.resolve(); await eventually(async () => (await f.request('/health')).body.active_requests === 0);
+  assert.equal((await f.request('/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/list' })).status, 200);
+});
+
+test('TI-04: invalid operator settings cannot disable service protection', async () => {
+  for (const name of ['TAXLAB_MAX_ACTIVE', 'TAXLAB_MAX_TRANSPORTS', 'TAXLAB_MAX_TRANSPORTS_PER_ACTOR', 'TAXLAB_LOOKUP_RPM', 'TAXLAB_REQUEST_RPM']) {
+    for (const value of ['0', '-1', 'Infinity', '1.5', 'bad']) {
+      let runtime;
+      try { assert.throws(() => { runtime = createApp({ env: { [name]: value }, law: { close: async () => {} } }); }, /limit/i); }
+      finally { if (runtime) await runtime.close(); }
+    }
+  }
+});
+
 test('TI-05/08: no registered fact gaps does not promise source or legal completeness', async t => {
   const f = await fixture(t), p = plan();
   p.issues[0].required_fact_ids = ['known']; p.issues[1].required_fact_ids = [];

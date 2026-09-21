@@ -76,6 +76,14 @@ actual work, even after a request transport has closed. Lookup token charging
 counts attempted calls, including later validation failures; it is not an exact
 billable upstream-request counter.
 
+Each stateless response has a 60-second total lifetime (operator-test override
+permitted). The route races transport handling against response close, because
+SDK JSON response promises need not settle when the transport closes. Cleanup is
+idempotent; actual work remains charged independently until its own completion.
+Admission remains held through response finish/close, not merely handler return.
+Budget capacities equal their refill-per-minute values (initial full burst);
+these are token buckets, not an assertion of a strict sliding-window count.
+
 Pro status: REVIEW PASS (2026-09-21); PLAN pending; IMPLEMENTATION not started;
 DEPLOYMENT not started. Accepted SH-01–04 and SI-01–04: shared service/work,
 bounded transport and short-request ingress, protocol version boundary,
