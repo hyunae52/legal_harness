@@ -27,7 +27,7 @@
 - **Antigravity**: [전용 설정](https://law.taxlab.kr/downloads/antigravity-mcp.json)의 `serverUrl`·`headers`를 사용합니다. Gemini CLI의 `url`과 구분합니다. 앱의 Open MCP Config/View raw config에서 연 파일에 병합하고 Refresh합니다. 최신 공식 전역 경로는 `~/.gemini/config/mcp_config.json`, 프로젝트 경로는 `.agents/mcp_config.json`입니다.
 - **PC 설정이 가능한 AI 에이전트**: 페이지의 ‘AI 설정 요청문’을 복사하세요. [setup.md](https://law.taxlab.kr/setup.md)에 기존 설정 보존, 비밀값 입력, 앱별 연결 범위와 확인 절차가 있습니다.
 
-다른 MCP 앱에서는 `https://law.taxlab.kr/sse`와 `Authorization: Bearer YOUR_API_KEY` 또는 `x-api-key: YOUR_API_KEY`를 사용합니다. 접속키를 URL에 붙이지 마세요. 현재 Streamable HTTP와 OAuth 로그인은 제공하지 않으므로 모든 앱에 URL만 등록해서 연결되는 것은 아닙니다. 서버 운영 절차는 아래 별도 항목을 참고하세요.
+다른 MCP 앱에서는 Streamable HTTP 주소 `https://law.taxlab.kr/mcp` 또는 기존 SSE 주소 `https://law.taxlab.kr/sse`와 `Authorization: Bearer YOUR_API_KEY` / `x-api-key: YOUR_API_KEY` 헤더를 사용합니다. 접속키를 URL에 붙이지 마세요. OAuth 로그인은 제공하지 않으므로 앱에서 헤더 인증을 설정할 수 있어야 합니다. 서버 운영 절차는 아래 별도 항목을 참고하세요.
 
 `npm run build`는 `desktop/manifest.json`과 검수된 bridge 및 설치된 SDK 의존성으로 `dist/downloads/taxlab-law.mcpb`를 생성합니다. 접속키는 포함하지 않으며 Claude의 민감값 입력 설정으로 받습니다. 직접 배포한 확장은 새 버전 배포 시 다시 설치합니다. 자동 시험은 저장소 밖 빈 디렉터리에서 설치파일을 풀어 실제 stdio→SSE 호출까지 확인합니다. 실제 Claude UI 설치와 ChatGPT 계정별 GPT 편집기 동작은 별도 확인 범위입니다.
 

@@ -41,6 +41,8 @@ test('public connection guide is readable without credentials and does not open 
   assert.equal(res.status,200);assert.match(res.headers.get('content-type'),/text\/html.*utf-8/);
   const html=await res.text();assert.match(html,/<html lang="ko">/);assert.match(html,/https:\/\/law\.taxlab\.kr\/sse/);
   assert.match(html,/YOUR_API_KEY/);assert.match(html,/OAuth/);assert.doesNotMatch(html,/Node\.js/);
+  assert.match(html,/https:\/\/law\.taxlab\.kr\/mcp/);assert.match(html,/사건 조건이 빠졌으면/);
+  assert.doesNotMatch(html,/OAuth 로그인과 Streamable HTTP는 제공하지 않습니다/);
   for(const text of ['Claude 설치파일','ChatGPT 설정하기','Gemini 연결 안내','Antigravity 연결 안내','AI 설정 요청문 복사','PR로 제안할까요'])assert.ok(html.includes(text));
   for(const value of [secret,'guide-private-oc','untrusted-input','untrusted.invalid'])assert.ok(!html.includes(value));
   assert.match(res.headers.get('content-security-policy'),/default-src 'none'/);
