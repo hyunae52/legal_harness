@@ -87,6 +87,66 @@ def cron_quiet():
     assert not any(any(p in row for p in targets) for row in rows.splitlines())
 
 
+class SmokeStateUnknown(RuntimeError):
+    operation_state_unknown = True
+
+
+def smoke_group_exists(pid):
+    # The smoke and its stdio providers inherit a dedicated POSIX process group.
+    # Parent exit alone is insufficient: orphaned providers retain this group.
+    try:
+        os.killpg(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+
+
+def monitor_smoke(process, sample, deadline_seconds=120):
+    def completed():
+        return process.poll() is not None and not smoke_group_exists(process.pid)
+
+    try:
+        deadline = time.monotonic() + deadline_seconds
+        while process.poll() is None:
+            if time.monotonic() >= deadline:
+                raise SmokeStateUnknown('Smoke deadline; owned work may remain')
+            sample()
+            time.sleep(.3)
+        if not completed():
+            raise SmokeStateUnknown('Smoke descendants may remain')
+        assert process.returncode == 0
+    except Exception as error:
+        # Do not turn a monitoring error into permission to replace the service.
+        # Failed observation (including permissions) also leaves state unknown.
+        try:
+            finished = completed()
+        except Exception:
+            finished = False
+        if not finished:
+            raise SmokeStateUnknown('Owned smoke completion unconfirmed') from error
+        raise
+
+
+def failure_record(error):
+    result = {'status': 'failed', 'error_type': type(error).__name__}
+    if isinstance(error, subprocess.TimeoutExpired) or getattr(error, 'operation_state_unknown', False):
+        result['operation_state_unknown'] = True
+    return result
+
+
+def wait_for_idle():
+    deadline = time.monotonic() + 60
+    samples = []
+    while True:
+        current = health()
+        counters = {key: current[key] for key in ('active_requests', 'active_authentications', 'active_dispatches')}
+        samples.append(counters)
+        if all(value == 0 for value in counters.values()):
+            return samples
+        assert time.monotonic() < deadline
+        time.sleep(.2)
+
+
 def main(mode, packet):
     assert run(['id', '-un']) == 'cta'
     config = json.loads(pathlib.Path(packet).read_text())
@@ -98,7 +158,8 @@ def main(mode, packet):
     report_file = BASE / ('transport-' + head[:12] + '-deployment.json')
     assert new.parent == BASE and new != OLD
     report = json.loads(report_file.read_text()) if report_file.exists() else {'head': head, 'events': []}
-    event = {'phase': mode, 'started_at': datetime.datetime.now(datetime.timezone.utc).isoformat()}
+    event = {'phase': mode, 'started_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+             'operator_sha256': config['operator_sha256'], 'operator_commit': config.get('operator_commit')}
     tag = 'taxlab-transport-' + head[:12]
     rule = ['OUTPUT', '-o', 'lo', '-p', 'tcp', '-d', '127.0.0.1', '--dport', '3100', '-m', 'owner', '--uid-owner', '0', '-m', 'comment', '--comment', tag, '-j', 'REJECT', '--reject-with', 'tcp-reset']
 
@@ -143,19 +204,18 @@ await import('./scripts/research-smoke.mjs');"""
         usage = resource.getrusage(resource.RUSAGE_CHILDREN)
         cpu_before = usage.ru_utime + usage.ru_stime; started = time.monotonic()
         with log.open('w') as stream:
-            process = subprocess.Popen(['node', '--input-type=module', '-e', bootstrap, '--', '--live'], cwd=new, env=env, stdout=stream, stderr=stream)
-            deadline = time.monotonic() + 120
-            while process.poll() is None:
-                if time.monotonic() >= deadline:
-                    process.terminate(); process.wait(timeout=10); raise RuntimeError('Smoke deadline')
+            process = subprocess.Popen(['node', '--input-type=module', '-e', bootstrap, '--', '--live'], cwd=new, env=env, stdout=stream, stderr=stream, start_new_session=True)
+            event['smoke_process_group'] = process.pid
+            def sample():
+                nonlocal peak_rss, minimum_available
                 rows = [tuple(map(int, line.split())) for line in run(['ps', '-eo', 'pid=,ppid=,rss=']).splitlines()]
                 pids = {process.pid}
                 for _ in range(8):
                     pids |= {pid for pid, parent, rss in rows if parent in pids}
                 peak_rss = max(peak_rss, sum(rss * 1024 for pid, parent, rss in rows if pid in pids))
                 minimum_available = min(minimum_available, resources()['MemAvailable'])
-                time.sleep(.3)
-            assert process.returncode == 0
+            monitor_smoke(process, sample)
+            event['smoke_owned_processes_completed'] = True
         data = json.loads(output.read_text()); assert data['status'] == 'pass' and data['tool_count'] == 36 and data['interview_unknown_preserved'] is True
         usage = resource.getrusage(resource.RUSAGE_CHILDREN)
         return {'result': data, 'peak_smoke_tree_rss': peak_rss, 'minimum_mem_available': minimum_available,
@@ -201,11 +261,12 @@ await import('./scripts/research-smoke.mjs');"""
             event.update(before=before, staged_smoke=smoke(), after=resources(), artifact_sha256=config['artifact_sha256'])
             assert event['staged_smoke']['minimum_mem_available'] > 80 * 1024 * 1024
             write_override()
-        elif mode == 'restage':
+        elif mode in ('restage', 'verify-stage'):
             # A completed failed smoke may be retried on the same immutable
             # installation. Never reuse an unknown/running operation or a
             # modified installation, and never activate from a failed record.
-            assert report['events'][-1]['phase'] in ('stage', 'restage') and report['events'][-1]['status'] == 'failed'
+            assert report['events'][-1]['phase'] in ('stage', 'restage', 'verify-stage')
+            assert report['events'][-1]['status'] == ('failed' if mode == 'restage' else 'pass')
             assert not report['events'][-1].get('operation_state_unknown')
             assert not DROPIN.exists() and prop('WorkingDirectory') == str(OLD)
             previous(); candidate(); cron_quiet()
@@ -214,7 +275,7 @@ await import('./scripts/research-smoke.mjs');"""
             assert event['staged_smoke']['minimum_mem_available'] > 80 * 1024 * 1024
             write_override()
         elif mode == 'fence':
-            assert report['events'][-1]['phase'] in ('stage', 'restage') and report['events'][-1]['status'] == 'pass'
+            assert report['events'][-1]['phase'] in ('stage', 'restage', 'verify-stage') and report['events'][-1]['status'] == 'pass'
             candidate(); previous(); cron_quiet()
             assert not DROPIN.exists() and prop('WorkingDirectory') == str(OLD)
             assert prop('User', 'cloudflared.service') in ('', 'root')
@@ -235,15 +296,7 @@ await import('./scripts/research-smoke.mjs');"""
             iptables('-C'); assert prop('MainPID') == report['old_pid']
             # This reviewed baseline exposes all three application drain counters.
             # Ingress is fenced and prior ingress sockets have been closed.
-            deadline = time.monotonic() + 60
-            samples = []
-            while True:
-                current = health()
-                counters = {key: current[key] for key in ('active_requests', 'active_authentications', 'active_dispatches')}
-                samples.append(counters)
-                if all(value == 0 for value in counters.values()): break
-                assert time.monotonic() < deadline
-                time.sleep(.2)
+            samples = wait_for_idle()
             assert prop('MainPID') == report['old_pid'] and prop('WorkingDirectory') == str(OLD)
             cron_quiet(); iptables('-C')
             event.update(samples=samples, status_condition='fenced_work_auth_dispatch_zero')
@@ -264,6 +317,9 @@ await import('./scripts/research-smoke.mjs');"""
             event.update(health=current, smoke=smoke('http://127.0.0.1:3100'), resources=resources(), timeout_stop=prop('TimeoutStopUSec'))
         elif mode == 'rollback':
             iptables('-C')
+            # A completed smoke process does not imply that requests it started
+            # have finished on the application. Verify that boundary separately.
+            event['drain_samples'] = wait_for_idle()
             # Removing only our override restores the preserved 90-research release.
             if DROPIN.exists():
                 assert head in DROPIN.read_text()
@@ -285,9 +341,7 @@ await import('./scripts/research-smoke.mjs');"""
             raise ValueError('Unknown phase')
         event['status'] = 'pass'
     except Exception as error:
-        event.update(status='failed', error_type=type(error).__name__)
-        # systemctl/SSH timeout does not establish that the systemd job stopped.
-        if isinstance(error, subprocess.TimeoutExpired): event['operation_state_unknown'] = True
+        event.update(failure_record(error))
         raise
     finally:
         event['finished_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()

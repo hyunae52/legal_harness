@@ -1,0 +1,280 @@
+{
+  "application_commit": "85f81cb118b55e251cd5c585d8aa8ae5eec7ade9",
+  "code_review_commit": "b1fe256d514c68adea66a2b98a522350f2576dd0",
+  "packet": {
+    "head": "85f81cb118b55e251cd5c585d8aa8ae5eec7ade9",
+    "source_tree": "5c1f7e2a6b0469cc34bd92d74a7cdfb74455840d",
+    "artifact_sha256": "668e1552c4ed5cf31195aaa26e598a24f4179c6e3091dd9e3f6e6c651776863d",
+    "files": {
+      "LICENSE": "612c9bd87c7fa02969a6558f3f84b7ea9b10c3e2fa00edcb881c2c44a7a37640",
+      "dist/app.js": "3eeec8c39fc7f61028deb944222dda02cfdf8fb93fc8ec1552be4dcc630f695e",
+      "dist/auth.js": "f515f8054c9f738a720bb7b650865e6b4ac7ab63929dda9f53a7f53276410699",
+      "dist/contracts.js": "7c9514c33b52b4b45d80aa30a49454db6a8f9dde57f5d9c5b2c774236ca3354f",
+      "dist/correctionGitHub.js": "1bbcafc5461af9612d228a5b497327c3253ef57936112f82d8f6565938bc0e77",
+      "dist/correctionMeta.js": "d532032cdd95f02458b649c08327141aff4c349483d29d2f6851170e6f1c2dc3",
+      "dist/corrections.js": "abf06e004c44b049b9af61b398a1a74c369295c725fea73859468f506f960d36",
+      "dist/dates.js": "181e2e45ce8bb87af8626a0368ab153529f6380a103425a4290080d46051f9be",
+      "dist/errorDiagnostics.js": "5a8d1a0244e2e8b6a6e533129148af799e6e7a98567adfbae0b3b04c89bb65b5",
+      "dist/evidence.js": "e517755c8fc25df7ee4ca0b3985b1e256758b419b8db8b49f6393d114010c838",
+      "dist/evolution.js": "bb74e0698182a25bc59ae852109233bac3bf0e46402dcb9f80e1d2f35a4fb77f",
+      "dist/failures.js": "d5496dd7a89481aba88b4fc764a5b5fa55953817b9d5378f0f76ff79d1205839",
+      "dist/gates.js": "615b6cc71dcbfc7454001641d0606c342a48ad6dfbbb492fc8dbcac5d9649d4b",
+      "dist/gitOps.js": "3c3d796d418301c13dd00b253a8052c5599d76dde6a515a4e60b0e7fd2d2116c",
+      "dist/index.js": "1e7163ade6a27e78603a91eb2034c303e938366fff23958e941b7ea8a70aeb0f",
+      "dist/koreanLawClient.js": "1f769a20ea319fbce24bf4dd771c178b166cda30b4b264034376eeac62897609",
+      "dist/landing.js": "b788d009e999b7bb5fac65a9dde0a7e00ee2f21e9145c44c39e8851431e042d6",
+      "dist/releaseGate.js": "750956637065183d378fa1252ee376b1240cc75c02489982de3007d25f989cbf",
+      "dist/research.js": "cbc4520cfba721117928fd244f9dcad70bd97578236d64b2d4520ee555142bee",
+      "dist/researchContracts.js": "9df0e843747c7430dcd4e361bbe2ca823c2e5c1f4f403a15de7dae91c47c7a65",
+      "dist/researchEvidence.js": "a7f00bf5619653286f40cd90500d1da048748ceb14f9211775191d7fdd5098a0",
+      "dist/researchInterview.js": "123a1a5b2109841c6fa153b3cccd73d921cb9acb4bbdea15724f4ad6562d10f4",
+      "dist/researchReview.js": "77d9cc2391adfd846409ac7c72fed62a3d5c03016de80ff9e530d34c2f743609",
+      "dist/resourceBudgets.js": "104e02f8153e2a5b0e4d192cbe0b33de4d89ff0c4d41f05eadd0c1684f03c04f",
+      "dist/setup.js": "5af623db97f5530ee837c18bef56b1590731c4178dd8beb4fac1834b0ad9f069",
+      "dist/sourceVerifier.js": "30d2ff0edac3c848abfaf3ca739405f66f4aea8c3f5987d1e72ed1a36b4b3103",
+      "dist/statelessHttp.js": "f75a7c2cd0599b4907777e2774dfc287fd2ff9c49824c37855aa52ddfed92ed9",
+      "dist/supremeJudge.js": "794a7c958f39439c6297993447b36f43030a91ac4b09297e95beb10f52750034",
+      "dist/taxLawClient.js": "a0a12e3107ff31383b324e87ee5d2eb967fee64239245c60ec804dd2fa8cbbd1",
+      "upstreams/korean-taxlaw-mcp.json": "9c18149d5330f070f9bff110380d23cdd8ed3305a2786003e6c219d4efa109b7",
+      "upstreams/korean-taxlaw-mcp.tools.json": "481b6f6af624bdffc56a1e9f4f8cd7002c26c9ba4989a9b62f57511cb3571d72",
+      "rules/manifest.json": "12df64a53752d7b0bf2d823cd6b9cd7c41b6e6be9bea15842bf8a48aeca2c973",
+      "npm-shrinkwrap.json": "3ccdba24b8fb34e6a9ff31d52d47563a3dca3140b4dea3e76b023030de25f2eb",
+      "package.json": "70246d4bc62a767ae3f85449ac7273772be89d3a4beeaf6b643e179fcc394901",
+      "rules/QG-COST-01.json": "ea9145c0eb642a220b0fcbeea06eac484ec78607abefd7162ac5c0fc9070d57e",
+      "rules/QG-COST-02.json": "d74561a76a363a3e837a4a8a18db699808d99690169b182394ba18a9b6200b45",
+      "rules/QG-COST-03.json": "650837f6c288922b8018a5795a6017cecfe5de1d79b88090786bc6c423256f36",
+      "rules/QG-EXCEPTION-02.json": "32974dcb16aaf07757b4268297ef2d0575cec2c1792da2d9b99d4f9894114a03",
+      "rules/QG-FACT-02.json": "fc639f99ba0fb3118462de1e3266fa25fb8d20694ed6a1492ff915c693dfb701",
+      "rules/QG-MATH-01.json": "c00ca33cdaf9bdcd96ecd47ef48419765da48c64b27ebd221473681f0d0883da",
+      "rules/QG-PRECEDENT-03.json": "b61b5818da71f9a0c279c2bd802a01784e7bed11b2984745edd79d80f22d78e1",
+      "rules/QG-TIME-02.json": "cfba01fb9bb0fa1cae119115b808c39c391a01e962b2280377292ac4cdb78717",
+      "rules/QG-TIME-03.json": "95873177c173f28e0fa64f3a0d53f07645b2515d3bfba60d7f3a5d0f4db52345",
+      "rules/QG-VALUATION-01.json": "d20db8853dbf23b1cc336ec1242f0d3802bda70603c41b85ed46b1ef60c53d97",
+      "dist/downloads/taxlab-law.mcpb.json": "7aec492dabbc896728938a500f62c683bfd43b0654026df7eb89653ac7f06626",
+      "upstreams/korean-taxlaw-mcp.LICENSE": "5c8f83e685f134252c0ec3815301234f369894f9242f8c059da83d74d77c1953",
+      "dist/downloads/taxlab-law.mcpb": "1cb172c33223b11b5810068ebe4536bfca36ab636ca72c4d649a120a4b1ad53f",
+      "README.md": "5c1bd0bc29f9a3e777e62b5e083ec89cb0aea47b427fcfa5630bc75e3788de35",
+      "scripts/hermes-mcp-bridge.mjs": "75ce4e51f7465006946ed51617389051cfab45159f212f8aea47acea40581d20",
+      "scripts/install-taxlaw-mcp.py": "5efdb251d719be8abb00c4b96a65d0f275e5a2c793963f5404ce996dca900e1c"
+    },
+    "ci": {
+      "id": 35549450300,
+      "head_sha": "85f81cb118b55e251cd5c585d8aa8ae5eec7ade9",
+      "conclusion": "success",
+      "html_url": "https://github.com/hyunae52/legal_harness/actions/runs/35549450300"
+    },
+    "ci_package_sha256": "668e1552c4ed5cf31195aaa26e598a24f4179c6e3091dd9e3f6e6c651776863d",
+    "operator_sha256": "83a652b438d5b90049a96ee1bbee969b705aed31d14de1b57b6f1e9bca414670",
+    "operator_files": {
+      "scripts/research-smoke.mjs": "57d91e68442de04ee04e72b7c4673a804b4e3863dbec8f4dc9aeef57ae628312",
+      "deploy/installed-dependencies.mjs": "d8c7971b07e56d451b7c2fa4076de3b7c737fd309a7975dfb0201477b65b21b2"
+    },
+    "operator_entry_sha256": "ce0063c07d723361109588487bdb2a080088844e30546305fa1d0d01b9d3987e",
+    "tunnel_config_sha256": "e0a93d9e228f3aecef7772f785fb34cbcdd30f9fa8b7e32b715ca39509c00e8c",
+    "protected_config_hashes": {
+      "/home/cta/legal-harness-candidate-ddddafa/.runtime/candidate.env": "6fe76d617cf0fae9dc02fbd316bfa45bd3fc6840575223575d6140bb237a549b",
+      "/home/cta/.config/legal-harness/corrections.env": "97058a3ebc79fcee37b4ea06f9ca14ffe3171ab0d1e4da06d95653f4edcc25d7",
+      "/home/cta/legal-harness-candidate-ddddafa/.runtime/upstream.json": "11f55fda27b064504b6d044c8abc33db523ecade9cef60c54696958543a45d93",
+      "/etc/systemd/system/legal-harness-a.service.d/90-research.conf": "586d6f5e1af2009cf73611b1de1d1d5fe7fba61c0fbc55f0cd77a3eabc59c54f"
+    }
+  },
+  "ci": {
+    "ci": {
+      "id": 35549450300,
+      "head_sha": "85f81cb118b55e251cd5c585d8aa8ae5eec7ade9",
+      "conclusion": "success",
+      "html_url": "https://github.com/hyunae52/legal_harness/actions/runs/35549450300"
+    },
+    "jobs": [
+      {
+        "id": 106181357716,
+        "conclusion": "success",
+        "test_summary": [
+          "# tests 151",
+          "# pass 151",
+          "# fail 0",
+          "# skipped 0"
+        ],
+        "packages": [
+          {
+            "status": "pass",
+            "artifact": "/home/runner/work/legal_harness/legal_harness/.runtime/package-review-tkLnnG/k-tax-agent-backend-2.3.0.tgz",
+            "sha256": "668e1552c4ed5cf31195aaa26e598a24f4179c6e3091dd9e3f6e6c651776863d",
+            "checks": 8,
+            "versions": {
+              "@modelcontextprotocol/sdk": "1.30.0",
+              "@octokit/rest": "21.1.1",
+              "@supabase/supabase-js": "2.116.0",
+              "dotenv": "16.6.1",
+              "express": "4.22.2",
+              "js-yaml": "5.4.2",
+              "korean-law-mcp": "4.13.0",
+              "zod": "3.25.76",
+              "zod-to-json-schema": "3.25.2"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "mutations": [
+    {
+      "mutation": "closed_request_guard",
+      "killed": true,
+      "test": "tests/transport-lifetime.test.mjs",
+      "pattern": "lifecycle fault injection"
+    },
+    {
+      "mutation": "answer_review_invalidation",
+      "killed": true,
+      "test": "tests/transport-interview.test.mjs",
+      "pattern": "invalidate an existing current review"
+    },
+    {
+      "mutation": "bounded_actor_map",
+      "killed": true,
+      "test": "tests/transport-lifetime.test.mjs",
+      "pattern": "default actor map"
+    }
+  ],
+  "deployment": {
+    "head": "85f81cb118b55e251cd5c585d8aa8ae5eec7ade9",
+    "events": [
+      {
+        "phase": "stage",
+        "started_at": "2026-09-21T01:03:43.479820+00:00",
+        "before": {
+          "MemAvailable": 448860160,
+          "SwapFree": 1915736064,
+          "disk_free": 1980768256,
+          "service_memory": 91443200
+        },
+        "staged_smoke": {
+          "result": {
+            "status": "pass",
+            "transport": "REST, MCP SSE and stateless Streamable HTTP",
+            "tool_count": 36,
+            "http_session_id_absent": true,
+            "interview_unknown_preserved": true,
+            "interview_unresolved": 1,
+            "previous_review_invalidated": true,
+            "provider": "korean-taxlaw",
+            "provider_version": "2.0.0",
+            "provider_commit": "d77c94e5b64892fe85928508544366e418397c71",
+            "document_number": "서면-2020-부동산-4503",
+            "body_scope": "body_returned",
+            "passages": 4,
+            "response_hash": "5c94093c787ba6a917f6c0c54b44d661a1b8c71d4a3b024525dbfdcbad42e1f6",
+            "quote_match": true,
+            "missing_fact_result": "needs_info",
+            "forged_quote_result": "blocked",
+            "legal_verification": "unverified",
+            "github_writes": 0,
+            "endpoint": "loopback",
+            "observed_at": "2026-09-21T01:04:04.294Z"
+          },
+          "peak_smoke_tree_rss": 294588416,
+          "minimum_mem_available": 275980288,
+          "wall_seconds": 10.148,
+          "child_cpu_seconds": 6.96
+        },
+        "after": {
+          "MemAvailable": 428310528,
+          "SwapFree": 1914949632,
+          "disk_free": 1845321728,
+          "service_memory": 82714624
+        },
+        "artifact_sha256": "668e1552c4ed5cf31195aaa26e598a24f4179c6e3091dd9e3f6e6c651776863d",
+        "status": "pass",
+        "finished_at": "2026-09-21T01:04:05.129003+00:00"
+      }
+    ],
+    "installed_dependencies": {
+      "algorithm": "sha256-path-type-content-v1",
+      "sha256": "bd4653a5c3b1b77dc5624dd5cfc3bbb2d1bab44b61b650b5ae8a6feb2e95746c",
+      "files": 6679,
+      "links": 9,
+      "bytes": 107564579
+    },
+    "python_selection": {
+      "version": "2.0.0",
+      "commit": "d77c94e5b64892fe85928508544366e418397c71",
+      "python": "/home/cta/legal-harness-research-75314179eb1d/.runtime/taxlaw/d77c94e5b64892fe85928508544366e418397c71/venv/bin/python",
+      "cwd": "/home/cta/legal-harness-research-75314179eb1d/.runtime/taxlaw/d77c94e5b64892fe85928508544366e418397c71/source"
+    },
+    "python_dependencies_sha256": "246f788d6ca347801bd3286d5fcb4deb9d0310ef5956466a3b42b9cdbddec538",
+    "python_dependencies": [
+      "aiofile==3.12.3",
+      "annotated-types==0.8.0",
+      "anyio==4.15.1",
+      "attrs==26.1.0",
+      "Authlib==1.8.0",
+      "beartype==0.22.9",
+      "cachetools==7.2.0",
+      "caio==0.12.4",
+      "certifi==2026.7.22",
+      "cffi==2.1.1",
+      "click==8.5.0",
+      "cryptography==50.0.1",
+      "cyclopts==4.25.3",
+      "dnspython==2.8.0",
+      "docstring_parser==0.18.0",
+      "email-validator==2.3.0",
+      "exceptiongroup==1.3.1",
+      "fastmcp==3.4.7",
+      "fastmcp-slim==3.4.7",
+      "griffelib==2.3.0",
+      "h11==0.16.0",
+      "httpcore==1.0.9",
+      "httpx==0.28.1",
+      "httpx-sse==0.4.3",
+      "idna==3.20",
+      "jaraco.classes==3.4.0",
+      "jaraco.context==6.1.2",
+      "jaraco.functools==4.6.0",
+      "jeepney==0.9.0",
+      "joserfc==1.7.5",
+      "jsonref==1.1.0",
+      "jsonschema==4.26.0",
+      "jsonschema-path==0.5.0",
+      "jsonschema-specifications==2025.9.1",
+      "keyring==25.7.0",
+      "korean-taxlaw-mcp @ file:///home/cta/legal-harness-research-75314179eb1d/.runtime/taxlaw/d77c94e5b64892fe85928508544366e418397c71/source",
+      "markdown-it-py==4.2.0",
+      "mcp==1.30.0",
+      "mdurl==0.1.2",
+      "more-itertools==11.1.0",
+      "openapi-pydantic==0.5.1",
+      "opentelemetry-api==1.44.0",
+      "packaging==26.3",
+      "pathable==0.6.0",
+      "platformdirs==4.11.11",
+      "py-key-value-aio==0.4.6",
+      "pycparser==3.0",
+      "pydantic==2.13.5",
+      "pydantic-settings==2.15.0",
+      "pydantic_core==2.46.5",
+      "Pygments==2.21.0",
+      "PyJWT==2.14.0",
+      "pyperclip==1.11.0",
+      "python-dotenv==1.2.3",
+      "python-multipart==0.0.32",
+      "PyYAML==6.0.3",
+      "referencing==0.37.0",
+      "rich==15.0.0",
+      "rich-rst==2.1.0",
+      "rpds-py==2026.6.3",
+      "SecretStorage==3.5.0",
+      "sse-starlette==3.4.11",
+      "starlette==1.6.0",
+      "typing-inspection==0.4.4",
+      "typing_extensions==4.16.0",
+      "uncalled-for==0.4.0",
+      "uvicorn==0.53.0",
+      "watchfiles==1.2.0",
+      "websockets==17.1"
+    ]
+  },
+  "status": "staged_only_not_public",
+  "scope": "Codex execution evidence; Pro did not operate the host."
+}

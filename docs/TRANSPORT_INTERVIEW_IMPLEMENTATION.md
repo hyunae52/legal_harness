@@ -2,7 +2,8 @@
 
 Scope is the [approved contract](TRANSPORT_INTERVIEW_PLAN.md). Pro REVIEW passed;
 PLAN TP-01–03 closed at `a7e24424e7d84b0c363a6444a72c69260f3941b6`.
-Code/deployment review is separate and has not yet passed in this record.
+Pro CODE passed at `b1fe256d514c68adea66a2b98a522350f2576dd0`.
+Public deployment remains pending the operator preflight and runtime review.
 
 ## Behavior
 
@@ -53,7 +54,36 @@ Code/deployment review is separate and has not yet passed in this record.
 - The existing exact Actions path-list assertion was expanded by the approved
   `/api/research/answer` route; no existing test was disabled or weakened.
 
-Package check, Linux CI, Pro CODE review and real deployment evidence will be
-recorded when completed. These tests are synthetic and publish no GitHub PR or
+Linux CI run 35549450300 at application commit
+`85f81cb118b55e251cd5c585d8aa8ae5eec7ade9` passed 151 tests and 8 clean-install
+package checks. The 50-file local tarball and Linux CI tarball share SHA-256
+`668e1552c4ed5cf31195aaa26e598a24f4179c6e3091dd9e3f6e6c651776863d`.
+The later operator-only fix does not change this application artifact.
+
+Pro deployment preflight identified TRD-01: a failed resource/ps observation
+could leave a smoke process alive while permitting ordinary rollback. Smoke now
+owns a POSIX process group; both the parent and its inherited provider group must
+be gone before reporting ordinary completion. Observation errors, live children,
+and deadlines report `operation_state_unknown`, which blocks rollback, previous
+verification and resume. No kill of an unverified process is attempted. A known
+smoke failure still requires application work/auth/dispatch to drain before the
+rollback changes systemd configuration. Failure to prove that drain leaves the
+ingress fence in place.
+
+The TRD-01 test drives the actual Python classifier through the remote adapter
+and rollout gate: monitoring exception, orphan provider, group observation
+failure, and post-completion assertion failure. Linux additionally uses real
+process groups and a test-only child subreaper to prove orphan behavior and clean
+up every fixture. `verify-stage` repeats the read-only source/interview smoke on
+the immutable staged install under the corrected operator. Each new phase binds
+its operator hash/commit; the original stage record is retained without relabeling.
+
+Unit/package tests are synthetic and publish no GitHub PR or
 private case facts. A successful interview is not an assurance that the client
 identified every applicable legal requirement or followed every instruction.
+
+Initial GCE stage smoke did read the public NTS document
+`서면-2020-부동산-4503`: 4 body passages, quote match, missing-fact and forged-quote
+gates, 36 tools over SSE/HTTP, unknown-answer preservation and old-review
+invalidation. This is separate from public deployment acceptance; evidence is in
+`docs/evidence/transport-interview-deployment-20260921.json`.
