@@ -1,4 +1,5 @@
 import { ServiceError, type Actor } from './contracts.js';
+import { actorBudgetKey } from './publicAccess.js';
 
 const defaults = { requestRpm: 600, actorRequestRpm: 180, lookupRpm: 120, actorLookupRpm: 60,
   maxActors: 1024, responseMs: 60_000, responseBytes: 4_194_304 };
@@ -11,7 +12,7 @@ export function positiveLimit(value: unknown, fallback: number): number {
 type Bucket = { tokens: number; updated: number };
 type Pair = { request: Bucket; lookup: Bucket; touched: number };
 
-/** Per-process token buckets, keyed only by authenticated identity. No queues. */
+/** Per-process token buckets for verified principals or anonymous network peers. No queues. */
 export class ResourceBudgets {
   readonly limits: typeof defaults;
   private readonly now: () => number;
@@ -34,7 +35,7 @@ export class ResourceBudgets {
     return { request: { tokens: request, updated: now }, lookup: { tokens: lookup, updated: now }, touched: now };
   }
   consume(actor: Actor, kind: 'request' | 'lookup') {
-    const now = this.now(), key = actor.kind + ':' + actor.id;
+    const now = this.now(), key = actorBudgetKey(actor);
     for (const [id, value] of this.actors) if (now - value.touched >= 60_000) this.actors.delete(id);
     let actorPair = this.actors.get(key);
     if (!actorPair) {

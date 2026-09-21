@@ -6,6 +6,7 @@ import { researchSchemas, type ResearchTool, type Plan } from './researchContrac
 import { adaptResearchEvidence, boundEvidence, researchSourceTools, type ResearchEvidence, type ResearchAttempt } from './researchEvidence.js';
 import { inspectResearch } from './researchReview.js';
 import { interviewState, applyInterviewAnswer, type Deferral } from './researchInterview.js';
+import { actorBudgetKey } from './publicAccess.js';
 
 export const researchPolicyVersion = 'research-v2-interview-20260921';
 const defaults = { ttlMs: 1_800_000, maxSessions: 50, maxSessionsPerActor: 5, maxReceipts: 32, maxAttempts: 40,
@@ -13,6 +14,7 @@ const defaults = { ttlMs: 1_800_000, maxSessions: 50, maxSessionsPerActor: 5, ma
 export interface ResearchOptions { now?: () => number; limits?: Partial<typeof defaults>; policyVersion?: string }
 interface LastReview { state_version: number; binding_hash: string; snapshot_hash: string; draft_hash: string }
 interface Session {
+  admission_actor: string;
   actor: string; research_id: string; revision: number; state_version: number; expires_at: string;
   plan: Plan; evidence: ResearchEvidence[]; attempts: ResearchAttempt[]; last_review: LastReview | null;
   reservation: number; busy: string | null;
@@ -54,7 +56,7 @@ export class ResearchService {
     this.sessions.set(session.research_id, session);
   }
   private view(session: Session) {
-    const { actor: _actor, reservation: _reservation, busy: _busy, deferrals: _deferrals, ...publicState } = session;
+    const { actor: _actor, admission_actor: _admission, reservation: _reservation, busy: _busy, deferrals: _deferrals, ...publicState } = session;
     return structuredClone({ ...publicState, status: 'research_session', policy_version: this.policy,
       last_review: session.last_review ? { ...session.last_review, current: session.last_review.state_version === session.state_version && !session.busy } : null,
       remaining_attempts: this.limits.maxAttempts - session.attempts.length, pending: Boolean(session.busy),
@@ -66,8 +68,8 @@ export class ResearchService {
     if (this.stopped) throw new ServiceError(503, 'SHUTTING_DOWN');
     if (name === 'start_legal_research') {
       const input = researchSchemas[name].parse(raw);
-      if (this.sessions.size >= this.limits.maxSessions || [...this.sessions.values()].filter(s => s.actor === owner(actor)).length >= this.limits.maxSessionsPerActor) throw new ServiceError(429, 'RESEARCH_CAPACITY');
-      const session: Session = { actor: owner(actor), research_id: randomUUID(), revision: 1, state_version: 1,
+      if (this.sessions.size >= this.limits.maxSessions || [...this.sessions.values()].filter(s => s.admission_actor === actorBudgetKey(actor)).length >= this.limits.maxSessionsPerActor) throw new ServiceError(429, 'RESEARCH_CAPACITY');
+      const session: Session = { actor: owner(actor), admission_actor: actorBudgetKey(actor), research_id: randomUUID(), revision: 1, state_version: 1,
         expires_at: new Date(this.now() + this.limits.ttlMs).toISOString(), plan: input.plan, evidence: [], attempts: [],
         last_review: null, reservation: 0, busy: null, deferrals: [] };
       this.save(session); return this.view(session);

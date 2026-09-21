@@ -3,8 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { Actor } from './contracts.js';
 import { ServiceError } from './contracts.js';
+import { PublicAccess } from './publicAccess.js';
 
-export function createAuthenticator(env: NodeJS.ProcessEnv, transport: typeof fetch = fetch) {
+export function createAuthenticator(env: NodeJS.ProcessEnv, transport: typeof fetch = fetch, publicAccess = new PublicAccess(env)) {
   const client = env.SUPABASE_URL && (env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY)
     ? createClient(env.SUPABASE_URL, (env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY)!, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
@@ -13,6 +14,7 @@ export function createAuthenticator(env: NodeJS.ProcessEnv, transport: typeof fe
   const hash = (s: string) => createHash('sha256').update(s).digest();
   return async (req: Request): Promise<Actor> => {
     if (req.query.apiKey !== undefined) throw new ServiceError(401, 'QUERY_AUTH_REMOVED');
+    if (req.get('authorization') === undefined && req.get('x-api-key') === undefined) return publicAccess.anonymous(req);
     const bearer = /^Bearer (\S+)$/i.exec(req.get('authorization') || '')?.[1];
     const apiKey = req.get('x-api-key');
     const supplied = apiKey || bearer;

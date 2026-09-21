@@ -50,13 +50,13 @@ async function collect(packageRoot) {
 }
 await collect(await resolvePackage('@modelcontextprotocol/sdk', root));
 const manifest = JSON.parse(await readFile(join(root, 'desktop/manifest.json'), 'utf8'));
-assert.equal(manifest.user_config.api_key.sensitive, true);
-assert.equal(manifest.server.mcp_config.env.TAXLAB_API_KEY, '${user_config.api_key}');
+assert.equal(manifest.user_config, undefined);
+assert.deepEqual(manifest.server.mcp_config.env, { TAXLAB_SERVER_URL: 'https://law.taxlab.kr' });
 add('manifest.json', JSON.stringify(manifest, null, 2) + '\n');
 add('server/bridge.mjs', (await readFile(join(root, 'scripts/hermes-mcp-bridge.mjs'), 'utf8')).replaceAll('\r\n', '\n'));
 add('package.json', JSON.stringify({ name: 'taxlab-law-desktop', version: manifest.version, private: true, type: 'module' }) + '\n');
 add('LICENSE', (await readFile(join(root, 'LICENSE'), 'utf8')).replaceAll('\r\n', '\n'));
-add('README.md', '# TaxLab 법령\n\nClaude PC 앱의 설정 → 확장 → 고급 설정 → Install Extension에서 이 .mcpb 파일을 선택하고 운영자에게 받은 접속키를 입력하세요.\n\n연결·데이터 전송 안내: https://law.taxlab.kr/\n');
+add('README.md', '# TaxLab 법령\n\nClaude PC 앱의 설정 → 확장 → 고급 설정 → Install Extension에서 이 .mcpb 파일을 선택하세요. 접속키나 별도 로그인이 필요 없습니다.\n\n연결·데이터 전송 안내: https://law.taxlab.kr/\n');
 const bundle = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 }, platform: 'UNIX' });
 const out = join(root, 'dist/downloads');
 await mkdir(out, { recursive: true });

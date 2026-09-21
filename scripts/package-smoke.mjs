@@ -40,9 +40,10 @@ for(const name of Object.keys(shrinkwrap.packages[''].dependencies)){
   assert.equal(metadata?.version,shrinkwrap.packages['node_modules/'+name].version,`Installed version drift: ${name}`);versions[name]=metadata.version;
 }
 const {createApp}=await import(pathToFileURL(join(installed,'dist/app.js')).href);
-const runtime=createApp({env:{TAXLAB_API_KEY:'package-fixture'},law:{releaseVersion:'fixture',listTools:async()=>({tools:[{name:'search_law',inputSchema:{type:'object'}}]}),callTool:async()=>({result:{content:[{type:'text',text:'package-fixture-result'}]}}),close:async()=>{}}});
+const runtime=createApp({env:{TAXLAB_API_KEY:'package-fixture',TAXLAB_PUBLIC_ACCESS:'1',TAXLAB_PUBLIC_SESSION_SECRET:'package-public-signing-fixture-0123456789abcdef'},law:{releaseVersion:'fixture',listTools:async()=>({tools:[{name:'search_law',inputSchema:{type:'object'}}]}),callTool:async()=>({result:{content:[{type:'text',text:'package-fixture-result'}]}}),close:async()=>{}}});
 const server=createServer(runtime.app);await new Promise(r=>server.listen(0,'127.0.0.1',r));
-const childEnv={...env,TAXLAB_API_KEY:'package-fixture',TAXLAB_SERVER_URL:`http://127.0.0.1:${server.address().port}`,TAXLAB_ALLOW_LOOPBACK_HTTP:'1'};
+const childEnv={...env,TAXLAB_SERVER_URL:`http://127.0.0.1:${server.address().port}`,TAXLAB_ALLOW_LOOPBACK_HTTP:'1'};
+delete childEnv.TAXLAB_API_KEY;delete childEnv.TAXLAB_AUTH_TOKEN;
 const client=new Client({name:'clean-package-check',version:'1'});
 const transport=new StdioClientTransport({command:process.execPath,args:[join(installed,'scripts/hermes-mcp-bridge.mjs')],cwd:prefix,env:childEnv,stderr:'pipe'});
 transport.stderr?.on('data',()=>{});
@@ -53,18 +54,20 @@ try {
   assert.ok(tools.tools.some(t=>t.name==='review_legal_reasoning'));
   const research=await client.callTool({name:'start_legal_research',arguments:{plan:{query:'Package synthetic',issues:[{id:'fixture',question:'Synthetic issue',required_fact_ids:[],required_date_roles:[]}],facts:[],event_dates:[]}}});
   assert.equal(research.structuredContent.revision,1);assert.deepEqual(JSON.parse(research.content[0].text),research.structuredContent);
+  assert.ok(research.structuredContent.client_session);
   const httpClient = new Client({name:'clean-package-http-check',version:'1'});
   try {
-    await httpClient.connect(new StreamableHTTPClientTransport(new URL(childEnv.TAXLAB_SERVER_URL + '/mcp'), {requestInit:{headers:{authorization:'Bearer package-fixture'}}}));
+    await httpClient.connect(new StreamableHTTPClientTransport(new URL(childEnv.TAXLAB_SERVER_URL + '/mcp')));
     const tools = await httpClient.listTools(); assert.ok(tools.tools.some(t => t.name === 'answer_legal_question'));
-    const state = await httpClient.callTool({name:'get_legal_research',arguments:{research_id:research.structuredContent.research_id}});
+    const state = await httpClient.callTool({name:'get_legal_research',arguments:{research_id:research.structuredContent.research_id,client_session:research.structuredContent.client_session}});
     assert.equal(state.structuredContent.interview.next_action,'research_sources_and_review');
   } finally { await httpClient.close(); }
   const {stdout}=await exec(process.execPath,[join(installed,'scripts/hermes-mcp-bridge.mjs'),'--doctor'],{cwd:prefix,env:childEnv,windowsHide:true,timeout:10000});assert.equal(JSON.parse(stdout).status,'ok');
+  const legacy=await exec(process.execPath,[join(installed,'scripts/hermes-mcp-bridge.mjs'),'--doctor'],{cwd:prefix,env:{...childEnv,TAXLAB_API_KEY:'package-fixture'},windowsHide:true,timeout:10000});assert.equal(JSON.parse(legacy.stdout).status,'ok');
   const {stdout:imported}=await exec(process.execPath,['--input-type=module','-e',"const {GateEngine}=await import('k-tax-agent-backend/dist/gates.js');console.log(new GateEngine().rules.length)"],{cwd:prefix,env,windowsHide:true,timeout:10000});assert.equal(imported.trim(),'10');
   const digest=createHash('sha256').update(await readFile(artifact)).digest('hex');
-  await writeFile(join(work,'evidence.json'),JSON.stringify({status:'pass',artifact,sha256:digest,files:packed.files.length,checks:['clean_install','stdio_sse_authenticated_call','doctor','packaged_rules','published_lock','installed_dependency_versions','installed_research_app_and_bridge','stateless_http_interview_contract'],versions,fixture_only:true},null,2));
-  console.log(JSON.stringify({status:'pass',artifact,sha256:digest,checks:8,versions}));
+  await writeFile(join(work,'evidence.json'),JSON.stringify({status:'pass',artifact,sha256:digest,files:packed.files.length,checks:['clean_install','stdio_sse_public_call','public_doctor','legacy_authenticated_doctor','packaged_rules','published_lock','installed_dependency_versions','installed_research_app_and_bridge','stateless_http_public_session_contract'],versions,fixture_only:true},null,2));
+  console.log(JSON.stringify({status:'pass',artifact,sha256:digest,checks:9,versions}));
 } finally {
   await client.close();await transport.close();await runtime.close();server.closeAllConnections();await new Promise(r=>server.close(r));
 }

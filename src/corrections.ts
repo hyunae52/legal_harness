@@ -3,6 +3,7 @@ import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, re
 import { join, resolve } from 'node:path';
 import { z } from 'zod';
 import { type Actor, digest, ServiceError } from './contracts.js';
+import { publicSessionPattern } from './publicAccess.js';
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 const uuid = z.string().uuid().transform(value => value.toLowerCase());
@@ -117,7 +118,7 @@ export class CorrectionService {
     return this.exclusive(async () => {
       const { request_id, ...proposal } = PrepareCorrectionSchema.parse(input);
       const serialized = JSON.stringify(proposal);
-      if (privatePattern.test(serialized) || this.options.secrets?.some(s => s.length >= 8 && serialized.includes(s))) throw new ServiceError(422, 'PRIVATE_CONTENT_BLOCKED');
+      if (privatePattern.test(serialized) || publicSessionPattern.test(serialized) || this.options.secrets?.some(s => s.length >= 8 && serialized.includes(s))) throw new ServiceError(422, 'PRIVATE_CONTENT_BLOCKED');
       if (Buffer.byteLength(serialized) > 20000) throw new ServiceError(413, 'CORRECTION_TOO_LARGE');
       const existing = this.read(request_id);
       if (existing) {

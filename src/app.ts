@@ -19,6 +19,7 @@ import { ResearchService, researchPolicyVersion, type ResearchOptions } from './
 import { researchTools, researchRoutes, researchSchemas, researchInstructions, type ResearchTool } from './researchContracts.js';
 import { ResourceBudgets, positiveLimit, type ResourceOptions } from './resourceBudgets.js';
 import { serveStateless, type RequestGuard } from './statelessHttp.js';
+import { PublicAccess, actorBudgetKey, assertNoPublicSession } from './publicAccess.js';
 
 interface Options {
   law: Pick<KoreanLawClient, 'listTools' | 'callTool' | 'close' | 'releaseVersion'> & { taxlawRelease?: { version?: string; commit: string } | null };
@@ -36,11 +37,12 @@ interface Options {
 }
 export function createApp(options: Options) {
   const env = options.env ?? process.env;
+  const publicAccess = new PublicAccess(env);
   const budgets = new ResourceBudgets(env, options.resourceOptions);
   const maxActive = positiveLimit(options.maxActive ?? env.TAXLAB_MAX_ACTIVE, 3);
   const maxTransports = positiveLimit(options.maxSessions ?? env.TAXLAB_MAX_TRANSPORTS, 20);
   const maxTransportsPerActor = positiveLimit(env.TAXLAB_MAX_TRANSPORTS_PER_ACTOR, 5);
-  const auth = options.authenticate ?? createAuthenticator(env);
+  const auth = options.authenticate ?? createAuthenticator(env, fetch, publicAccess);
   const gates = options.gates ?? new GateEngine();
   const research = new ResearchService(options.law, options.sources ? input => options.sources!.check(input) : undefined, options.researchOptions);
   const app = express();
@@ -51,7 +53,7 @@ export function createApp(options: Options) {
   let transportActive = 0;
   const transportActors = new Map<string, number>();
   const admitTransport = (actor: Actor) => {
-    const key = actor.kind + ':' + actor.id, current = transportActors.get(key) ?? 0;
+    const key = actorBudgetKey(actor), current = transportActors.get(key) ?? 0;
     if (transportActive >= maxTransports || current >= maxTransportsPerActor) throw new ServiceError(429, 'SESSION_CAPACITY');
     transportActive++; transportActors.set(key, current + 1);
     let released = false;
@@ -99,6 +101,7 @@ export function createApp(options: Options) {
   };
   const validate = (input: unknown) => gates.validate(DraftSchema.parse(input), version);
   const retrieve = async (actor: Actor, name: string, args: Record<string, unknown>, dates: Record<string, string> = {}, correctionQuery = String(args.query ?? '')) => {
+    assertNoPublicSession(args);
     budgets.consume(actor, 'lookup');
     const result = await options.law.callTool(name, args);
     const evidence = { ...retrievalEnvelope(name, args, result.result, result.server?.version ?? version, dates),
@@ -106,14 +109,18 @@ export function createApp(options: Options) {
     return { ...result, evidence, corrections: options.corrections?.search(correctionQuery) ?? { status: 'unavailable', items: [] } };
   };
   const submit = (actor: Actor, input: unknown) => {
+    if (actor.kind === 'anonymous') throw new ServiceError(410, 'USE_CORRECTION_PR');
     if (!options.failures) throw new ServiceError(503, 'MAINTENANCE_UNAVAILABLE');
     return options.failures.submit(actor, input);
   };
-  const runResearch = (name: ResearchTool, actor: Actor, input: unknown) => {
+  const runResearch = async (name: ResearchTool, actor: Actor, input: unknown) => {
     if (name === 'research_legal_sources') budgets.consume(actor, 'lookup');
-    return research.run(name, actor, input);
+    const scoped = publicAccess.scope(actor, input, name === 'start_legal_research');
+    assertNoPublicSession(scoped.input);
+    return publicAccess.result(await research.run(name, scoped.actor, scoped.input), scoped.token);
   };
   const checkSources = (actor: Actor, input: unknown) => {
+    assertNoPublicSession(input);
     if (!options.sources) throw new ServiceError(503, 'SOURCE_VERIFIER_UNAVAILABLE');
     budgets.consume(actor, 'lookup');
     return options.sources.check(input);
@@ -123,9 +130,19 @@ export function createApp(options: Options) {
     if (!options.corrections) throw new ServiceError(503, 'CORRECTION_PR_UNAVAILABLE');
     return options.corrections;
   };
-  app.post('/api/corrections/prepare', protectedRoute(async (req, res, actor) => res.json(await work(() => corrections().prepare(actor, req.body)))));
-  app.post('/api/corrections/create', protectedRoute(async (req, res, actor) => res.json(await work(() => corrections().confirm(actor, req.body)))));
-  app.post('/api/corrections/status', protectedRoute(async (req, res, actor) => res.json(await work(() => corrections().status(actor, z.object({ proposal_id: z.string().uuid() }).strict().parse(req.body).proposal_id)))));
+  const runCorrection = async (name: 'prepare' | 'confirm' | 'status', actor: Actor, input: unknown) => {
+    const scoped = publicAccess.scope(actor, input, name === 'prepare');
+    assertNoPublicSession(scoped.input);
+    const service = corrections();
+    const result = name === 'status' ? await service.status(scoped.actor, z.object({ proposal_id: z.string().uuid() }).strict().parse(scoped.input).proposal_id)
+      : await service[name](scoped.actor, scoped.input);
+    const retry = scoped.token && 'retry' in result && result.retry
+      ? { retry: { ...result.retry, arguments: { ...result.retry.arguments, client_session: scoped.token } } } : {};
+    return publicAccess.result({ ...result, ...retry }, scoped.token);
+  };
+  app.post('/api/corrections/prepare', protectedRoute(async (req, res, actor) => res.json(await work(() => runCorrection('prepare', actor, req.body)))));
+  app.post('/api/corrections/create', protectedRoute(async (req, res, actor) => res.json(await work(() => runCorrection('confirm', actor, req.body)))));
+  app.post('/api/corrections/status', protectedRoute(async (req, res, actor) => res.json(await work(() => runCorrection('status', actor, req.body)))));
   for (const [name, route] of Object.entries(researchRoutes)) {
     app.post('/api/research/' + route, protectedRoute(async (req, res, actor) =>
       res.json(await work(() => runResearch(name as ResearchTool, actor, req.body)))));
@@ -149,7 +166,8 @@ export function createApp(options: Options) {
       } else if (error) res.destroy();
     });
   });
-  app.get('/health', (_req, res) => res.json({ status: stopping ? 'stopping' : 'ok', version: '2.3.0', active_requests: active,
+  app.get('/health', (_req, res) => res.json({ status: stopping ? 'stopping' : 'ok', version: '2.4.0', active_requests: active,
+    access_mode: publicAccess.enabled ? 'public' : 'authenticated',
     active_authentications: authActive, active_dispatches: dispatchActive, release_commit: env.TAXLAB_RELEASE_COMMIT ?? null,
     research_harness: { policy: researchPolicyVersion, tools: researchTools.length, storage: 'ephemeral' },
     mcp_transport: { endpoint: '/mcp', mode: 'stateless', protocol: '2025-11-25', legacy_endpoint: '/sse',
@@ -174,6 +192,7 @@ export function createApp(options: Options) {
   }));
   app.post('/api/failures', protectedRoute(async (req, res, actor) => res.status(202).json(await work(() => submit(actor, req.body)))));
   app.get('/api/failures/:id', protectedRoute(async (req, res, actor) => {
+    if (actor.kind === 'anonymous') throw new ServiceError(410, 'USE_CORRECTION_PR');
     const id = z.string().uuid().parse(req.params.id);
     if (!options.failures) throw new ServiceError(503, 'MAINTENANCE_UNAVAILABLE');
     res.json(await work(() => options.failures!.status(actor, id)));
@@ -200,9 +219,10 @@ export function createApp(options: Options) {
   ];
   function mcpServer(actor: Actor, guard: RequestGuard = operation => operation()) {
     const mcpWork = <T>(operation: () => Promise<T>) => guard(() => work(operation));
-    const server = new Server({ name: 'taxlab-legal-harness', version: '2.3.0' }, { capabilities: { tools: {} },
+    const server = new Server({ name: 'taxlab-legal-harness', version: '2.4.0' }, { capabilities: { tools: {} },
       instructions: researchInstructions + ' 법령 도구 결과는 조회 자료입니다. 사건 기준일·연혁·부칙·후속 해석을 확인하세요. 국세청 해석례는 search_tax_interpretations → get_tax_document로 사실관계·질의·회신을 읽고, 문서번호를 알면 lookup_tax_document를 쓰세요(도구가 제공되는 경우). 법제처 일련번호와 국세청 ntstDcmId를 혼용하지 마세요. 기존 validate_legal_draft는 별도의 제한된 초안 검사입니다. ' + correctionInstructions });
-    server.setRequestHandler(ListToolsRequestSchema, () => mcpWork(async () => ({ tools: [...(await options.law.listTools()).tools.filter(t => !custom.some(c => c.name === t.name)).map(t => ({...t, description: (t.description ?? '') + '\n반박·새 근거로 기존 답변을 정정하면 prepare_correction_pr로 제안 내용을 준비하고 사용자에게 PR 생성을 물어보세요.'})), ...custom] })));
+    const visible = actor.kind === 'anonymous' ? custom.filter(tool => tool.name !== 'submit_failure') : custom;
+    server.setRequestHandler(ListToolsRequestSchema, () => mcpWork(async () => ({ tools: [...(await options.law.listTools()).tools.filter(t => !custom.some(c => c.name === t.name)).map(t => ({...t, description: (t.description ?? '') + '\n반박·새 근거로 기존 답변을 정정하면 prepare_correction_pr로 제안 내용을 준비하고 사용자에게 PR 생성을 물어보세요.'})), ...visible] })));
     server.setRequestHandler(CallToolRequestSchema, async request => {
       try {
         return await mcpWork(async () => {
@@ -213,9 +233,9 @@ export function createApp(options: Options) {
           }
           if (['prepare_correction_pr', 'create_correction_pr', 'get_correction_pr', 'find_legal_corrections'].includes(name)) {
             const service = corrections();
-            const data = name === 'prepare_correction_pr' ? await service.prepare(actor, args)
-              : name === 'create_correction_pr' ? await service.confirm(actor, args)
-              : name === 'get_correction_pr' ? await service.status(actor, z.object({ proposal_id: z.string().uuid() }).strict().parse(args).proposal_id)
+            const data = name === 'prepare_correction_pr' ? await runCorrection('prepare', actor, args)
+              : name === 'create_correction_pr' ? await runCorrection('confirm', actor, args)
+              : name === 'get_correction_pr' ? await runCorrection('status', actor, args)
               : service.search(z.object({ query: z.string().min(1).max(20000) }).strict().parse(args).query);
             return { content: [{ type: 'text' as const, text: JSON.stringify(data) }], structuredContent: data };
           }

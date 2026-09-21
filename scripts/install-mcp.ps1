@@ -1,5 +1,5 @@
 # Install a reviewed, locally downloaded npm tarball, including dependencies.
-# Example: .\scripts\install-mcp.ps1 -Package C:\Downloads\k-tax-agent-backend-2.2.0.tgz
+# Example: .\scripts\install-mcp.ps1 -Package C:\Downloads\k-tax-agent-backend-2.4.0.tgz
 param([Parameter(Mandatory=$true)][string]$Package,
       [string]$Destination = (Join-Path $env:USERPROFILE '.taxlab\legal-mcp'))
 $ErrorActionPreference = 'Stop'
@@ -16,7 +16,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Pinned application dependency installation fai
 $bridge = Join-Path $Destination 'node_modules\k-tax-agent-backend\scripts\hermes-mcp-bridge.mjs'
 if (-not (Test-Path -LiteralPath $bridge)) { throw 'Installed bridge is missing.' }
 @{mcpServers=@{'taxlab-legal'=@{command='node';args=@($bridge);env=@{
-    TAXLAB_SERVER_URL='https://law.taxlab.kr';TAXLAB_API_KEY='<your existing server key>'
+    TAXLAB_SERVER_URL='https://law.taxlab.kr'
 }}}} | ConvertTo-Json -Depth 8
 Write-Host 'Add this entry to your MCP client. Existing configurations have not been overwritten.'
 Write-Host 'Set the key in your client environment, then run the installed bridge with --doctor.'

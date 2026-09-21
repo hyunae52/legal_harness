@@ -1,15 +1,16 @@
 # Legal Harness
 
-2.3의 새 MCP 주소는 `https://law.taxlab.kr/mcp`입니다. Streamable HTTP와
-접속키 헤더를 지원하는 클라이언트에서 사용하며 기존 `/sse`와 설치파일도
-유지합니다. 사건 연구는 빠진 필수 사실을 하나씩 묻고 `answer_legal_question`으로
+MCP 주소는 `https://law.taxlab.kr/mcp`입니다. 공개 모드에서는 접속키나 로그인 없이
+Streamable HTTP로 연결합니다. 기존 `/sse`와 설치파일도 유지합니다.
+사건 연구는 빠진 필수 사실을 하나씩 묻고 `answer_legal_question`으로
 답변·모름을 기록합니다. 추가 서버 LLM 키는 필요 없습니다.
 
 보호 한도는 유지됩니다. 기본값은 실제 작업 3개, 전송 연결 전체 20개/인증 주체별
 5개, 연구 전체 50개/주체별 5개(30분)입니다. 새 요청별 전송은 응답이 끝나면
 연결 자원을 반환합니다. 요청 토큰은 전체 600/주체별 180, 조회 토큰은 120/60의
-용량과 분당 충전량을 사용합니다. 공유키를 쓰는 사람들은 한 주체로 계산됩니다.
-가입자 수를 세는 정책은 아닙니다. [구현·검증 계약](docs/TRANSPORT_INTERVIEW_PLAN.md)을 참고하세요.
+용량과 분당 충전량을 사용합니다. 익명 사용량은 접속 IP의 해시로 묶으므로 같은
+AI 서비스·공유망에서는 한도를 공유할 수 있습니다. 연구·PR 소유권은 별도 자동 세션으로
+구분합니다. [공개 접속 계약](docs/PUBLIC_ACCESS_PLAN.md)을 참고하세요.
 
 사용자의 LLM이 공식 `korean-law-mcp`를 조회하고, 제출한 초안의 확인 범위와 누락 사실을 구분할 수 있게 하는 Express/MCP 서버입니다. upstream은 npm 패키지를 **별도 stdio 자식 프로세스**로 실행합니다. 원본 파싱 코드를 복사하거나 포크하지 않습니다. 일반 조회에는 서버의 LLM 키가 필요 없습니다.
 
@@ -17,19 +18,19 @@
 
 ## 사용자가 연결하는 방법
 
-[연결 안내 페이지](https://law.taxlab.kr/)에서 앱을 고르세요. 사용자에게 필요한 것은 운영자에게 받은 **TaxLab 접속키**입니다.
+[연결 안내 페이지](https://law.taxlab.kr/)에서 앱을 고르세요. 인증 방식은 **없음**으로 설정합니다.
 
-- **Claude PC 앱**: [설치파일](https://law.taxlab.kr/downloads/taxlab-law.mcpb)을 확장 설정에서 설치하고 접속키를 입력합니다. SDK 의존성이 함께 들어 있으며 앱 내장 실행 환경을 사용합니다. 웹·모바일로 자동 연결되지 않습니다.
-- **Claude 웹**: 일부 조직에 제공되는 Request headers 인증 베타 메뉴가 있으면 `/sse`와 `x-api-key`를 설정할 수 있습니다. 메뉴가 없는 계정은 현재 직접 연결할 수 없습니다. OAuth Client Secret에 접속키를 넣지 않습니다.
-- **ChatGPT 웹**: GPT 만들기가 가능한 계정에서 [OpenAPI 설정](https://law.taxlab.kr/openapi.json)을 가져와 GPT Actions의 API Key/Bearer 인증을 설정합니다. [GPT 지침](https://law.taxlab.kr/downloads/chatgpt-instructions.txt)을 넣고 나만 사용으로 저장합니다. 모든 데스크톱 앱에서 같은 GPT의 Actions가 실행된다고 보장하지 않습니다.
-- **ChatGPT 데스크톱**: Settings → MCP servers 메뉴가 있는 앱은 [로컬 bridge ZIP](https://law.taxlab.kr/downloads/taxlab-bridge.zip)을 풀고 STDIO로 등록합니다. 실행환경은 별도 필요하며 [설정 템플릿](https://law.taxlab.kr/downloads/chatgpt-desktop.toml)과 setup.md에 경로·접속키 전달 방법이 있습니다. `/sse` 주소를 Streamable HTTP 칸에 넣는 방식은 지원하지 않습니다. 메뉴가 없으면 웹 Actions를 사용합니다.
-- **Gemini CLI**: [설정 예시](https://law.taxlab.kr/downloads/gemini-settings.json)를 `~/.gemini/settings.json`에 병합하고 `TAXLAB_API_KEY`를 로컬 환경에 설정합니다. 일반 Gemini 웹·모바일은 국내 일반 계정에서 현재 연결 불가이며, 공식 지역 조건에 해당하더라도 TaxLab 인증 호환은 미검증입니다.
-- **Antigravity**: [전용 설정](https://law.taxlab.kr/downloads/antigravity-mcp.json)의 `serverUrl`·`headers`를 사용합니다. Gemini CLI의 `url`과 구분합니다. 앱의 Open MCP Config/View raw config에서 연 파일에 병합하고 Refresh합니다. 최신 공식 전역 경로는 `~/.gemini/config/mcp_config.json`, 프로젝트 경로는 `.agents/mcp_config.json`입니다.
-- **PC 설정이 가능한 AI 에이전트**: 페이지의 ‘AI 설정 요청문’을 복사하세요. [setup.md](https://law.taxlab.kr/setup.md)에 기존 설정 보존, 비밀값 입력, 앱별 연결 범위와 확인 절차가 있습니다.
+- **Claude PC 앱**: [설치파일](https://law.taxlab.kr/downloads/taxlab-law.mcpb)을 확장 설정에서 설치합니다. 키 입력은 없습니다. SDK 의존성이 포함되며 앱 내장 실행 환경을 사용합니다. 이 로컬 확장은 웹·모바일로 자동 연결되지 않습니다.
+- **Claude 웹**: Customize → Connectors → Add custom connector에서 `/mcp` 주소를 등록합니다. OAuth 설정은 비웁니다. 조직 계정은 관리자 정책에 따릅니다. [공식 안내](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp).
+- **ChatGPT 웹**: 원격 MCP 앱을 추가할 수 있는 계정이면 `/mcp`와 인증 없음으로 등록합니다. 요금제·조직 정책에 따라 조회와 쓰기 도구의 지원 범위가 다릅니다. GPT Actions를 쓰는 경우 [OpenAPI 설정](https://law.taxlab.kr/openapi.json)을 가져와 인증 None을 선택하고 [GPT 지침](https://law.taxlab.kr/downloads/chatgpt-instructions.txt)을 넣습니다. [공식 MCP 안내](https://help.openai.com/en/articles/12584461-developer-mode-and-mcp-apps-in-chatgpt).
+- **ChatGPT 데스크톱 등 PC 호스트**: 원격 MCP 메뉴가 있으면 `/mcp`를 등록합니다. STDIO만 지원하는 호스트는 [로컬 bridge ZIP](https://law.taxlab.kr/downloads/taxlab-bridge.zip)을 풀고 [설정 템플릿](https://law.taxlab.kr/downloads/chatgpt-desktop.toml)을 사용합니다. 키 환경변수는 필요 없습니다. MCP 설정 메뉴가 없는 앱은 지원되는 웹 경로를 사용하세요.
+- **Gemini CLI**: [설정 예시](https://law.taxlab.kr/downloads/gemini-settings.json)를 `~/.gemini/settings.json`에 병합합니다. 헤더 설정은 없습니다. Gemini 웹·모바일은 2026-09-21 공식 안내상 미국 개인 계정 등 조건이 있어 한국 일반 계정에서는 현재 직접 연결할 수 없습니다. [Google 제공 조건](https://support.google.com/gemini/answer/17209137?co=GENIE.Platform%3DDesktop&hl=en).
+- **Antigravity**: [전용 설정](https://law.taxlab.kr/downloads/antigravity-mcp.json)의 `serverUrl`을 사용합니다. 앱의 Open MCP Config/View raw config에서 연 파일에 병합하고 Refresh합니다. 인증 헤더는 넣지 않습니다.
+- **PC 설정이 가능한 AI 에이전트**: 페이지의 ‘AI 설정 요청문’을 복사하세요. [setup.md](https://law.taxlab.kr/setup.md)에 기존 설정 보존, 앱별 연결 범위와 확인 절차가 있습니다.
 
-다른 MCP 앱에서는 Streamable HTTP 주소 `https://law.taxlab.kr/mcp` 또는 기존 SSE 주소 `https://law.taxlab.kr/sse`와 `Authorization: Bearer YOUR_API_KEY` / `x-api-key: YOUR_API_KEY` 헤더를 사용합니다. 접속키를 URL에 붙이지 마세요. OAuth 로그인은 제공하지 않으므로 앱에서 헤더 인증을 설정할 수 있어야 합니다. 서버 운영 절차는 아래 별도 항목을 참고하세요.
+다른 MCP 앱에서도 `https://law.taxlab.kr/mcp` 또는 기존 SSE 주소 `https://law.taxlab.kr/sse`를 인증 없이 사용합니다. 이전 TaxLab 설정에 잘못된 인증 헤더가 남아 있으면 401이 발생하므로 제거하세요. 서버 운영 절차는 아래 별도 항목을 참고하세요.
 
-`npm run build`는 `desktop/manifest.json`과 검수된 bridge 및 설치된 SDK 의존성으로 `dist/downloads/taxlab-law.mcpb`를 생성합니다. 접속키는 포함하지 않으며 Claude의 민감값 입력 설정으로 받습니다. 직접 배포한 확장은 새 버전 배포 시 다시 설치합니다. 자동 시험은 저장소 밖 빈 디렉터리에서 설치파일을 풀어 실제 stdio→SSE 호출까지 확인합니다. 실제 Claude UI 설치와 ChatGPT 계정별 GPT 편집기 동작은 별도 확인 범위입니다.
+`npm run build`는 `desktop/manifest.json`과 bridge 및 설치된 SDK 의존성으로 `dist/downloads/taxlab-law.mcpb`를 생성합니다. 키 입력 항목은 없습니다. 직접 배포한 확장은 새 버전 배포 시 다시 설치합니다. 자동 시험은 저장소 밖 빈 디렉터리에서 설치파일을 풀어 인증 없는 실제 stdio→SSE 호출까지 확인합니다. 실제 앱별 설치 UI는 별도 확인 범위입니다.
 
 게시 패키지의 의존성은 `npm-shrinkwrap.json`으로 고정합니다. 제공 설치기는 tarball 설치 후 앱 디렉터리에서 `npm ci`를 실행해 이 고정을 적용합니다. 의존성을 변경할 때 `package-lock.json`과 함께 갱신해야 하며, package 시험이 두 파일의 일치 및 실제 설치 버전을 확인합니다.
 
@@ -43,7 +44,7 @@ npm run review
 npm run review:package
 ```
 
-`.env.example`을 `.env`로 복사하고 `LAW_OC`, 기존 `TAXLAB_API_KEY`를 설정합니다. 사용자 JWT를 사용할 때는 Supabase URL과 publishable/anon key도 설정합니다. 실패 접수에는 서버 전용 `SUPABASE_SERVICE_ROLE_KEY`와 아래의 추가 migration이 필요합니다. 이 값은 MCP 클라이언트에 전달하지 않습니다.
+`.env.example`을 `.env`로 복사하고 `LAW_OC`를 설정합니다. 공개 서버는 `TAXLAB_PUBLIC_ACCESS=1`과 별도 생성한 `TAXLAB_PUBLIC_SESSION_SECRET`(최소 32바이트 난수)을 설정합니다. 이 서명값은 운영 환경에 영속 보관하고 사용자에게 배포하지 않습니다. 바꾸면 기존 익명 연구·PR 세션은 무효화됩니다. 기본값은 비공개 모드입니다. 비공개 서버나 기존 클라이언트에는 `TAXLAB_API_KEY` 또는 Supabase가 검증하는 사용자 JWT를 계속 사용할 수 있습니다. 실패 접수에는 서버 전용 `SUPABASE_SERVICE_ROLE_KEY`와 아래 migration이 필요합니다.
 
 ```sh
 npm start
@@ -51,7 +52,9 @@ npm start
 
 서버는 `127.0.0.1:3000`에만 바인딩합니다. Linux의 cloudflared는 [systemd 예시](deploy/cloudflared.service.example)와 [터널 설정](deploy/cloudflared.yml.example)을 사용합니다. DNS와 터널 연결 확인 후 GCE의 외부 TCP 3000 접근을 차단해야 HTTPS 전환이 완료됩니다. 설정 예시 작성만으로 실제 DNS/방화벽이 변경되지는 않습니다.
 
-인증은 `x-api-key` 또는 `Authorization: Bearer` 헤더로 보냅니다. Bearer는 기존 공유 key 또는 Supabase가 확인한 사용자 JWT를 받습니다. URL의 `?apiKey=`는 거부하며 내장 기본 key도 없습니다. 공유 key는 `api:partner` 한 주체이므로 개인별 비공개 기록을 구분하지 않습니다.
+Cloudflare 터널이 loopback으로 연결되고 외부 직접 포트가 차단된 배포에서만 `TAXLAB_TRUST_CLOUDFLARE=1`을 켭니다. 이때 검증한 `CF-Connecting-IP`를 사용량 묶음에 사용하며, 임의의 `X-Forwarded-For`는 믿지 않습니다. IP는 연구 소유권을 부여하지 않습니다.
+
+공개 모드는 인증 헤더 없는 조회를 허용합니다. 잘못 제출된 키/JWT는 익명으로 바꾸지 않고 거부합니다. URL의 `?apiKey=`도 거부합니다. 기존 공유 key는 `api:partner` 한 주체이므로 개인별 비공개 기록을 구분하지 않습니다.
 
 ## LLM의 MCP 연결
 
@@ -60,10 +63,10 @@ npm start
 ```sh
 npm run build
 npm pack --ignore-scripts
-bash scripts/install-mcp.sh /absolute/path/k-tax-agent-backend-2.2.0.tgz
+bash scripts/install-mcp.sh /absolute/path/k-tax-agent-backend-2.4.0.tgz
 ```
 
-Windows에서는 `scripts/install-mcp.ps1 -Package C:\Downloads\k-tax-agent-backend-2.2.0.tgz`를 실행합니다. 설치기는 MCP 설정 예시를 출력하며 기존 클라이언트 설정을 덮어쓰지 않습니다. 클라이언트에 `TAXLAB_SERVER_URL=https://law.taxlab.kr`과 기존 key 또는 `TAXLAB_AUTH_TOKEN`을 설정합니다. 설치된 bridge를 `node <bridge-path> --doctor`로 점검할 수 있습니다. 진단은 공개 상태와 인증된 도구 목록만 확인합니다.
+Windows에서는 `scripts/install-mcp.ps1 -Package C:\Downloads\k-tax-agent-backend-2.4.0.tgz`를 실행합니다. 설치기는 키 없는 MCP 설정 예시를 출력하며 기존 클라이언트 설정을 덮어쓰지 않습니다. 설치된 bridge를 `node <bridge-path> --doctor`로 점검할 수 있습니다. 비공개 서버를 연결할 때만 선택적으로 기존 key 또는 `TAXLAB_AUTH_TOKEN`을 설정합니다.
 
 ## 조회·검증 계약
 
@@ -80,7 +83,9 @@ REST/GPT Actions에는 같은 계약의 POST `/api/research/start`, `/retrieve`,
 
 `blocked`는 잘못된 인용·연결·모순을 수정해야 한다는 뜻입니다. `needs_info`는 사실·자료·시점·반론 공백이 남았다는 뜻이며 조건부·유보 답변을 표시하지 말라는 뜻은 아닙니다. `structurally_complete`도 **등록한 계획과 제출한 주장만** 구조가 갖춰졌다는 뜻입니다. 법률적 의미와 독립 AI 검수는 여전히 미검수입니다. quote 일치는 제공자가 반환한 텍스트와의 대조이며 원천 XML의 완전성·최신성·법적 지지를 인증하지 않습니다.
 
-연구 장부는 메모리에 30분만 보관하며 재시작 시 사라집니다. 한 연구당 40회 조회, 32개 영수증, 1MiB, 전체 8MiB 보관 예산을 적용합니다. 같은 연구의 조회 중에는 갱신·추가 조회·검토를 잠시 거부합니다. 검색 0건·실패·부분 본문은 성공 근거로 승격하지 않으며, 연구 자료를 로그나 GitHub에 자동 게시하지 않습니다. 공유 접속키는 같은 인증 주체이므로 개인별 자료 격리가 필요하면 사용자 JWT를 사용해야 합니다.
+연구 장부는 메모리에 30분만 보관하며 재시작 시 사라집니다. 한 연구당 40회 조회, 32개 영수증, 1MiB, 전체 8MiB 보관 예산을 적용합니다. 같은 연구의 조회 중에는 갱신·추가 조회·검토를 잠시 거부합니다. 검색 0건·실패·부분 본문은 성공 근거로 승격하지 않으며, 연구 자료를 로그나 GitHub에 자동 게시하지 않습니다.
+
+익명 연구·PR 준비 시 서버가 `client_session`을 자동 반환합니다. AI는 후속 상태 도구에 이 값을 전달하고 사용자에게 발급·입력을 요구하지 않습니다. 서로 다른 자동 세션은 같은 IP에서도 다른 연구·PR에 접근하지 못합니다. 서명 세션은 48시간 유효하며 새 작업 준비 시 같은 소유권으로 갱신됩니다. 조회·근거·공개 PR에 이 값을 넣지 마세요. 첫 응답과 세션을 잃으면 기존 작업을 복구할 수 없으므로 새 PR을 자동으로 재생성하지 않습니다. 영속 실패 접수는 기존 인증 사용자용이며 공개 교정은 PR 제안 경로를 사용합니다.
 
 설계 참고: [OpenTax](https://github.com/koi2026/opentax/tree/38c49cba2952dea847ba87970bf2800f1855b763)의 인용·사실·시점 경계와 [korean-tax-agent](https://github.com/minsooparkk/korean-tax-agent/tree/6095cdcf1583a2cd513d08f418b65558346a8845)의 쟁점·반론·공백 구조를 검토했습니다. 새 하네스 TypeScript는 독자 작성했으며 두 프로젝트를 실행 의존성으로 추가하지 않았습니다. [상세 리뷰](docs/HARNESS_REFERENCE_REVIEW.md), [확정 계획·시험 계약](docs/RESEARCH_HARNESS_PLAN.md)을 함께 보세요.
 
