@@ -91,6 +91,7 @@ def main(mode, packet):
     assert run(['id', '-un']) == 'cta'
     config = json.loads(pathlib.Path(packet).read_text())
     assert sha(pathlib.Path(__file__)) == config['operator_sha256']
+    assert sha(BASE / 'installed-dependencies.mjs') == config['operator_files']['deploy/installed-dependencies.mjs']
     head = config['head']; assert re.fullmatch('[0-9a-f]{40}', head)
     new = BASE / ('legal-harness-transport-' + head[:12])
     archive = BASE / ('transport-' + head[:12] + '.tgz')
