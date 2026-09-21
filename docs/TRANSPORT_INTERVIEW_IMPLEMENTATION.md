@@ -3,7 +3,8 @@
 Scope is the [approved contract](TRANSPORT_INTERVIEW_PLAN.md). Pro REVIEW passed;
 PLAN TP-01–03 closed at `a7e24424e7d84b0c363a6444a72c69260f3941b6`.
 Pro CODE passed at `b1fe256d514c68adea66a2b98a522350f2576dd0`.
-Public deployment remains pending the operator preflight and runtime review.
+Deployment preflight TRD-01 is closed. Public deployment and runtime checks have
+passed; the final Pro evidence review is pending in this record.
 
 ## Behavior
 
@@ -87,3 +88,29 @@ Initial GCE stage smoke did read the public NTS document
 gates, 36 tools over SSE/HTTP, unknown-answer preservation and old-review
 invalidation. This is separate from public deployment acceptance; evidence is in
 `docs/evidence/transport-interview-deployment-20260921.json`.
+
+## Deployment execution
+
+- Final operator ref `0cb0a36fe10870d5be74a3936085ff1d69d701fa`, CI run
+  35550394896 / attempt 1 / job 106183924714: **152 tests, 8 package checks**,
+  zero failures/skips, the same `668e1552...776863d` application archive.
+- Prior run 35550242720 is retained as a failure: CP-14 had not completed all
+  records after 20 refreshes. The fixture retains its 150 ms per-refresh deadline
+  and durability/search assertions, using a 30-second eventual-recovery bound.
+  Operator bytes are identical to Pro-reviewed `a0543fd`. A controlled removal
+  of the unknown classification was detected by the new gate test and restored.
+- Corrected operator `verify-stage` passed at 01:20:37 UTC. Fence, application
+  drain (all three counters zero), activation, candidate checks and resume all
+  passed. Public ingress resumed at **2026-09-21 01:21:33 UTC**.
+- Public HTTPS smoke passed at 01:22:05 UTC with the same real NTS body, 36 tools,
+  no HTTP session ID, preserved unknown and invalidated prior review. No GitHub
+  writes were made by smoke. A separate client observed homepage 200 and
+  unauthenticated `/mcp` 401.
+- Read-only binding audit checked all 50 application payload files, operator
+  files, three Node dependency closures, all 69 Python freeze entries, effective
+  systemd/drop-in/runtime selectors and both live provider processes. Main PID
+  89499 runs the new release. Prior runtime/publisher env, upstream selector and
+  90-research drop-in hashes are preserved; correction state remains 0700.
+- Actual health retains 20 transport slots / actor 5 / actual work 3, request
+  600/180 and lookup 120/60 global/actor budgets. No registered-user quota or
+  client-specific OAuth capability is claimed. PR10 remains a draft for merge.
