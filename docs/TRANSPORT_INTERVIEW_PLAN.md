@@ -84,7 +84,58 @@ Admission remains held through response finish/close, not merely handler return.
 Budget capacities equal their refill-per-minute values (initial full burst);
 these are token buckets, not an assertion of a strict sliding-window count.
 
-Pro status: REVIEW PASS (2026-09-21); PLAN pending; IMPLEMENTATION not started;
+## PLAN TP-01–03 closure contracts
+
+- TP-01: the 60-second clock starts immediately after authenticated transport
+  admission, before SDK connect. Each response is capped at 4 MiB of complete
+  JSON-RPC serialization, including text and structuredContent duplication.
+  Oversize returns a bounded `RESPONSE_TOO_LARGE` RPC error, never truncated
+  success. Existing provider/result and ledger caps remain; this is an output
+  guard, not a claim that JSON serialization has no transient allocation.
+  Finish/close/connect or handle failure/timeout share idempotent cleanup.
+  A request-local admission guard rejects late tool handler entry after close;
+  already-entered work continues to count until settled. Slow response and
+  failed connect are injected at the lifecycle module boundary, while real SDK
+  integration verifies abort, timeout, drain and subsequent slot recovery.
+- TP-02: answer variants are strict. question_id is nonblank <=128 chars;
+  fact value <=2,000, source <=1,000 (both nonblank); date value <=10,
+  precision day/month/year and valid calendar, source <=1,000; unknown reason
+  <=1,000 nonblank. Wrong target kind is 400; wrong question/revision/state 409;
+  foreign/expired research 404. Build a new immutable session, then call the
+  existing byte/reservation save boundary exactly once. Any rejection preserves
+  plan/deferrals/revision/state/evidence/review. Deferrals have one bounded entry
+  per required target (kind + ID, <=52). Data answers preserve other deferrals;
+  unknown preserves assumed facts and partial dates; full plan update resets
+  deferrals. Status returns current plan, revision/state, next question and a
+  target-level unresolved list with deferral reasons. Supplied facts/sources
+  are client assertions, not independently authenticated human testimony.
+- TP-03: all protected request entries consume request tokens once after auth
+  and Origin checks, before dispatch/transport creation. Both actor/global
+  buckets must have tokens before either is charged. Rejection does not debit
+  either; do not evict partially depleted actors to admit new actors. An idle
+  minute refills both capacities and permits expiry. Source tokens are consumed
+  once in the shared direct retrieval/source-check/research-retrieve entry,
+  before provider or research attempt creation. Rejected research lookup leaves
+  attempts unchanged. Tokens count attempted calls, not successful results.
+
+Additional executable/fault-test contracts (besides the original six RED cases):
+
+| Case | Input and independent expected result |
+| --- | --- |
+| Bounded admission | Exhaust actor/global request tokens with init/notifications/unknown methods across protected routes; next is 429, work 0. Fill a lowered actor capacity, deny new actor without eviction, advance clock one minute and accept. Invalid zero/negative/nonfinite/fractional settings throw. |
+| All lookup entries | Exhaust direct lookup tokens, then try REST source check, MCP source check and research retrieve: each rejected, providers 0 additional and no new attempt. One allowed research retrieve charges only once. |
+| Isolation | Concurrent actors use same RPC ID; results retain distinct research/query. Five SSE leases deny sixth same-actor HTTP lease; another actor can still list. |
+| Lifetime failures | Delayed auth + drain never dispatches; timeout/abort while provider pending releases HTTP lease but leaves active work; closing an already-finished or failed-connect response twice releases once. A stalled output has finite timeout. Closed request's guard rejects late operation entry. |
+| Existing review | Create a conditional review, confirm last_review.current=true, answer each kind fact/date/unknown and confirm it is invalidated. Source and counter gaps remain after all user facts are answered/deferred. |
+| Atomic answers | Two concurrent answers to the same state (including different values): one applies, other 409. Ignore successful response, recover exact value/deferral/revision via status. Invalid kind/date/over-capacity preserve complete prior state. |
+| Oversize response | Provider fixture returns an oversized result; new HTTP returns bounded explicit RPC error, no partial successful result; later request works. |
+
+Tests added at `443495c` already cover auth drain, same-ID actor isolation,
+shared SSE/HTTP actor leases, bounded ingress/expiry, capacity rejection,
+response deadline and invalid configuration. Remaining focused tests above are
+part of implementation acceptance, not claims of completed GREEN coverage.
+
+Pro status: REVIEW PASS (2026-09-21); PLAN TP-01–03 revisions submitted; IMPLEMENTATION not started;
 DEPLOYMENT not started. Accepted SH-01–04 and SI-01–04: shared service/work,
 bounded transport and short-request ingress, protocol version boundary,
 single question/deferred state, atomic stale-answer rejection, invalidation and
