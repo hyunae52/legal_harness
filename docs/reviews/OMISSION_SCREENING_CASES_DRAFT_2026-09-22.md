@@ -1,5 +1,7 @@
 # 누락 쟁점 탐지 하네스 검수 사례 12선 초안
 
+> 빠르게 구조를 파악하려면 [시각 요약본](./OMISSION_SCREENING_CASES_VISUAL_2026-09-22.md)을 먼저 확인한다.
+
 상태: `DRAFT - HUMAN LEGAL ORACLE NOT APPROVED`
 
 기준 저장소: `hyunae52/legal_harness` `main` `2a9fdbee30b47126cd35f14c57de28f19b969a26`
