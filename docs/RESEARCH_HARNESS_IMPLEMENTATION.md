@@ -10,10 +10,13 @@ LLM을 서버에 종속시키지 않고 REST와 MCP에서 같은 연구 세션�
 - `src/research.ts`: actor·세션·revision·state_version 경계, 고정 30분 TTL, 조회 예약과 JSON byte 예산. 수정·재조회 후 이전 검토를 현재 검토로 표시하지 않는다.
 - `src/researchEvidence.ts`: 도구별 반환 형식 허용표. 검색 목록, 부분 본문, 인식하지 못한 형식, 실제 반환 본문을 구분한다. 실패·0건은 기록하고 SourceVerifier의 previous 캐시를 새 원문으로 승격하지 않는다.
 - `src/researchReview.ts`: 인용의 정확한 부분 문자열, 쟁점·주장·필수 사실·날짜·반론 연결 검사. 잘못된 인용 원본과 이유를 그대로 돌려준다. 최종 draft/analysis/plan/evidence/policy 해시를 결합한다.
+- `src/scopeCompletion.ts`: 당사자별 요청·답변 의존·독립 안내 트랙을 분리하고 질문 범위와 선언 범위의 완료 여부를 각각 계산한다. `supported/excluded`도 활성 쟁점, 제공 사실, 완전한 원문과 공백 없는 확정 분석이 함께 있어야 닫힌 상태로 인정한다.
 - `src/app.ts`, `src/index.ts`: REST/MCP 공통 처리, 인증 중 요청과 실제 작업까지 포함하는 종료 drain. 인증 뒤에도 접수 중단을 다시 확인한다.
 - `scripts/rollout-gate.mjs`: 후보 또는 이전 릴리스가 검증된 경우에만 공개 재개. rollback 실패 시 차단을 유지한다.
 
 검사 결과는 `blocked`, `needs_info`, `structurally_complete`다. 마지막 값도 **법률 정답, 의미적 지지, 독립 AI 심사 통과를 뜻하지 않는다**. 해당 필드는 계속 `unverified`/`not_performed`다. 실패 조회 후 다시 성공해도 현재 revision에 남은 공백을 숨기지 않는다. 쟁점 자체의 완전성과 미제출 주장까지 보증하지 않는다.
+
+범위 원장을 등록한 검토는 `question_scope_complete`와 `declared_scope_review_complete`를 추가로 반환한다. 답변 의존 트랙이 열려 있으면 전자는 `false`이고, 독립 안내 트랙만 열려 있으면 좁은 답변을 허용해 전자는 `true`, 후자는 `false`일 수 있다. 이 불리언은 트랙의 해결 상태가 아니라 해당 범위의 완료 플래그다. 원장을 등록하지 않은 기존 요청은 `not_configured`와 두 개의 `false`를 반환한다.
 
 필수 사실 누락·부분 본문·날짜 정밀도 부족이 있으면 확정 결론을 막고 조건부/유보 결론에 추가 질문을 요구한다. 보정 제안은 공개 초안 준비 도구를 안내할 뿐, 연구 자료를 GitHub에 자동 게시하지 않는다. 기존 공개 preview·저장소·명시적 동의 후 draft PR 생성 경계를 유지한다.
 
@@ -32,6 +35,13 @@ LLM을 서버에 종속시키지 않고 REST와 MCP에서 같은 연구 세션�
 | 실제 원문 검사 | 정확한 quote=true, 사실 미확인=needs_info, 위조 quote=blocked, 법률 검수=unverified, GitHub 쓰기 0 |
 
 실제 원문 관측: 2026-09-20T19:16:37.982Z. NTS 제공자 `korean-taxlaw` 2.0.0, 커밋 `d77c94e5b64892fe85928508544366e418397c71`, 반환 해시 `5c94093c787ba6a917f6c0c54b44d661a1b8c71d4a3b024525dbfdcbad42e1f6`. 이 행은 **로컬 loopback** 증거다. 운영 HTTPS 검증은 별도 배포 기록에 남긴다.
+
+### 범위 완료 판정 추가 검증 (2026-09-23)
+
+- 새 상태 변형과 연구 API 표적 검사: 29개 통과, 실패ㆍskip 0.
+- 전체 회귀검사: 177개 통과, 실패ㆍskip 0.
+- clean 설치 패키지 검사: 9개 통과, artifact SHA-256 `0fc8ce129db7a21d5039ea527048659066b504c5094a319211cbc8eb36853dd4`.
+- 이 결과는 완료 플래그ㆍ누락 원장ㆍ조회 실패ㆍoverflow의 결정론적 동작 검증이다. 12개 법률 사례의 실제 모델 반복 실행, 법률 결론의 정답 검수 또는 운영 배포 승인을 뜻하지 않는다.
 
 CODE 수정 후 패키지 시험 artifact SHA-256: `d63b301deaeea5d48c9719da7918b23cb3cff6216abae4a83d8de603f9464ce6`. 운영 배포에는 실제 선택한 artifact·commit·Linux CI·설치된 의존성 파일 지문을 다시 결합한다.
 

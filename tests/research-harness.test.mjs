@@ -149,6 +149,9 @@ test('RH-03/09: exact returned quotes pass structure only; draft and snapshot bi
   assert.equal(result.status, 'structurally_complete', JSON.stringify(result));
   assert.equal(result.legal_verification, 'unverified'); assert.equal(result.semantic_support, 'unverified');
   assert.equal(result.independent_review, 'not_performed');
+  assert.equal(result.question_scope_complete, false);
+  assert.equal(result.declared_scope_review_complete, false);
+  assert.equal(result.scope_completion.status, 'not_configured');
   assert.equal(result.stages.independent_semantic_review, 'not_configured');
   assert.equal(result.claim_coverage, 'submitted_claims_only');
   assert.equal(result.citation_checks[0].quote_match, true);
@@ -156,7 +159,7 @@ test('RH-03/09: exact returned quotes pass structure only; draft and snapshot bi
   // Explicit alphabetical projection, independent of the production canonicalizer.
   const bindingJson = JSON.stringify({ analysis_hash: result.analysis_hash, correction_needed: false, draft_hash: result.draft_hash,
     plan_hash: result.plan_hash, policy_version: result.policy_version, research_id: result.research_id, revision: result.revision,
-    snapshot_hash: result.snapshot_hash, state_version: result.state_version });
+    scope_assessment_hash: result.scope_assessment_hash, snapshot_hash: result.snapshot_hash, state_version: result.state_version });
   assert.equal(result.binding_hash, createHash('sha256').update(bindingJson).digest('hex'));
   const changed = structuredClone(input); changed.draft_answer += '\n추가 설명';
   const next = (await f.request('review', changed)).body;
@@ -175,6 +178,26 @@ test('RH-03/09: exact returned quotes pass structure only; draft and snapshot bi
   revised = (await f.request('retrieve', retrieveInput(revised))).body;
   revised = (await f.request('retrieve', { ...retrieveInput(revised), purpose: 'counter' })).body;
   assert.notEqual((await f.request('review', reviewInput(revised))).body.plan_hash, result.plan_hash);
+});
+
+test('RH-05: configured scope completion is returned through the authenticated review API', async t => {
+  const f = await fixture(t), p = plan();
+  p.scope_review = { mode: 'question', tracks: [{ id: 'requested_cost', party: '합성 당사자',
+    legal_question: '합성 원가의 구분 조건', factual_anchor_ids: ['joint'], relation: 'requested',
+    blocks_track_ids: [], issue_id: 'cost', lifecycle: 'active' }] };
+  const state = await seed(f, p), input = reviewInput(state);
+  input.scope_assessments = [{ track_id: 'requested_cost', status: 'supported', reason: '합성 근거 확인',
+    fact_ids: ['joint'], evidence_ids: [state.evidence.find(item => item.purpose === 'support').evidence_id] }];
+  const result = (await f.request('review', input)).body;
+  assert.equal(result.status, 'structurally_complete', JSON.stringify(result));
+  assert.equal(result.question_scope_complete, true);
+  assert.equal(result.declared_scope_review_complete, true);
+  assert.equal(result.scope_completion.status, 'complete');
+  const changed = structuredClone(input); changed.scope_assessments[0].reason = '같은 상태의 다른 설명';
+  const changedResult = (await f.request('review', changed)).body;
+  assert.equal(changedResult.analysis_hash, result.analysis_hash);
+  assert.notEqual(changedResult.scope_assessment_hash, result.scope_assessment_hash);
+  assert.notEqual(changedResult.binding_hash, result.binding_hash);
 });
 
 test('RH-03: empty, changed, noncontiguous and wrong-passage citations never disappear into a pass', async t => {

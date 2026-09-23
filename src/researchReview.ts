@@ -1,6 +1,7 @@
 import { digest } from './contracts.js';
 import type { ReviewInput, Plan } from './researchContracts.js';
 import type { ResearchAttempt, ResearchEvidence } from './researchEvidence.js';
+import { inspectScopeCompletion } from './scopeCompletion.js';
 
 export function inspectResearch(input: ReviewInput, plan: Plan, evidence: ResearchEvidence[], attempts: ResearchAttempt[]) {
   const findings: { code: string; severity: 'blocked' | 'needs_info'; issue_id?: string; detail: string }[] = [];
@@ -96,12 +97,19 @@ export function inspectResearch(input: ReviewInput, plan: Plan, evidence: Resear
     if (hasGaps && analysis.conclusion_mode === 'definitive') block('DEFINITIVE_WITH_GAPS', '필요한 사실·근거·시점·반론의 공백이 남아 확정 결론과 모순됩니다.');
     if (hasGaps && analysis.conclusion_mode !== 'definitive' && (!analysis.unknowns.length || !analysis.next_queries.length)) block('GAPS_NOT_EXPLAINED', '조건부/유보 답변에 미확인점과 다음 질문·검색을 적으세요.');
   }
+  const scopeCompletion = inspectScopeCompletion(input, plan, evidence, attempts, findings);
+  const { findings: scopeFindings, ...scopeStatus } = scopeCompletion;
+  findings.push(...scopeFindings);
   return { status: findings.some(f => f.severity === 'blocked') ? 'blocked' : findings.length ? 'needs_info' : 'structurally_complete',
     findings, citation_checks: citationChecks, next_queries: input.analysis.flatMap(a => a.next_queries),
+    question_scope_complete: scopeCompletion.question_scope_complete,
+    declared_scope_review_complete: scopeCompletion.declared_scope_review_complete,
+    scope_completion: scopeStatus,
     draft_hash: digest(input.draft_answer), analysis_hash: digest(input.analysis),
+    scope_assessment_hash: digest(input.scope_assessments ?? null),
     legal_verification: 'unverified', semantic_support: 'unverified', independent_review: 'not_performed',
     stages: { deterministic_structure: 'completed', independent_semantic_review: 'not_configured' },
-    claim_coverage: 'submitted_claims_only', note: '등록된 쟁점과 제출된 주장만 대조했습니다. 법률 정답·전체 쟁점·인용의 의미적 지지는 미검수입니다.',
+    claim_coverage: 'submitted_claims_only', note: '등록된 쟁점·범위 트랙과 제출된 주장만 대조했습니다. 법률 정답·등록되지 않은 쟁점·인용의 의미적 지지는 미검수입니다.',
     correction_suggestion: input.correction_needed ? { next_tool: 'prepare_correction_pr', question: '공개 가능한 정정안을 준비해서 PR로 제안할까요?',
       consent_required: true, note: '먼저 공개할 내용을 prepare_correction_pr로 준비하고 실제 preview·저장소를 보여준 뒤 동의를 받으세요. 연구 원문·개인 사실을 자동 게시하지 않습니다.' } : null };
 }

@@ -8,7 +8,7 @@ import { inspectResearch } from './researchReview.js';
 import { interviewState, applyInterviewAnswer, type Deferral } from './researchInterview.js';
 import { actorBudgetKey } from './publicAccess.js';
 
-export const researchPolicyVersion = 'research-v2-interview-20260921';
+export const researchPolicyVersion = 'research-v3-scope-completion-20260923';
 const defaults = { ttlMs: 1_800_000, maxSessions: 50, maxSessionsPerActor: 5, maxReceipts: 32, maxAttempts: 40,
   maxSessionBytes: 1_048_576, maxTotalBytes: 8_388_608, receiptBytes: 131_072, metadataReserve: 8192 };
 export interface ResearchOptions { now?: () => number; limits?: Partial<typeof defaults>; policyVersion?: string }
@@ -142,7 +142,7 @@ export class ResearchService {
       evidence: session.evidence, attempts: session.attempts });
     const binding = { research_id: session.research_id, revision: session.revision, state_version: session.state_version,
       policy_version: this.policy, plan_hash: planHash, snapshot_hash: snapshotHash, draft_hash: result.draft_hash, analysis_hash: result.analysis_hash,
-      correction_needed: input.correction_needed };
+      scope_assessment_hash: result.scope_assessment_hash, correction_needed: input.correction_needed };
     const bindingHash = digest(binding);
     this.save({ ...session, last_review: { state_version: session.state_version, binding_hash: bindingHash, snapshot_hash: snapshotHash, draft_hash: result.draft_hash } });
     return { ...binding, ...result, binding_hash: bindingHash, expires_at: session.expires_at, interview: interviewState(session) };

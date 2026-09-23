@@ -8,6 +8,8 @@ The suite covers authentication/session binding, input contracts, disconnected
 caller capacity, complete upstream results, uncertainty-aware gates, source
 refresh deadlines, PostgreSQL roles/RLS/atomic intake, fencing, update candidate
 selection and rollback, independent-review failure handling and release identity.
+It also keeps question-scope completion separate from declared-scope completion,
+and prevents unresolved, overflow or failed-retrieval tracks from becoming closed.
 
 `npm run review:package` separately packs and installs the artifact into a new
 empty prefix, then uses real SDK stdio/SSE transports against a local fixture.
