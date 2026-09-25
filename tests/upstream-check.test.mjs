@@ -9,7 +9,8 @@ const installed = { law: { version: '4.13.0' },
   taxlaw: { version: '2.0.0', commit: 'a'.repeat(40), repository: 'hyunae52/korean-taxlaw-mcp' } };
 const stamp = '2026-09-22T00:00:00.000Z';
 function requests({ latest = '4.13.0', law = 'b'.repeat(40), tax = 'a'.repeat(40), fork = tax,
-  upstreamRelation, forkRelation, syncRelation = tax === fork ? 'identical' : 'ahead', failure } = {}) {
+  upstreamRelation, forkRelation, syncRelation = tax === fork ? 'identical' : 'ahead',
+  forkFiles = ['src/korean_taxlaw_mcp/server.py'], failure } = {}) {
   return async url => {
     if (failure?.(url)) throw new Error('HTTP_404');
     if (url.includes('/latest')) return { name: 'korean-law-mcp', version: latest, gitHead: law };
@@ -20,7 +21,8 @@ function requests({ latest = '4.13.0', law = 'b'.repeat(40), tax = 'a'.repeat(40
       const status = isFork && !isHead ? syncRelation
         : isFork ? (forkRelation ?? (fork === installed.taxlaw.commit ? 'identical' : 'ahead'))
           : (upstreamRelation ?? (tax === installed.taxlaw.commit ? 'identical' : 'ahead'));
-      return { status, ahead_by: status === 'ahead' ? 1 : 0, behind_by: status === 'behind' ? 1 : 0 };
+      return { status, ahead_by: status === 'ahead' ? 1 : 0, behind_by: status === 'behind' ? 1 : 0,
+        files: isFork && isHead ? forkFiles.map(filename => ({ filename })) : [] };
     }
     return [{ sha: url.includes('zisu17') ? tax : url.includes('hyunae52') ? fork : law }];
   };
@@ -105,6 +107,15 @@ test('canonical changes require fork review and never become direct production c
   assert.equal(candidate.repository, 'zisu17/korean-taxlaw-mcp');
   assert.equal(candidate.activation, 'fork_review_required');
   assert.equal(result.candidates.some(c => c.kind === 'repository_change'), false);
+});
+
+test('fork workflow and documentation commits are not production runtime candidates', async () => {
+  const result = await check(requests({ fork: 'd'.repeat(40), forkRelation: 'ahead', syncRelation: 'ahead',
+    forkFiles: ['.github/workflows/upstream-sync.yml', 'README.md', 'docs/FORK_MAINTENANCE.md'] }));
+  assert.deepEqual(result.candidates.filter(c => c.provider === 'korean-taxlaw-mcp'), []);
+  assert.equal(result.sources.taxlaw_fork_relation.value.status, 'ahead');
+  assert.deepEqual(result.sources.taxlaw_fork_relation.value.changed_files,
+    ['.github/workflows/upstream-sync.yml', 'README.md', 'docs/FORK_MAINTENANCE.md']);
 });
 
 test('report persistence leaves runtime manifests intact; changed pinned provider refuses checks', async t => {

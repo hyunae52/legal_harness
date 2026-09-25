@@ -14,7 +14,7 @@
 
 실행마다 systemd의 현재 WorkingDirectory와 프로세스의 release manifest 위치를 읽어 **실제 실행 중인 버전**과 비교한다. 앱을 새 릴리스로 전환하면 다음 확인부터 새 설치본을 기준으로 한다. 프로세스가 읽는 도중 교체되거나 설치 pin이 맞지 않으면 실패로 기록하고 설치본을 건드리지 않는다.
 
-확인 대상은 npm의 `korean-law-mcp@latest`, 법령 MCP 저장소, 국세법령정보 MCP의 원본 `zisu17/main`과 검토 포크 `hyunae52/main`이다. 설치된 npm 버전의 원본 커밋은 npm metadata의 `gitHead`로 대조한다. 포크의 새 커밋만 운영 검증 후보가 되며, 원본에만 있는 변경은 `upstream_sync_required`로 기록하고 직접 운영 후보로 승격하지 않는다. 이 확인은 법령 내용의 최신성 검증과는 별개다.
+확인 대상은 npm의 `korean-law-mcp@latest`, 법령 MCP 저장소, 국세법령정보 MCP의 원본 `zisu17/main`과 검토 포크 `hyunae52/main`이다. 설치된 npm 버전의 원본 커밋은 npm metadata의 `gitHead`로 대조한다. 포크의 새 커밋 중 실행 코드·패키지 설정에 영향을 주는 변경만 운영 검증 후보가 되며, `.github`, 문서, 시험만 바뀐 커밋은 후보에서 제외한다. 비교 파일 목록이 없거나 300개 이상으로 잘리면 안전하게 실행 변경으로 취급한다. 원본에만 있는 변경은 `upstream_sync_required`로 기록하고 직접 운영 후보로 승격하지 않는다. 이 확인은 법령 내용의 최신성 검증과는 별개다.
 
 ## 결과와 업데이트 범위
 

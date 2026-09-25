@@ -79,8 +79,14 @@ const commitValue = data => {
 const comparisonValue = data => {
   if (!['ahead', 'behind', 'identical', 'diverged'].includes(data?.status)
       || !Number.isInteger(data.ahead_by) || !Number.isInteger(data.behind_by)) throw new Error('INVALID_METADATA');
-  return { status: data.status, ahead_by: data.ahead_by, behind_by: data.behind_by };
+  const names = Array.isArray(data.files) && data.files.length < 300
+    && data.files.every(file => typeof file?.filename === 'string' && file.filename.length <= 500)
+    ? data.files.map(file => file.filename) : null;
+  return { status: data.status, ahead_by: data.ahead_by, behind_by: data.behind_by, changed_files: names };
 };
+const taxlawRuntimeChanged = comparison => comparison.changed_files === null
+  || comparison.changed_files.some(path => !path.startsWith('.github/') && !path.startsWith('docs/')
+    && !path.startsWith('tests/') && !['README.md', 'LICENSE', 'NOTICE', '.gitignore', '.dockerignore'].includes(path));
 const errorCode = error => /^(HTTP_\d{3}|RESPONSE_TOO_LARGE|INVALID_METADATA)$/.test(error?.message)
   ? error.message : error?.name === 'TimeoutError' ? 'TIMEOUT' : 'FETCH_FAILED';
 const compareVersions = (a, b) => {
@@ -149,10 +155,10 @@ export async function checkUpstreams(installed, previous = {}, { request = fetch
   const forkStatus = forkHead.status === 'unavailable' || forkRelation.status === 'unavailable' ? 'unavailable' : 'ok';
   const forkConfirmed = [forkHead.last_success_at, forkRelation.last_success_at].filter(Boolean).sort()[0] ?? null;
   const forkSource = { status: forkStatus, last_success_at: forkConfirmed };
-  if (forkHead.value && forkRelation.value?.status === 'ahead') {
+  if (forkHead.value && forkRelation.value?.status === 'ahead' && taxlawRuntimeChanged(forkRelation.value)) {
     add('korean-taxlaw-mcp', 'repository_change', forkSource,
       { ...forkHead.value, repository: repositories.taxlaw_fork });
-  } else if (forkHead.value && forkRelation.value?.status === 'diverged') {
+  } else if (forkHead.value && forkRelation.value?.status === 'diverged' && taxlawRuntimeChanged(forkRelation.value)) {
     add('korean-taxlaw-mcp', 'repository_diverged', forkSource,
       { ...forkHead.value, repository: repositories.taxlaw_fork });
   }
