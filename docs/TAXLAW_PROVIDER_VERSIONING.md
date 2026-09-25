@@ -61,6 +61,8 @@ systemd 서비스에는 다음처럼 활성 선택 파일의 절대경로를 설
 TAXLAW_MCP_RELEASE_FILE=/home/cta/legal-harness-taxlaw/active.json
 ```
 
+운영 drop-in 원본은 [`deploy/taxlaw-store.conf`](../deploy/taxlaw-store.conf)에 둔다.
+
 따라서 Legal Harness 애플리케이션을 새 디렉터리로 배포해도 국세법령정보 MCP의
 설치본과 활성 선택은 유지된다. 애플리케이션은 시작할 때 `active.json`을 읽고,
 각 요청에서는 그 파일이 가리키는 Python과 작업 디렉터리로 MCP 자식을 실행한다.
