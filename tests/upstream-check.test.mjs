@@ -5,13 +5,18 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { checkUpstreams, fetchMetadata, readInstalled, saveReport } from '../scripts/check-upstreams.mjs';
 
-const installed = { law: { version: '4.13.0' }, taxlaw: { version: '2.0.0', commit: 'a'.repeat(40) } };
+const installed = { law: { version: '4.13.0' },
+  taxlaw: { version: '2.0.0', commit: 'a'.repeat(40), repository: 'zisu17/korean-taxlaw-mcp' } };
 const stamp = '2026-09-22T00:00:00.000Z';
-function requests({ latest = '4.13.0', law = 'b'.repeat(40), tax = 'a'.repeat(40), failure } = {}) {
+function requests({ latest = '4.13.0', law = 'b'.repeat(40), tax = 'a'.repeat(40), relation, failure } = {}) {
   return async url => {
     if (failure?.(url)) throw new Error('HTTP_404');
     if (url.includes('/latest')) return { name: 'korean-law-mcp', version: latest, gitHead: law };
     if (url.includes('/4.13.0')) return { name: 'korean-law-mcp', version: '4.13.0', gitHead: 'b'.repeat(40) };
+    if (url.includes('/compare/')) {
+      const status = relation ?? (tax === installed.taxlaw.commit ? 'identical' : 'ahead');
+      return { status, ahead_by: status === 'ahead' ? 1 : 0, behind_by: status === 'behind' ? 1 : 0 };
+    }
     return [{ sha: url.includes('zisu17') ? tax : law }];
   };
 }
@@ -69,6 +74,19 @@ test('a newly deployed installed version cannot reuse the prior installed commit
   assert.equal(result.sources.law_installed.status, 'unavailable');
 });
 
+test('trusted fork pins stay monitored against canonical history without proposing a rollback', async () => {
+  const fork = { ...installed,
+    taxlaw: { ...installed.taxlaw, commit: 'f'.repeat(40), repository: 'hyunae52/korean-taxlaw-mcp' } };
+  const pending = await checkUpstreams(fork, {}, { request: requests({ tax: 'a'.repeat(40), relation: 'behind' }), now: () => stamp });
+  assert.equal(pending.status, 'current');
+  assert.deepEqual(pending.candidates.filter(c => c.provider === 'korean-taxlaw-mcp'), []);
+  assert.equal(pending.sources.taxlaw_relation.value.status, 'behind');
+  const merged = await checkUpstreams(fork, {}, { request: requests({ tax: 'd'.repeat(40), relation: 'ahead' }), now: () => stamp });
+  const candidate = merged.candidates.find(c => c.provider === 'korean-taxlaw-mcp');
+  assert.equal(candidate.kind, 'repository_change');
+  assert.equal(candidate.commit, 'd'.repeat(40));
+});
+
 test('report persistence leaves runtime manifests intact; changed pinned provider refuses checks', async t => {
   const root = await mkdtemp(join(tmpdir(), 'taxlab-upstream-watch-'));
   t.after(async () => {
@@ -86,12 +104,14 @@ test('report persistence leaves runtime manifests intact; changed pinned provide
   await writeFile(lawFile, lawText); await writeFile(taxFile, taxText);
   await writeFile(pinFile, JSON.stringify({ repository: 'zisu17/korean-taxlaw-mcp', ...installed.taxlaw }));
   assert.deepEqual(await readInstalled(root, lawFile, taxFile), installed);
+  await writeFile(pinFile, JSON.stringify({ ...installed.taxlaw, repository: 'hyunae52/korean-taxlaw-mcp' }));
+  assert.deepEqual((await readInstalled(root, lawFile, taxFile)).taxlaw.repository, 'hyunae52/korean-taxlaw-mcp');
   const state = join(root, 'state');
   await saveReport(state, await check(requests()));
   await saveReport(state, await check(requests({ failure: () => true })));
   assert.equal(JSON.parse(await readFile(join(state, 'latest.json'), 'utf8')).status, 'partial');
   assert.equal(await readFile(lawFile, 'utf8'), lawText);
   assert.equal(await readFile(taxFile, 'utf8'), taxText);
-  await writeFile(pinFile, JSON.stringify({ repository: 'zisu17/korean-taxlaw-mcp', ...installed.taxlaw, commit: 'f'.repeat(40) }));
+  await writeFile(pinFile, JSON.stringify({ ...installed.taxlaw, repository: 'untrusted/example', commit: 'f'.repeat(40) }));
   await assert.rejects(readInstalled(root, lawFile, taxFile), /INSTALLED_MANIFEST_INVALID/);
 });

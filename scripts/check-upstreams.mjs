@@ -9,6 +9,7 @@ const repositories = {
   law: 'chrisryugj/korean-law-mcp',
   taxlaw: 'zisu17/korean-taxlaw-mcp',
 };
+const trustedTaxlawRepositories = new Set([repositories.taxlaw, 'hyunae52/korean-taxlaw-mcp']);
 const sha = /^[a-f0-9]{40}$/;
 const version = /^\d+\.\d+\.\d+$/;
 const json = async path => JSON.parse(await readFile(path, 'utf8'));
@@ -20,12 +21,14 @@ export async function readInstalled(appDirectory, lawReleaseFile, taxlawReleaseF
   if (!version.test(law.version) || !isAbsolute(law.entrypoint)
       || !version.test(taxlaw.version) || !sha.test(taxlaw.commit)
       || !isAbsolute(taxlaw.python) || !isAbsolute(taxlaw.cwd)
-      || pin.repository !== repositories.taxlaw || pin.commit !== taxlaw.commit || pin.version !== taxlaw.version) {
+      || !trustedTaxlawRepositories.has(pin.repository)
+      || pin.commit !== taxlaw.commit || pin.version !== taxlaw.version) {
     throw new Error('INSTALLED_MANIFEST_INVALID');
   }
   const metadata = await json(join(dirname(law.entrypoint), '..', 'package.json'));
   if (metadata.name !== 'korean-law-mcp' || metadata.version !== law.version) throw new Error('INSTALLED_PACKAGE_MISMATCH');
-  return { law: { version: law.version }, taxlaw: { version: taxlaw.version, commit: taxlaw.commit } };
+  return { law: { version: law.version },
+    taxlaw: { version: taxlaw.version, commit: taxlaw.commit, repository: pin.repository } };
 }
 
 export async function readRunningService(service) {
@@ -72,6 +75,11 @@ const commitValue = data => {
   if (!Array.isArray(data) || !sha.test(data[0]?.sha)) throw new Error('INVALID_METADATA');
   return { commit: data[0].sha };
 };
+const comparisonValue = data => {
+  if (!['ahead', 'behind', 'identical', 'diverged'].includes(data?.status)
+      || !Number.isInteger(data.ahead_by) || !Number.isInteger(data.behind_by)) throw new Error('INVALID_METADATA');
+  return { status: data.status, ahead_by: data.ahead_by, behind_by: data.behind_by };
+};
 const errorCode = error => /^(HTTP_\d{3}|RESPONSE_TOO_LARGE|INVALID_METADATA)$/.test(error?.message)
   ? error.message : error?.name === 'TimeoutError' ? 'TIMEOUT' : 'FETCH_FAILED';
 const compareVersions = (a, b) => {
@@ -87,6 +95,7 @@ export async function checkUpstreams(installed, previous = {}, { request = fetch
     law_installed: [`https://registry.npmjs.org/korean-law-mcp/${installed.law.version}`, packageValue],
     law_repository: [`https://api.github.com/repos/${repositories.law}/commits?per_page=1`, commitValue],
     taxlaw_repository: [`https://api.github.com/repos/${repositories.taxlaw}/commits?per_page=1`, commitValue],
+    taxlaw_relation: [`https://api.github.com/repos/${repositories.taxlaw}/compare/${installed.taxlaw.commit}...HEAD`, comparisonValue],
   };
   const sources = Object.fromEntries(await Promise.all(Object.entries(definitions).map(async ([name, [url, parse]]) => {
     const prior = previous.sources?.[name]?.url === url ? previous.sources[name] : undefined;
@@ -116,8 +125,15 @@ export async function checkUpstreams(installed, previous = {}, { request = fetch
   if (head.value && head.value.commit !== baseline) {
     add('korean-law-mcp', baseline ? 'repository_change' : 'repository_baseline_unknown', head, head.value);
   }
-  const tax = sources.taxlaw_repository;
-  if (tax.value && tax.value.commit !== installed.taxlaw.commit) add('korean-taxlaw-mcp', 'repository_change', tax, tax.value);
+  const tax = sources.taxlaw_repository, relation = sources.taxlaw_relation;
+  const taxStatus = tax.status === 'unavailable' || relation.status === 'unavailable' ? 'unavailable' : 'ok';
+  const taxConfirmed = [tax.last_success_at, relation.last_success_at].filter(Boolean).sort()[0] ?? null;
+  const taxSource = { status: taxStatus, last_success_at: taxConfirmed };
+  if (tax.value && relation.value?.status === 'ahead') {
+    add('korean-taxlaw-mcp', 'repository_change', taxSource, tax.value);
+  } else if (tax.value && relation.value?.status === 'diverged') {
+    add('korean-taxlaw-mcp', 'repository_diverged', taxSource, tax.value);
+  }
   const failures = Object.values(sources).filter(source => source.status === 'unavailable').length;
   return { schema_version: 1, checked_at: checkedAt, status: failures ? 'partial' : candidates.length ? 'updates_available' : 'current',
     installed, repositories, sources, candidates, policy: { metadata_only: true, installs: false, production_restarts: false } };
