@@ -12,15 +12,16 @@ const repositories = {
 };
 const trustedTaxlawRepositories = new Set([repositories.taxlaw, repositories.taxlaw_fork]);
 const sha = /^[a-f0-9]{40}$/;
-const version = /^\d+\.\d+\.\d+$/;
+const npmVersion = /^\d+\.\d+\.\d+$/;
+const taxlawVersion = /^\d+\.\d+\.\d+(?:\.post\d+)?$/;
 const json = async path => JSON.parse(await readFile(path, 'utf8'));
 
 export async function readInstalled(appDirectory, lawReleaseFile, taxlawReleaseFile) {
   const law = await json(lawReleaseFile);
   const taxlaw = await json(taxlawReleaseFile);
   const pin = await json(join(appDirectory, 'upstreams/korean-taxlaw-mcp.json'));
-  if (!version.test(law.version) || !isAbsolute(law.entrypoint)
-      || !version.test(taxlaw.version) || !sha.test(taxlaw.commit)
+  if (!npmVersion.test(law.version) || !isAbsolute(law.entrypoint)
+      || !taxlawVersion.test(taxlaw.version) || !sha.test(taxlaw.commit)
       || !isAbsolute(taxlaw.python) || !isAbsolute(taxlaw.cwd)
       || !trustedTaxlawRepositories.has(pin.repository)
       || pin.commit !== taxlaw.commit || pin.version !== taxlaw.version) {
@@ -69,7 +70,7 @@ export async function fetchMetadata(url, fetchImpl = fetch) {
 }
 
 const packageValue = data => {
-  if (data?.name !== 'korean-law-mcp' || !version.test(data.version)) throw new Error('INVALID_METADATA');
+  if (data?.name !== 'korean-law-mcp' || !npmVersion.test(data.version)) throw new Error('INVALID_METADATA');
   return { version: data.version, commit: sha.test(data.gitHead) ? data.gitHead : null };
 };
 const commitValue = data => {

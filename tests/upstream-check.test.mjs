@@ -6,7 +6,7 @@ import { basename, dirname, join } from 'node:path';
 import { checkUpstreams, fetchMetadata, readInstalled, saveReport } from '../scripts/check-upstreams.mjs';
 
 const installed = { law: { version: '4.13.0' },
-  taxlaw: { version: '2.0.0', commit: 'a'.repeat(40), repository: 'hyunae52/korean-taxlaw-mcp' } };
+  taxlaw: { version: '2.0.0.post1', commit: 'a'.repeat(40), repository: 'hyunae52/korean-taxlaw-mcp' } };
 const stamp = '2026-09-22T00:00:00.000Z';
 function requests({ latest = '4.13.0', law = 'b'.repeat(40), tax = 'a'.repeat(40), fork = tax,
   upstreamRelation, forkRelation, syncRelation = tax === fork ? 'identical' : 'ahead',
