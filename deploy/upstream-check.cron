@@ -3,4 +3,4 @@
 SHELL=/bin/bash
 PATH=/usr/bin:/bin
 MAILTO=""
-30 18 * * * cta /usr/bin/flock --nonblock --conflict-exit-code 0 /home/cta/.local/state/legal-harness-upstreams/check.lock /usr/bin/timeout --kill-after=5s 120s /usr/bin/node --max-old-space-size=96 /usr/local/lib/legal-harness/check-upstreams.mjs --service legal-harness-a.service --state-dir /home/cta/.local/state/legal-harness-upstreams >> /home/cta/.local/state/legal-harness-upstreams/check.log 2>&1
+30 18 * * * cta /usr/bin/flock --nonblock --conflict-exit-code 0 /home/cta/.local/state/legal-harness-upstreams/check.lock /usr/bin/timeout --kill-after=5s 160s /usr/bin/node --max-old-space-size=96 /usr/local/lib/legal-harness/run-upstream-watch.mjs --service legal-harness-a.service --state-dir /home/cta/.local/state/legal-harness-upstreams --email-config /home/cta/.config/legal-harness/upstream-email.env >> /home/cta/.local/state/legal-harness-upstreams/check.log 2>&1

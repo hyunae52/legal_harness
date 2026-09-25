@@ -32,7 +32,7 @@
 
 ```sh
 flock --nonblock --conflict-exit-code 0 /home/cta/.local/state/legal-harness-upstreams/check.lock \
-  timeout --kill-after=5s 120s /usr/bin/node --max-old-space-size=96 \
+  timeout --kill-after=5s 160s /usr/bin/node --max-old-space-size=96 \
   /usr/local/lib/legal-harness/run-upstream-watch.mjs \
   --service legal-harness-a.service \
   --state-dir /home/cta/.local/state/legal-harness-upstreams \

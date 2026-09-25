@@ -119,7 +119,8 @@ export async function sendUpstreamEmail({ configPath, stateDirectory, report, ex
   if (previous?.message_key === key) return { sent: false, reason: 'duplicate' };
   const factory = transportFactory || (options => nodemailer.createTransport(options));
   const transport = factory({ host: config.host, port: config.port, secure: config.secure,
-    auth: { user: config.user, pass: config.pass }, tls: { minVersion: 'TLSv1.2', servername: config.host } });
+    auth: { user: config.user, pass: config.pass }, tls: { minVersion: 'TLSv1.2', servername: config.host },
+    connectionTimeout: 15000, greetingTimeout: 10000, socketTimeout: 20000 });
   const result = await transport.sendMail({
     from: `"TaxLab MCP Monitor" <${config.user}>`, to: config.to,
     subject: prepared.subject, text: prepared.text,

@@ -47,6 +47,8 @@ test('successful delivery is recorded and an identical execution is not sent twi
   assert.deepEqual(await sendUpstreamEmail(input), { sent: false, reason: 'duplicate' });
   assert.equal(deliveries.length, 1);
   assert.equal(deliveries[0].options.auth.user, 'cta@planbtax.co.kr');
+  assert.equal(deliveries[0].options.connectionTimeout, 15000);
+  assert.equal(deliveries[0].options.socketTimeout, 20000);
   assert.match(deliveries[0].message.subject, /^\[정상\]/);
   const state = JSON.parse(await readFile(join(paths.stateDirectory, 'email-state.json'), 'utf8'));
   assert.equal(state.status, 'current');
