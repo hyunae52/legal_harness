@@ -41,7 +41,7 @@ export function taxLawOptionsFromEnv(env: NodeJS.ProcessEnv = process.env): LawM
 
 const errorStatus: Record<string, number> = {
   NOT_FOUND: 404, DETAIL_NOT_AVAILABLE: 502, UPSTREAM_ERROR: 502, PARSE_ERROR: 502,
-  RATE_LIMITED: 429, INVALID_INPUT: 400, TIMEOUT: 504,
+  RATE_LIMITED: 429, INVALID_INPUT: 400, AMBIGUOUS_DOCUMENT_NUMBER: 409, TIMEOUT: 504,
 };
 function malformed(): never {
   throw new LawMcpError(502, 'TAXLAW_INVALID_RESPONSE', 'Tax-law MCP returned an unrecognized response.');

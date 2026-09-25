@@ -20,8 +20,14 @@ function fixture(t, changes = {}) {
   return { managed, client };
 }
 
+test('pinned lookup schema exposes duplicate-number context', () => {
+  const lookup = taxLawTools.find(tool => tool.name === 'lookup_tax_document');
+  assert.equal(lookup.inputSchema.properties.context_query.description, '중복 문서번호를 구분할 주제 키워드. 중복일 때만 사용.');
+  assert.equal(lookup.inputSchema.additionalProperties, false);
+});
+
 test('NTS application failures cannot become successful retrievals even when MCP isError is false', () => {
-  for (const [code, status] of Object.entries({ NOT_FOUND: 404, DETAIL_NOT_AVAILABLE: 502, UPSTREAM_ERROR: 502, PARSE_ERROR: 502, RATE_LIMITED: 429, INVALID_INPUT: 400, TIMEOUT: 504 })) {
+  for (const [code, status] of Object.entries({ NOT_FOUND: 404, DETAIL_NOT_AVAILABLE: 502, UPSTREAM_ERROR: 502, PARSE_ERROR: 502, RATE_LIMITED: 429, INVALID_INPUT: 400, AMBIGUOUS_DOCUMENT_NUMBER: 409, TIMEOUT: 504 })) {
     assert.throws(() => normalizeTaxLawResult(response(code, { ok: false, error: { code, message: 'source result' } })), error =>
       error.code === 'MCP_TOOL_ERROR' && error.status === status && error.result.isError && error.result.structuredContent.error.code === code);
   }
@@ -42,6 +48,18 @@ test('real tax-law child uses no OC key, preserves structured facts and survives
   await assert.rejects(client.callTool('lookup_tax_document', { document_number: '__offline__' }), e => e.status === 502);
   const next = await client.callTool('lookup_tax_document', { document_number: '다음 조회' });
   assert.equal(first.result.structuredContent.fixture.pid, next.result.structuredContent.fixture.pid);
+});
+
+test('duplicate document numbers require context and preserve candidates for the caller', async t => {
+  const { client } = fixture(t);
+  await assert.rejects(client.callTool('lookup_tax_document', { document_number: '__ambiguous__' }), error =>
+    error.status === 409
+      && error.result.structuredContent.error.code === 'AMBIGUOUS_DOCUMENT_NUMBER'
+      && error.result.structuredContent.error.detail.candidates.length === 2);
+  const selected = await client.callTool('lookup_tax_document', {
+    document_number: '__ambiguous__', context_query: '퇴직금',
+  });
+  assert.equal(selected.result.structuredContent.fixture.args.context_query, '퇴직금');
 });
 
 test('tax-law hangs retire the actual child and recover without affecting the statute provider', async t => {
@@ -82,7 +100,7 @@ test('release selection pins version and commit and does not inherit application
   const directory = await mkdtemp(join(tmpdir(), 'taxlaw-config-'));
   t.after(async () => { const target = await realpath(directory); assert.equal(dirname(target), await realpath(tmpdir())); assert.ok(basename(target).startsWith('taxlaw-config-')); await rm(target, { recursive: true, force: true }); });
   const manifest = join(directory, 'active.json');
-  const data = { version: '2.0.0', commit: 'd77c94e5b64892fe85928508544366e418397c71', python: process.execPath, cwd: directory };
+  const data = { version: '2.0.0', commit: '50a2093170367dcf51f1273116b0fd032d3b8fdf', python: process.execPath, cwd: directory };
   await writeFile(manifest, JSON.stringify(data));
   const options = taxLawOptionsFromEnv({ TAXLAW_MCP_RELEASE_FILE: manifest, LAW_OC: 'secret', SUPABASE_SERVICE_ROLE_KEY: 'secret', GITHUB_TOKEN: 'secret', PYTHONPATH: 'bad' });
   assert.equal(options.credentialPolicy, 'none');

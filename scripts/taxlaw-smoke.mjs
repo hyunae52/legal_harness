@@ -53,6 +53,17 @@ try {
   assert.equal(same.document.documentNumber, '서면-2020-부동산-4503');
   const variant = await call('lookup_tax_document', { document_number: '서면 2026 법규재산 0119' });
   assert.equal(variant.document.documentNumber, '서면-2026-법규재산-0119');
+  const ambiguous = await call('lookup_tax_document', {
+    document_number: '법인46012-1784', include_full_text: false,
+  }, 'AMBIGUOUS_DOCUMENT_NUMBER');
+  assert.deepEqual(new Set(ambiguous.error.detail.candidates.map(item => item.ntstDcmId)), new Set([
+    '010000000000091224', '010000000000062896',
+  ]));
+  const resolved = await call('lookup_tax_document', {
+    document_number: '법인46012-1784', context_query: '퇴직금', include_full_text: false,
+  });
+  assert.equal(resolved.resolvedBy, 'document_number_and_context');
+  assert.equal(resolved.document.ntstDcmId, '010000000000062896');
   const limited = await call('get_tax_document', { ntst_dcm_id: search.items[0].ntstDcmId, body_limit: 500 });
   assert.ok(JSON.stringify(limited).includes('나머지는 sourceUrl 원문에서 확인하세요'), 'truncation must not be silent');
   await call('lookup_tax_document', { document_number: '법규재산-0119' }, 'NOT_FOUND');

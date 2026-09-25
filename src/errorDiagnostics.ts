@@ -5,6 +5,7 @@ import { publicSessionPattern } from './publicAccess.js';
 export function safeToolDiagnostic(result:CallToolResult,env:NodeJS.ProcessEnv):CallToolResult {
   const secrets=Object.entries(env).filter(([key,value])=>value&&value.length>=4&&/key|token|secret|password|^LAW_OC$/i.test(key)).flatMap(([,v])=>[v!,encodeURIComponent(v!)]);
   const omitted='[OMITTED: unparseable or encoded diagnostic]';
+  const maxDepth=6;
   const scrub=(input:string,max=2000)=>{
     let text=input;
     for(const secret of secrets)text=text.split(secret).join('[REDACTED]');
@@ -22,7 +23,7 @@ export function safeToolDiagnostic(result:CallToolResult,env:NodeJS.ProcessEnv):
   // more than once). Decode the whole JSON value before applying field policy;
   // regex-only filtering cannot see headers or JSON-escaped credentials.
   const cleanText=(input:string,max:number,depth:number):string=>{
-    if(depth>4||input.length>24000)return omitted;
+    if(depth>maxDepth||input.length>24000)return omitted;
     const trimmed=input.trim();
     if(/^[{[\"]/.test(trimmed)) {
       let parsed:unknown;
@@ -37,7 +38,7 @@ export function safeToolDiagnostic(result:CallToolResult,env:NodeJS.ProcessEnv):
     return scrub(input,max);
   };
   const clean=(value:unknown,depth=0):unknown=>{
-    if(--budget<0||depth>4)return '[OMITTED]';
+    if(--budget<0||depth>maxDepth)return '[OMITTED]';
     if(typeof value==='string')return cleanText(value,2000,depth);
     if(typeof value==='number'&&secrets.includes(String(value)))return '[REDACTED]';
     if(value===null||typeof value==='boolean'||typeof value==='number')return value;

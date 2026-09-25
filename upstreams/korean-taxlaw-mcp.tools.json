@@ -1,7 +1,7 @@
 [
   {
     "name": "lookup_tax_document",
-    "description": "문서번호로 국세청 문서(해석례·판례·결정례 자동 판별)를 **정확히 일치할 때만** 본문까지 반환한다. 표기 편차('서면 2026 법규재산 0119' 등)는 자동 정규화한다. 없으면 NOT_FOUND — similarDocuments 는 번호가 일부 겹치는 별개 문서이며 정답이 아니다. 문서번호를 아는 경우 검색 대신 항상 이 도구를 먼저 쓸 것.",
+    "description": "문서번호로 국세청 문서(해석례·판례·결정례 자동 판별)를 **정확히 일치할 때만** 본문까지 반환한다. 표기 편차('서면 2026 법규재산 0119' 등)는 자동 정규화한다. 동일 번호가 여러 건이면 context_query로 주제를 구분하며, 확정할 수 없으면 AMBIGUOUS_DOCUMENT_NUMBER를 반환한다. 없으면 NOT_FOUND — similarDocuments 는 번호가 일부 겹치는 별개 문서이며 정답이 아니다. 문서번호를 아는 경우 검색 대신 항상 이 도구를 먼저 쓸 것.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -9,6 +9,18 @@
           "description": "문서번호. 표기 편차 자동 정규화.",
           "minLength": 2,
           "type": "string"
+        },
+        "context_query": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "중복 문서번호를 구분할 주제 키워드. 중복일 때만 사용."
         },
         "include_full_text": {
           "default": true,

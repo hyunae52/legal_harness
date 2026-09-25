@@ -164,6 +164,13 @@ test('tool diagnostics bound oversized data and omit credential labels and inter
   const result=safeToolDiagnostic({isError:true,content:[{type:'text',text:'PUBLIC_FIXTURE\nAuthorization: Bearer fixture-unknown-value\n    at /internal/private.js:10\nSUPABASE_SECRET=unconfigured-sensitive-value'}],structuredContent:{required:['event_date'],environment:{secret:'hidden'},large:'z'.repeat(20000)}},{});
   const json=JSON.stringify(result);assert.ok(json.includes('PUBLIC_FIXTURE'));assert.ok(!json.includes('fixture-unknown-value'));assert.ok(!json.includes('unconfigured-sensitive-value'));assert.ok(!json.includes('/internal/private.js'));assert.ok(Buffer.byteLength(json)<=16000);
 });
+test('nested public ambiguity candidates survive diagnostics while candidate secrets are removed',()=>{
+  const secret='fixture-private-candidate-token';
+  const candidates=[{documentNumber:'법인46012-1784',ntstDcmId:'010000000000062896',productionDate:'1998-07-02',headers:{authorization:secret},token:secret}];
+  const result=safeToolDiagnostic({isError:true,content:[{type:'text',text:JSON.stringify({ok:false,error:{code:'AMBIGUOUS_DOCUMENT_NUMBER',detail:{candidates}}})}],structuredContent:{ok:false,error:{code:'AMBIGUOUS_DOCUMENT_NUMBER',detail:{candidates}}}},{LAW_OC:secret});
+  assert.deepEqual(result.structuredContent.error.detail.candidates,[{documentNumber:'법인46012-1784',ntstDcmId:'010000000000062896',productionDate:'1998-07-02'}]);
+  assert.equal(JSON.stringify(result).includes(secret),false);
+});
 test('JSON tool diagnostics decode before filtering nested private fields and escaped configured secrets',()=>{
   const secret='fixture-"law\\secret\nvalue';
   const encoded=JSON.stringify(secret).slice(1,-1).replace('f','\\u0066');
