@@ -14,12 +14,12 @@
 
 실행마다 systemd의 현재 WorkingDirectory와 프로세스의 release manifest 위치를 읽어 **실제 실행 중인 버전**과 비교한다. 앱을 새 릴리스로 전환하면 다음 확인부터 새 설치본을 기준으로 한다. 프로세스가 읽는 도중 교체되거나 설치 pin이 맞지 않으면 실패로 기록하고 설치본을 건드리지 않는다.
 
-확인 대상은 npm의 `korean-law-mcp@latest`와 두 저장소의 기본 브랜치 최신 커밋이다. 설치된 npm 버전의 원본 커밋은 npm metadata의 `gitHead`로 대조한다. npm 배포 전의 저장소 변경도 별도로 기록한다. 이 확인은 법령 내용의 최신성 검증과는 별개다.
+확인 대상은 npm의 `korean-law-mcp@latest`, 법령 MCP 저장소, 국세법령정보 MCP의 원본 `zisu17/main`과 검토 포크 `hyunae52/main`이다. 설치된 npm 버전의 원본 커밋은 npm metadata의 `gitHead`로 대조한다. 포크의 새 커밋만 운영 검증 후보가 되며, 원본에만 있는 변경은 `upstream_sync_required`로 기록하고 직접 운영 후보로 승격하지 않는다. 이 확인은 법령 내용의 최신성 검증과는 별개다.
 
 ## 결과와 업데이트 범위
 
 - `current`: 확인한 최신 배포 버전·커밋이 설치본과 같다. npm latest가 더 오래된 버전이면 설치본을 유지하고 원본 조회값을 결과에 남긴다.
-- `updates_available`: 새 버전이나 변경 커밋이 있다. `candidates`에 버전·커밋과 `validation: pending`을 기록한다.
+- `updates_available`: 새 버전이나 변경 커밋이 있다. `candidates`에 버전·커밋과 `validation: pending`을 기록한다. `activation: fork_review_required`는 포크 동기화 PR이 먼저 필요하고, `activation: human_review_required`는 검토 포크의 커밋을 Legal Harness 후보로 검증할 수 있다는 뜻이다.
 - `partial`: 비공개 전환, 삭제, API 한도, 응답 형식 오류, 통신 실패 등으로 일부 출처를 확인하지 못했다. 마지막 정상 확인값과 시각을 보존하되 `unavailable`로 표시한다. 다른 출처의 확인은 계속한다.
 - `check_failed`: 실행 중인 설치본이나 상태 파일을 읽지 못했다. 직전 결과 파일은 유지하고 로그에 실패 시각을 남긴다.
 

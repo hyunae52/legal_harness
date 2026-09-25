@@ -8,8 +8,9 @@ import { fileURLToPath } from 'node:url';
 const repositories = {
   law: 'chrisryugj/korean-law-mcp',
   taxlaw: 'zisu17/korean-taxlaw-mcp',
+  taxlaw_fork: 'hyunae52/korean-taxlaw-mcp',
 };
-const trustedTaxlawRepositories = new Set([repositories.taxlaw, 'hyunae52/korean-taxlaw-mcp']);
+const trustedTaxlawRepositories = new Set([repositories.taxlaw, repositories.taxlaw_fork]);
 const sha = /^[a-f0-9]{40}$/;
 const version = /^\d+\.\d+\.\d+$/;
 const json = async path => JSON.parse(await readFile(path, 'utf8'));
@@ -96,6 +97,8 @@ export async function checkUpstreams(installed, previous = {}, { request = fetch
     law_repository: [`https://api.github.com/repos/${repositories.law}/commits?per_page=1`, commitValue],
     taxlaw_repository: [`https://api.github.com/repos/${repositories.taxlaw}/commits?per_page=1`, commitValue],
     taxlaw_relation: [`https://api.github.com/repos/${repositories.taxlaw}/compare/${installed.taxlaw.commit}...HEAD`, comparisonValue],
+    taxlaw_fork_repository: [`https://api.github.com/repos/${repositories.taxlaw_fork}/commits?per_page=1`, commitValue],
+    taxlaw_fork_relation: [`https://api.github.com/repos/${repositories.taxlaw_fork}/compare/${installed.taxlaw.commit}...HEAD`, comparisonValue],
   };
   const sources = Object.fromEntries(await Promise.all(Object.entries(definitions).map(async ([name, [url, parse]]) => {
     const prior = previous.sources?.[name]?.url === url ? previous.sources[name] : undefined;
@@ -112,6 +115,23 @@ export async function checkUpstreams(installed, previous = {}, { request = fetch
         value: prior?.value ?? null, error: errorCode(error) }];
     }
   })));
+  const upstreamHead = sources.taxlaw_repository, forkHead = sources.taxlaw_fork_repository;
+  const syncUrl = upstreamHead.status === 'ok' && forkHead.status === 'ok'
+    ? `https://api.github.com/repos/${repositories.taxlaw_fork}/compare/${upstreamHead.value.commit}...${forkHead.value.commit}` : null;
+  const priorSync = previous.sources?.taxlaw_fork_sync;
+  if (syncUrl) {
+    try {
+      sources.taxlaw_fork_sync = { url: syncUrl, status: 'ok', checked_at: checkedAt, last_success_at: checkedAt,
+        value: comparisonValue(await request(syncUrl)) };
+    } catch (error) {
+      sources.taxlaw_fork_sync = { url: syncUrl, status: 'unavailable', checked_at: checkedAt,
+        last_success_at: priorSync?.last_success_at ?? null, value: priorSync?.value ?? null, error: errorCode(error) };
+    }
+  } else {
+    sources.taxlaw_fork_sync = { url: syncUrl, status: 'unavailable', checked_at: checkedAt,
+      last_success_at: priorSync?.last_success_at ?? null, value: priorSync?.value ?? null, error: 'DEPENDENCY_UNAVAILABLE' };
+  }
+
   const candidates = [];
   const add = (provider, kind, source, value) => candidates.push({
     provider, kind, ...value, validation: 'pending', activation: 'human_review_required',
@@ -125,14 +145,24 @@ export async function checkUpstreams(installed, previous = {}, { request = fetch
   if (head.value && head.value.commit !== baseline) {
     add('korean-law-mcp', baseline ? 'repository_change' : 'repository_baseline_unknown', head, head.value);
   }
-  const tax = sources.taxlaw_repository, relation = sources.taxlaw_relation;
-  const taxStatus = tax.status === 'unavailable' || relation.status === 'unavailable' ? 'unavailable' : 'ok';
-  const taxConfirmed = [tax.last_success_at, relation.last_success_at].filter(Boolean).sort()[0] ?? null;
-  const taxSource = { status: taxStatus, last_success_at: taxConfirmed };
-  if (tax.value && relation.value?.status === 'ahead') {
-    add('korean-taxlaw-mcp', 'repository_change', taxSource, tax.value);
-  } else if (tax.value && relation.value?.status === 'diverged') {
-    add('korean-taxlaw-mcp', 'repository_diverged', taxSource, tax.value);
+  const forkRelation = sources.taxlaw_fork_relation;
+  const forkStatus = forkHead.status === 'unavailable' || forkRelation.status === 'unavailable' ? 'unavailable' : 'ok';
+  const forkConfirmed = [forkHead.last_success_at, forkRelation.last_success_at].filter(Boolean).sort()[0] ?? null;
+  const forkSource = { status: forkStatus, last_success_at: forkConfirmed };
+  if (forkHead.value && forkRelation.value?.status === 'ahead') {
+    add('korean-taxlaw-mcp', 'repository_change', forkSource,
+      { ...forkHead.value, repository: repositories.taxlaw_fork });
+  } else if (forkHead.value && forkRelation.value?.status === 'diverged') {
+    add('korean-taxlaw-mcp', 'repository_diverged', forkSource,
+      { ...forkHead.value, repository: repositories.taxlaw_fork });
+  }
+
+  const sync = sources.taxlaw_fork_sync;
+  if (upstreamHead.value && ['behind', 'diverged'].includes(sync.value?.status)) {
+    candidates.push({ provider: 'korean-taxlaw-mcp', kind: 'upstream_sync_required',
+      commit: upstreamHead.value.commit, repository: repositories.taxlaw,
+      validation: 'pending', activation: 'fork_review_required', source_status: sync.status,
+      last_confirmed_at: sync.last_success_at });
   }
   const failures = Object.values(sources).filter(source => source.status === 'unavailable').length;
   return { schema_version: 1, checked_at: checkedAt, status: failures ? 'partial' : candidates.length ? 'updates_available' : 'current',

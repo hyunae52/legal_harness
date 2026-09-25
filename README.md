@@ -164,7 +164,7 @@ MCP `submit_failure` 또는 `POST /api/failures`는 공개 합성 사례 식별�
 
 국세청 해석례·불복 결정례의 본문 수집은 별도 zisu17/korean-taxlaw-mcp 제공자를 연결할 수 있습니다. 서버에서 `python3 scripts/install-taxlaw-mcp.py`로 검토한 커밋을 설치하면 기존 인증 REST/MCP에 국세청·지방세 도구 12개가 추가됩니다. 설치·본문 조회·오류 계약·실제 문서 시험은 [국세청 연결 안내](docs/TAXLAW_INTEGRATION.md), OpenTax와 korean-tax-agent를 검토한 후속 구조 제안은 [리서치 하네스 참고 검토](docs/RESEARCH_HARNESS_REFERENCES.md)에 있습니다.
 
-현재 GCE는 [매일 upstream 확인 작업](docs/UPSTREAM_WATCH.md)으로 korean-law-mcp의 npm 배포 버전과 두 GitHub 저장소의 최신 커밋을 한국시간 매일 03:30에 확인합니다. 변경은 **미검증 후보**로 기록하고 사람이 검수한 실행 묶음으로 배포합니다. 조회 실패·비공개 전환 시 기존 설치본과 마지막 확인 결과를 보존하며, 확인 작업은 설치·자동 활성화·서버 재시작을 하지 않습니다.
+현재 GCE는 [매일 upstream 확인 작업](docs/UPSTREAM_WATCH.md)으로 korean-law-mcp의 npm 배포 버전과 두 GitHub 저장소의 최신 커밋을 한국시간 매일 03:30에 확인합니다. 변경은 **미검증 후보**로 기록하고 사람이 검수한 실행 묶음으로 배포합니다. 조회 실패·비공개 전환 시 기존 설치본과 마지막 확인 결과를 보존하며, 확인 작업은 설치·자동 활성화·서버 재시작을 하지 않습니다. 국세법령정보 MCP 포크, 독립 버전 저장소, 승인 후 전환 원칙은 [국세법령정보 MCP 포크와 운영 버전 관리](docs/TAXLAW_PROVIDER_VERSIONING.md)에 정리했습니다.
 
 구형 PM2용 `scripts/update-korean-law.sh`와 [이전 cron 예시](deploy/korean-law-update.cron.example)는 현재 systemd 운영 배포에 사용하지 않습니다. 별도 PM2 환경에서만 `KOREAN_LAW_MCP_RELEASE_FILE`과 `--bootstrap`으로 초기 설치하고, 업데이트를 설치·review·MCP schema 확인을 거친 후보로 준비할 수 있습니다. `--activate <approved-sha256>`는 검수한 후보를 수동 전환하는 PM2 운영자 명령입니다. 현재 GCE에 이 명령이나 구형 git-sync cron을 재활성화하면 안 됩니다.
 

@@ -6,24 +6,30 @@ import { basename, dirname, join } from 'node:path';
 import { checkUpstreams, fetchMetadata, readInstalled, saveReport } from '../scripts/check-upstreams.mjs';
 
 const installed = { law: { version: '4.13.0' },
-  taxlaw: { version: '2.0.0', commit: 'a'.repeat(40), repository: 'zisu17/korean-taxlaw-mcp' } };
+  taxlaw: { version: '2.0.0', commit: 'a'.repeat(40), repository: 'hyunae52/korean-taxlaw-mcp' } };
 const stamp = '2026-09-22T00:00:00.000Z';
-function requests({ latest = '4.13.0', law = 'b'.repeat(40), tax = 'a'.repeat(40), relation, failure } = {}) {
+function requests({ latest = '4.13.0', law = 'b'.repeat(40), tax = 'a'.repeat(40), fork = tax,
+  upstreamRelation, forkRelation, syncRelation = tax === fork ? 'identical' : 'ahead', failure } = {}) {
   return async url => {
     if (failure?.(url)) throw new Error('HTTP_404');
     if (url.includes('/latest')) return { name: 'korean-law-mcp', version: latest, gitHead: law };
     if (url.includes('/4.13.0')) return { name: 'korean-law-mcp', version: '4.13.0', gitHead: 'b'.repeat(40) };
     if (url.includes('/compare/')) {
-      const status = relation ?? (tax === installed.taxlaw.commit ? 'identical' : 'ahead');
+      const isFork = url.includes('/hyunae52/');
+      const isHead = url.endsWith('...HEAD');
+      const status = isFork && !isHead ? syncRelation
+        : isFork ? (forkRelation ?? (fork === installed.taxlaw.commit ? 'identical' : 'ahead'))
+          : (upstreamRelation ?? (tax === installed.taxlaw.commit ? 'identical' : 'ahead'));
       return { status, ahead_by: status === 'ahead' ? 1 : 0, behind_by: status === 'behind' ? 1 : 0 };
     }
-    return [{ sha: url.includes('zisu17') ? tax : law }];
+    return [{ sha: url.includes('zisu17') ? tax : url.includes('hyunae52') ? fork : law }];
   };
 }
 const check = (request, previous) => checkUpstreams(installed, previous, { request, now: () => stamp });
 
 test('daily upstream check detects npm and both repo changes without authorizing activation', async () => {
-  const result = await check(requests({ latest: '4.13.1', law: 'c'.repeat(40), tax: 'd'.repeat(40) }));
+  const result = await check(requests({ latest: '4.13.1', law: 'c'.repeat(40),
+    tax: 'd'.repeat(40), fork: 'd'.repeat(40), syncRelation: 'identical' }));
   assert.equal(result.status, 'updates_available');
   assert.equal(result.candidates.length, 3);
   assert.ok(result.candidates.every(c => c.validation === 'pending' && c.activation === 'human_review_required'));
@@ -31,7 +37,8 @@ test('daily upstream check detects npm and both repo changes without authorizing
 });
 
 test('private repos preserve last known candidates and do not mask fresh npm changes', async () => {
-  const previous = await check(requests({ latest: '4.13.1', law: 'c'.repeat(40), tax: 'd'.repeat(40) }));
+  const previous = await check(requests({ latest: '4.13.1', law: 'c'.repeat(40),
+    tax: 'd'.repeat(40), fork: 'd'.repeat(40), syncRelation: 'identical' }));
   const result = await check(requests({ latest: '4.13.2', failure: url => url.includes('api.github.com') }), previous);
   assert.equal(result.status, 'partial');
   assert.equal(result.candidates.find(c => c.kind === 'npm_release').version, '4.13.2');
@@ -46,7 +53,8 @@ test('registry and repo outage on first run is unavailable, never falsely curren
   const result = await check(async () => { throw new Error('upstream response with secrets'); });
   assert.equal(result.status, 'partial');
   assert.deepEqual(result.candidates, []);
-  assert.ok(Object.values(result.sources).every(s => s.value === null && s.error === 'FETCH_FAILED'));
+  assert.ok(Object.entries(result.sources).every(([name, source]) => source.value === null
+    && source.error === (name === 'taxlaw_fork_sync' ? 'DEPENDENCY_UNAVAILABLE' : 'FETCH_FAILED')));
   assert.doesNotMatch(JSON.stringify(result), /with secrets/);
 });
 
@@ -77,14 +85,26 @@ test('a newly deployed installed version cannot reuse the prior installed commit
 test('trusted fork pins stay monitored against canonical history without proposing a rollback', async () => {
   const fork = { ...installed,
     taxlaw: { ...installed.taxlaw, commit: 'f'.repeat(40), repository: 'hyunae52/korean-taxlaw-mcp' } };
-  const pending = await checkUpstreams(fork, {}, { request: requests({ tax: 'a'.repeat(40), relation: 'behind' }), now: () => stamp });
+  const pending = await checkUpstreams(fork, {}, { request: requests({ tax: 'a'.repeat(40), fork: 'f'.repeat(40),
+    upstreamRelation: 'behind', forkRelation: 'identical', syncRelation: 'ahead' }), now: () => stamp });
   assert.equal(pending.status, 'current');
   assert.deepEqual(pending.candidates.filter(c => c.provider === 'korean-taxlaw-mcp'), []);
   assert.equal(pending.sources.taxlaw_relation.value.status, 'behind');
-  const merged = await checkUpstreams(fork, {}, { request: requests({ tax: 'd'.repeat(40), relation: 'ahead' }), now: () => stamp });
+  const merged = await checkUpstreams(fork, {}, { request: requests({ tax: 'a'.repeat(40), fork: 'd'.repeat(40),
+    upstreamRelation: 'behind', forkRelation: 'ahead', syncRelation: 'ahead' }), now: () => stamp });
   const candidate = merged.candidates.find(c => c.provider === 'korean-taxlaw-mcp');
   assert.equal(candidate.kind, 'repository_change');
   assert.equal(candidate.commit, 'd'.repeat(40));
+});
+
+test('canonical changes require fork review and never become direct production candidates', async () => {
+  const result = await check(requests({ tax: 'd'.repeat(40), fork: installed.taxlaw.commit,
+    upstreamRelation: 'ahead', forkRelation: 'identical', syncRelation: 'behind' }));
+  const candidate = result.candidates.find(c => c.kind === 'upstream_sync_required');
+  assert.equal(candidate.commit, 'd'.repeat(40));
+  assert.equal(candidate.repository, 'zisu17/korean-taxlaw-mcp');
+  assert.equal(candidate.activation, 'fork_review_required');
+  assert.equal(result.candidates.some(c => c.kind === 'repository_change'), false);
 });
 
 test('report persistence leaves runtime manifests intact; changed pinned provider refuses checks', async t => {
@@ -102,8 +122,10 @@ test('report persistence leaves runtime manifests intact; changed pinned provide
   const lawText = JSON.stringify({ version: '4.13.0', entrypoint: join(root, 'law/build/index.js') });
   const taxText = JSON.stringify({ ...installed.taxlaw, python: join(root, 'python'), cwd: root });
   await writeFile(lawFile, lawText); await writeFile(taxFile, taxText);
-  await writeFile(pinFile, JSON.stringify({ repository: 'zisu17/korean-taxlaw-mcp', ...installed.taxlaw }));
-  assert.deepEqual(await readInstalled(root, lawFile, taxFile), installed);
+  const canonical = { ...installed,
+    taxlaw: { ...installed.taxlaw, repository: 'zisu17/korean-taxlaw-mcp' } };
+  await writeFile(pinFile, JSON.stringify(canonical.taxlaw));
+  assert.deepEqual(await readInstalled(root, lawFile, taxFile), canonical);
   await writeFile(pinFile, JSON.stringify({ ...installed.taxlaw, repository: 'hyunae52/korean-taxlaw-mcp' }));
   assert.deepEqual((await readInstalled(root, lawFile, taxFile)).taxlaw.repository, 'hyunae52/korean-taxlaw-mcp');
   const state = join(root, 'state');
