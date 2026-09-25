@@ -72,7 +72,7 @@ try {
   assert.equal(rest.status, 200);
   evidence.rest = await rest.json();
   assert.equal(evidence.rest.data.evidence.upstream_name, 'korean-taxlaw');
-  assert.equal(evidence.rest.data.evidence.upstream_version, '2.0.0');
+  assert.equal(evidence.rest.data.evidence.upstream_version, '2.0.0.post1');
   assert.equal(evidence.rest.data.result.structuredContent.document.documentNumber, '서면-2020-부동산-4503');
   evidence.status = 'passed';
 } catch (error) {

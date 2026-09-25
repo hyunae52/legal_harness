@@ -1,5 +1,10 @@
 # Legal Harness
 
+> **Limited beta:** 소스와 공개 조회 엔드포인트는 사용할 수 있지만 정식 세무 자문 서비스나
+> 신고·불복 업무의 단독 근거가 아닙니다. 실제 고객 개인정보를 입력하지 말고 원문과 전문가
+> 검토를 거치세요. 범위와 데이터 취급 기준은 [제한 베타 정책](docs/LIMITED_BETA_POLICY.md),
+> 보안 신고 방법은 [SECURITY.md](SECURITY.md)를 참고하세요.
+
 MCP 주소는 `https://law.taxlab.kr/mcp`입니다. 공개 모드에서는 접속키나 로그인 없이
 Streamable HTTP로 연결합니다. 기존 `/sse`와 설치파일도 유지합니다.
 사건 연구는 빠진 필수 사실을 하나씩 묻고 `answer_legal_question`으로
@@ -158,11 +163,11 @@ MCP `submit_failure` 또는 `POST /api/failures`는 공개 합성 사례 식별�
 
 ## 사용한 오픈소스와 크레딧
 
-- [zisu17/korean-taxlaw-mcp](https://github.com/zisu17/korean-taxlaw-mcp): 국세청·지방세 자료 검색과 원문 조회에 사용합니다. [zisu17](https://github.com/zisu17)과 해당 프로젝트 기여자들에게 감사드립니다. 검토한 원본을 별도 MCP 프로세스로 실행하며, 원본 저작권 및 [MIT 라이선스 고지](upstreams/korean-taxlaw-mcp.LICENSE)를 보존합니다. 이 표기는 외부 프로젝트 활용에 대한 크레딧이며 TaxLab에 대한 원작자의 검수·보증을 뜻하지 않습니다.
+- [zisu17/korean-taxlaw-mcp](https://github.com/zisu17/korean-taxlaw-mcp): 국세청·지방세 자료 검색과 원문 조회의 원본 프로젝트입니다. [zisu17](https://github.com/zisu17)과 해당 프로젝트 기여자들에게 감사드립니다. 운영은 [hyunae52 검토 포크](https://github.com/hyunae52/korean-taxlaw-mcp)의 고정 버전을 별도 MCP 프로세스로 실행하며, 원본 저작권 및 [MIT 라이선스 고지](upstreams/korean-taxlaw-mcp.LICENSE)를 보존합니다. 이 표기는 외부 프로젝트 활용에 대한 크레딧이며 TaxLab에 대한 원작자의 검수·보증을 뜻하지 않습니다.
 
 ## upstream 업데이트와 배포
 
-국세청 해석례·불복 결정례의 본문 수집은 별도 zisu17/korean-taxlaw-mcp 제공자를 연결할 수 있습니다. 서버에서 `python3 scripts/install-taxlaw-mcp.py`로 검토한 커밋을 설치하면 기존 인증 REST/MCP에 국세청·지방세 도구 12개가 추가됩니다. 설치·본문 조회·오류 계약·실제 문서 시험은 [국세청 연결 안내](docs/TAXLAW_INTEGRATION.md), OpenTax와 korean-tax-agent를 검토한 후속 구조 제안은 [리서치 하네스 참고 검토](docs/RESEARCH_HARNESS_REFERENCES.md)에 있습니다.
+국세청 해석례·불복 결정례의 본문 수집은 별도 Hyunae 검토 포크 제공자를 연결할 수 있습니다. 서버에서 `python3 scripts/install-taxlaw-mcp.py`로 고정 커밋을 설치하면 기존 인증 REST/MCP에 국세청·지방세 도구 12개가 추가됩니다. 원본 `zisu17/main`은 매일 변경 여부만 확인하고 자동 병합·배포하지 않습니다. 설치·본문 조회·오류 계약·실제 문서 시험은 [국세청 연결 안내](docs/TAXLAW_INTEGRATION.md), OpenTax와 korean-tax-agent를 검토한 후속 구조 제안은 [리서치 하네스 참고 검토](docs/RESEARCH_HARNESS_REFERENCES.md)에 있습니다.
 
 현재 GCE는 [매일 upstream 확인 작업](docs/UPSTREAM_WATCH.md)으로 korean-law-mcp의 npm 배포 버전과 두 GitHub 저장소의 최신 커밋을 한국시간 매일 03:30에 확인합니다. 변경은 **미검증 후보**로 기록하고 사람이 검수한 실행 묶음으로 배포합니다. 조회 실패·비공개 전환 시 기존 설치본과 마지막 확인 결과를 보존하며, 확인 작업은 설치·자동 활성화·서버 재시작을 하지 않습니다. 국세법령정보 MCP 포크, 독립 버전 저장소, 승인 후 전환 원칙은 [국세법령정보 MCP 포크와 운영 버전 관리](docs/TAXLAW_PROVIDER_VERSIONING.md)에 정리했습니다.
 

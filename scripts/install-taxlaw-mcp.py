@@ -1,4 +1,4 @@
-"""Install the reviewed upstream in its own venv; never use a floating git branch."""
+"""Install the reviewed provider fork in its own venv; never use a floating branch."""
 from __future__ import annotations
 
 import argparse
@@ -26,7 +26,7 @@ def main() -> None:
     release.mkdir(parents=True, exist_ok=True)
     archive = release / "source.zip"
     if not archive.exists():
-        request = urllib.request.Request(pin["archive_url"], headers={"User-Agent": "TaxLab-reviewed-upstream-installer"})
+        request = urllib.request.Request(pin["archive_url"], headers={"User-Agent": "TaxLab-reviewed-provider-installer"})
         with urllib.request.urlopen(request, timeout=60) as response:
             payload = response.read(20 * 1024 * 1024 + 1)
         if len(payload) > 20 * 1024 * 1024:
@@ -67,7 +67,7 @@ def main() -> None:
     run([str(python), "-I", "-m", "pip", "install", str(source) + ("[dev]" if options.dev else "")])
     version = run([str(python), "-I", "-c", "from korean_taxlaw_mcp import __version__; print(__version__)"], capture_output=True, text=True).stdout.strip()
     if version != pin["version"]:
-        raise SystemExit("Installed upstream version differs from the reviewed pin.")
+        raise SystemExit("Installed provider version differs from the reviewed pin.")
     dependencies = run([str(python), "-I", "-m", "pip", "freeze"], capture_output=True, text=True).stdout
     (release / "installed-dependencies.txt").write_text(dependencies, encoding="utf-8")
     selected = {"version": version, "commit": pin["commit"], "python": str(python), "cwd": str(source)}

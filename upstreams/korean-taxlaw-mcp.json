@@ -1,8 +1,8 @@
 {
   "repository": "hyunae52/korean-taxlaw-mcp",
-  "commit": "50a2093170367dcf51f1273116b0fd032d3b8fdf",
-  "version": "2.0.0",
-  "archive_url": "https://codeload.github.com/hyunae52/korean-taxlaw-mcp/zip/50a2093170367dcf51f1273116b0fd032d3b8fdf",
-  "archive_sha256": "500563208a824e98f6fafc8f738c8212943d0ac8b24c33ce3ac80486e4cb0200",
+  "commit": "72f6e7fc14f2e92b5580ca1ad2ccfaec9fbfec13",
+  "version": "2.0.0.post1",
+  "archive_url": "https://codeload.github.com/hyunae52/korean-taxlaw-mcp/zip/72f6e7fc14f2e92b5580ca1ad2ccfaec9fbfec13",
+  "archive_sha256": "a8e00e917c91d84738144bfeb2939e17cc837ffb2afbc093abe11259c0b82d5b",
   "license": "MIT"
 }

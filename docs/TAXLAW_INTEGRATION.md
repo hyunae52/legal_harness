@@ -1,6 +1,6 @@
 # 국세청·지방세 자료 제공자 연결
 
-법령·조문·연혁은 기존 korean-law-mcp가 맡고, 해석례 본문은 zisu17/korean-taxlaw-mcp를 별도 stdio 자식 프로세스로 실행해 읽는다. 사용자에게 보이는 접속 URL과 인증 방식은 같다. Python 3.11 이상은 서버에만 필요하다.
+법령·조문·연혁은 기존 korean-law-mcp가 맡고, 해석례 본문은 `zisu17/korean-taxlaw-mcp`를 바탕으로 검토한 `hyunae52/korean-taxlaw-mcp` 포크를 별도 stdio 자식 프로세스로 실행해 읽는다. 사용자에게 보이는 접속 URL과 인증 방식은 같다. Python 3.11 이상은 서버에만 필요하다.
 
 ## 설치와 검증
 
@@ -15,7 +15,7 @@ Windows에서는 `python scripts/install-taxlaw-mcp.py` 또는 `npm run taxlaw:i
 
 기본 선택 파일은 `.runtime/taxlaw/active.json`이다. 다른 경로로 설치하려면 `--directory /absolute/path`를 주고 `TAXLAW_MCP_RELEASE_FILE=/absolute/path/active.json`을 설정한다. 서비스 계정이 설치 디렉터리를 읽고 Python을 실행할 수 있어야 한다. 앱이 시작할 때 선택 파일을 읽으며 설치 스크립트가 서비스를 재시작하거나 배포하지 않는다.
 
-코드·버전 핀: [upstreams/korean-taxlaw-mcp.json](../upstreams/korean-taxlaw-mcp.json). 도구 스키마는 해당 커밋의 실제 MCP tools/list에서 얻었다. 현재 중복 문서번호 수정은 원본 PR 병합 전까지 `hyunae52` 포크의 검토 커밋에 고정하며, 원본 병합 뒤에는 동일 변경을 포함한 upstream 커밋으로 교체한다. 원본 MIT 고지는 `upstreams/korean-taxlaw-mcp.LICENSE`에 보존했다. 설치된 의존성 버전은 release 디렉터리의 `installed-dependencies.txt`에 저장한다. pip의 선언 버전 범위를 설치하므로 모든 전이 의존성을 잠근 재현 빌드는 아니다.
+코드·버전 핀: [upstreams/korean-taxlaw-mcp.json](../upstreams/korean-taxlaw-mcp.json). 도구 스키마는 해당 커밋의 실제 MCP tools/list에서 얻었다. 운영과 공개 설치 기준은 `hyunae52` 포크의 검토 태그이며, 원본에 같은 수정이 병합되어도 자동으로 원본 브랜치로 교체하지 않는다. `zisu17/main`은 매일 변경을 확인하고 포크 후보 PR에서 시험·검토한 뒤 새 포크 버전으로만 반영한다. 원본 MIT 고지는 `upstreams/korean-taxlaw-mcp.LICENSE`에 보존했다. 설치된 의존성 버전은 release 디렉터리의 `installed-dependencies.txt`에 저장한다. pip의 선언 버전 범위를 설치하므로 모든 전이 의존성을 잠근 재현 빌드는 아니다.
 
 업데이트할 때는 커밋·아카이브 해시·버전·도구 스키마를 같은 PR에서 변경하고 회귀 및 라이브 시험을 다시 실행한다. 기존 korean-law-mcp cron이 이 Python 제공자까지 자동 갱신하지는 않는다.
 

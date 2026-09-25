@@ -23,9 +23,9 @@
     "provider_log_sha256": "ae1a76631b5596841cb31fe82f3db5ce929541ea8d4a6b414f3ebeb038c447ec"
   },
   "gce": {
-    "account": "gncntodrkd@gmail.com",
-    "project": "project-fc97e503-d3b6-4b10-a9f",
-    "instance": "instance-20260918-213052",
+    "account": "[redacted operator account]",
+    "project": "[redacted project]",
+    "instance": "[redacted instance]",
     "zone": "us-west1-b",
     "ipv4": "136.67.179.84",
     "ipv6": false,

@@ -100,7 +100,7 @@ test('release selection pins version and commit and does not inherit application
   const directory = await mkdtemp(join(tmpdir(), 'taxlaw-config-'));
   t.after(async () => { const target = await realpath(directory); assert.equal(dirname(target), await realpath(tmpdir())); assert.ok(basename(target).startsWith('taxlaw-config-')); await rm(target, { recursive: true, force: true }); });
   const manifest = join(directory, 'active.json');
-  const data = { version: '2.0.0', commit: '50a2093170367dcf51f1273116b0fd032d3b8fdf', python: process.execPath, cwd: directory };
+  const data = { version: '2.0.0.post1', commit: '72f6e7fc14f2e92b5580ca1ad2ccfaec9fbfec13', python: process.execPath, cwd: directory };
   await writeFile(manifest, JSON.stringify(data));
   const options = taxLawOptionsFromEnv({ TAXLAW_MCP_RELEASE_FILE: manifest, LAW_OC: 'secret', SUPABASE_SERVICE_ROLE_KEY: 'secret', GITHUB_TOKEN: 'secret', PYTHONPATH: 'bad' });
   assert.equal(options.credentialPolicy, 'none');
