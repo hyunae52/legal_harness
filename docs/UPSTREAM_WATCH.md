@@ -11,6 +11,7 @@
 - 최신 결과: `/home/cta/.local/state/legal-harness-upstreams/latest.json`.
 - 실행 로그: 같은 디렉터리의 `check.log`. 로그는 주 단위 또는 1 MiB 초과 시 회전하고 4개를 보관한다.
 - 상태 디렉터리 `0700`, 결과·로그 `0600`. GitHub 토큰이나 API 접속키를 사용하지 않는다.
+- 메일 기록: Gmail SMTP 앱 비밀번호를 사용하는 `upstream-email.env`를 서버에만 `0600`으로 보관한다. 매 실행 결과를 메일로 보내며, 같은 `status + checked_at` 실행만 중복 차단한다. 앱 비밀번호와 SMTP 원문 오류는 로그·Git·상태 파일에 기록하지 않는다.
 
 실행마다 systemd의 현재 WorkingDirectory와 프로세스의 release manifest 위치를 읽어 **실제 실행 중인 버전**과 비교한다. 앱을 새 릴리스로 전환하면 다음 확인부터 새 설치본을 기준으로 한다. 프로세스가 읽는 도중 교체되거나 설치 pin이 맞지 않으면 실패로 기록하고 설치본을 건드리지 않는다.
 
@@ -32,9 +33,12 @@
 ```sh
 flock --nonblock --conflict-exit-code 0 /home/cta/.local/state/legal-harness-upstreams/check.lock \
   timeout --kill-after=5s 120s /usr/bin/node --max-old-space-size=96 \
-  /usr/local/lib/legal-harness/check-upstreams.mjs \
+  /usr/local/lib/legal-harness/run-upstream-watch.mjs \
   --service legal-harness-a.service \
-  --state-dir /home/cta/.local/state/legal-harness-upstreams
+  --state-dir /home/cta/.local/state/legal-harness-upstreams \
+  --email-config /home/cta/.config/legal-harness/upstream-email.env
 ```
+
+메일 제목은 `[정상]`, `[업데이트 발견]`, `[점검 일부 실패]`, `[점검 실패]`, `[복구]`로 구분한다. 본문에는 운영 중인 두 MCP 버전·변경 후보·조회 출처 상태를 남긴다. 발송이 실패하면 `notification_failed`만 로그에 출력하고 다음 예약에서 다시 시도한다.
 
 이전 `/opt/legal_harness/scripts/cron-git-sync.sh`와 `update-korean-law.sh` cron은 동결 상태를 유지한다. 이 작업들은 현재 systemd 배포 방식과 호환되지 않으며, 새 확인 작업과 함께 켜지 않는다.
