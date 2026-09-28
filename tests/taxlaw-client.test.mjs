@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { mkdtemp, writeFile, realpath, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname, basename } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -100,7 +100,8 @@ test('release selection pins version and commit and does not inherit application
   const directory = await mkdtemp(join(tmpdir(), 'taxlaw-config-'));
   t.after(async () => { const target = await realpath(directory); assert.equal(dirname(target), await realpath(tmpdir())); assert.ok(basename(target).startsWith('taxlaw-config-')); await rm(target, { recursive: true, force: true }); });
   const manifest = join(directory, 'active.json');
-  const data = { version: '2.0.0.post1', commit: '72f6e7fc14f2e92b5580ca1ad2ccfaec9fbfec13', python: process.execPath, cwd: directory };
+  const pin = JSON.parse(await readFile(new URL('../upstreams/korean-taxlaw-mcp.json', import.meta.url), 'utf8'));
+  const data = { version: pin.version, commit: pin.commit, python: process.execPath, cwd: directory };
   await writeFile(manifest, JSON.stringify(data));
   const options = taxLawOptionsFromEnv({ TAXLAW_MCP_RELEASE_FILE: manifest, LAW_OC: 'secret', SUPABASE_SERVICE_ROLE_KEY: 'secret', GITHUB_TOKEN: 'secret', PYTHONPATH: 'bad' });
   assert.equal(options.credentialPolicy, 'none');
@@ -134,8 +135,21 @@ test('authenticated REST and SSE expose NTS tools and actual provider provenance
   const mcp = new Client({ name: 'nts-integration-test', version: '1' });
   t.after(() => mcp.close());
   await mcp.connect(new SSEClientTransport(new URL(origin + '/sse'), { requestInit: { headers } }));
-  const names = (await mcp.listTools()).tools.map(t => t.name);
+  const listedTools = (await mcp.listTools()).tools;
+  const names = listedTools.map(t => t.name);
   for (const tool of taxLawTools) assert.ok(names.includes(tool.name));
+  for (const [tool, type] of [['search_tax_interpretations', 'curated_issue'], ['search_tax_decisions', 'audit_appeal'], ['search_tax_decisions', 'taxpayer_protection']]) {
+    assert.ok(listedTools.find(t => t.name === tool).inputSchema.properties.type.enum.includes(type), `discovery must expose ${type}`);
+    const args = { query: 'special fixture', type, limit: 1, ...(type === 'audit_appeal' ? { attachment_status: true } : {}) };
+    const special = await mcp.callTool({ name: tool, arguments: args });
+    assert.notEqual(special.isError, true);
+    assert.equal(special.structuredContent.fixture.args.type, type);
+    if (type === 'audit_appeal') assert.equal(special.structuredContent.fixture.args.attachment_status, true);
+    const restSpecial = await fetch(origin + '/api/analyze', { method: 'POST', headers,
+      body: JSON.stringify({ tool, query: args.query, arguments: args }) });
+    assert.equal(restSpecial.status, 200);
+    assert.equal((await restSpecial.json()).data.result.structuredContent.fixture.args.type, type);
+  }
   const read = await mcp.callTool({ name: 'lookup_tax_document', arguments: { document_number: '서면-2020-부동산-4503' } });
   assert.equal(read.structuredContent.document.question, 'fixture question');
   assert.equal(read._meta['legal-harness/evidence'].upstream_name, 'korean-taxlaw');

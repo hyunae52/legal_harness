@@ -97,11 +97,24 @@ VPS cron은 읽기 전용 상태 감시다. 실행 중인 버전, 포크 `main`,
 
 - 검토 포크: `hyunae52/korean-taxlaw-mcp`
 - 원본 저장소: `zisu17/korean-taxlaw-mcp`
-- 현재 고정 커밋: `72f6e7fc14f2e92b5580ca1ad2ccfaec9fbfec13`
-- 현재 패키지 버전: `2.0.0.post1`
-- 설치 태그: `taxlab-v2.0.0.post1`
+- 현재 고정 커밋: `5790d279d123d9991846b23749e08bd57e65474d`
+- 현재 패키지 버전: `2.0.0.post2`
+- 설치 기준: 위 커밋의 아카이브와 SHA-256 (태그 없이 고정)
 - 실행 방식: Legal Harness가 요청 시 Python MCP를 `stdio` 자식으로 실행
 - 운영 전환: 시험 완료 후 사람의 명시적 승인 필요
 
 커밋과 버전의 실제 운영값은 이 문서가 아니라
 `upstreams/korean-taxlaw-mcp.json`과 운영 `active.json`을 기준으로 판단한다.
+
+### 2026-09-28 문서 유형 확장
+
+포크 PR #2의 쟁점별 사례(`curated_issue`), 감사원 심사청구(`audit_appeal`),
+납세자보호위원회(`taxpayer_protection`) 조회를 반영했다. 기존 `all` 검색의 범위는
+유지되므로 이 자료는 해당 `type`을 지정해서 조회한다. 쟁점별 사례와 납세자보호위원회는
+검색 결과의 `ntstDcmId`로 본문을 조회할 수 있다. 감사원 자료는 첨부파일 중심이며,
+`attachment_status=true`는 파일 앞부분의 형식과 응답 가능 여부를 확인한다.
+전체 파일의 무결성이나 법률 판단의 정확성을 검증했다는 의미는 아니다.
+
+실제 서버의 `tools/list`로 도구 스키마를 함께 갱신한다. 지원하지 않는 필터는
+무시하지 않고 `INVALID_INPUT`으로 반환한다. 국세청 응답 오류나 미확인 첨부 상태를
+자료 부존재나 본문 확보로 해석하지 않는다.

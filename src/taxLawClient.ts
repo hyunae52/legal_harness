@@ -6,7 +6,8 @@ import { z } from 'zod';
 import { KoreanLawClient, LawMcpError, type LawMcpOptions } from './koreanLawClient.js';
 
 const pin = JSON.parse(readFileSync(new URL('../upstreams/korean-taxlaw-mcp.json', import.meta.url), 'utf8')) as { commit: string; version: string };
-// These schemas were obtained from the pinned server's real tools/list response.
+// Input schemas and descriptions come from the pinned server's real tools/list.
+// Omit its {result: string} output schema: normalizeTaxLawResult decodes that wrapper.
 // Discovery stays available when an optional provider is temporarily down.
 export const taxLawTools: Tool[] = JSON.parse(readFileSync(new URL('../upstreams/korean-taxlaw-mcp.tools.json', import.meta.url), 'utf8'));
 export const taxLawToolNames = new Set(taxLawTools.map(t => t.name));
