@@ -1,7 +1,8 @@
 import { digest } from './contracts.js';
-import type { ReviewInput, Plan } from './researchContracts.js';
+import type { ReviewInput, Plan, CitationInput } from './researchContracts.js';
 import type { ResearchAttempt, ResearchEvidence } from './researchEvidence.js';
 import { inspectScopeCompletion } from './scopeCompletion.js';
+import { inspectLegalApplicability } from './legalApplicability.js';
 
 export function inspectResearch(input: ReviewInput, plan: Plan, evidence: ResearchEvidence[], attempts: ResearchAttempt[]) {
   const findings: { code: string; severity: 'blocked' | 'needs_info'; issue_id?: string; detail: string }[] = [];
@@ -35,6 +36,25 @@ export function inspectResearch(input: ReviewInput, plan: Plan, evidence: Resear
       if (analysis.conclusion_mode !== 'withheld' || !analysis.withholding_reason.trim()) block('CLAIM_REQUIRED', '주장을 제출하거나 명시적으로 유보 사유를 적으세요.');
       gap('CONCLUSION_WITHHELD', analysis.withholding_reason || '주장이 제출되지 않았습니다.');
     }
+    const checkCitation = (citation: CitationInput, claimId: string) => {
+      const receipt = byEvidence.get(citation.evidence_id);
+      const passage = receipt?.passages.find(p => p.passage_id === citation.passage_id);
+      const match = Boolean(passage && passage.text.includes(citation.quote));
+      const errors: string[] = [];
+      if (!receipt) errors.push('EVIDENCE_NOT_FOUND');
+      else if (!passage) errors.push('PASSAGE_NOT_FOUND');
+      else {
+        if (!match) errors.push('QUOTE_MISMATCH');
+        if (!receipt.issue_ids.includes(issue.id) && !citation.bridge_reason) errors.push('ISSUE_BRIDGE_REQUIRED');
+        if (['discovery_only', 'unknown'].includes(passage.body_scope)) errors.push('BODY_NOT_AVAILABLE');
+        if (passage.body_scope === 'partial') gap('PARTIAL_BODY', citation.evidence_id);
+        if (receipt.units.some(u => u.source_access === 'unavailable')) gap('UNAVAILABLE_SOURCE_ROLE', citation.evidence_id);
+      }
+      for (const code of errors) block(code, `${claimId}: ${citation.evidence_id}/${citation.passage_id}`);
+      citationChecks.push({ issue_id: issue.id, claim_id: claimId, citation, quote_match: match,
+        body_scope: passage?.body_scope ?? receipt?.body_scope ?? 'unknown', errors, semantic_support: 'unverified' });
+      return !errors.length && match && citation.relation === 'direct' && passage?.body_scope === 'body_returned';
+    };
     for (const claim of analysis.claims) {
       if (claimIds.has(claim.id)) block('DUPLICATE_CLAIM', claim.id);
       claimIds.add(claim.id);
@@ -47,23 +67,7 @@ export function inspectResearch(input: ReviewInput, plan: Plan, evidence: Resear
       }
       let direct = false;
       for (const citation of claim.citations) {
-        const receipt = byEvidence.get(citation.evidence_id);
-        const passage = receipt?.passages.find(p => p.passage_id === citation.passage_id);
-        const match = Boolean(passage && passage.text.includes(citation.quote));
-        const errors: string[] = [];
-        if (!receipt) errors.push('EVIDENCE_NOT_FOUND');
-        else if (!passage) errors.push('PASSAGE_NOT_FOUND');
-        else {
-          if (!match) errors.push('QUOTE_MISMATCH');
-          if (!receipt.issue_ids.includes(issue.id) && !citation.bridge_reason) errors.push('ISSUE_BRIDGE_REQUIRED');
-          if (['discovery_only', 'unknown'].includes(passage.body_scope)) errors.push('BODY_NOT_AVAILABLE');
-          if (passage.body_scope === 'partial') gap('PARTIAL_BODY', citation.evidence_id);
-          if (receipt.units.some(u => u.source_access === 'unavailable')) gap('UNAVAILABLE_SOURCE_ROLE', citation.evidence_id);
-        }
-        for (const code of errors) block(code, `${claim.id}: ${citation.evidence_id}/${citation.passage_id}`);
-        citationChecks.push({ issue_id: issue.id, claim_id: claim.id, citation, quote_match: match,
-          body_scope: passage?.body_scope ?? receipt?.body_scope ?? 'unknown', errors, semantic_support: 'unverified' });
-        if (!errors.length && match && citation.relation === 'direct' && passage?.body_scope === 'body_returned') direct = true;
+        if (checkCitation(citation, claim.id)) direct = true;
       }
       if (!direct) gap('DIRECT_SUPPORT_REQUIRED', claim.id + ': 확인 가능한 직접 본문 인용이 부족합니다. 유추 여부의 의미 판단은 별도입니다.');
     }
@@ -77,6 +81,8 @@ export function inspectResearch(input: ReviewInput, plan: Plan, evidence: Resear
         if (receipt.body_scope !== 'body_returned') gap('COUNTER_BODY_REQUIRED', counter.evidence_id);
       }
       if (counter.disposition === 'unresolved') gap('UNRESOLVED_COUNTER', counter.reason);
+      if (counter.disposition === 'resolved' && !counter.resolution_citations?.length) gap('COUNTER_RESOLUTION_SOURCE_REQUIRED', counter.evidence_id);
+      for (const citation of counter.resolution_citations ?? []) checkCitation(citation, 'counter_resolution');
     }
     const counters = evidence.filter(e => e.purpose === 'counter' && e.issue_ids.includes(issue.id));
     if (!counters.length) gap('COUNTER_RESEARCH_REQUIRED', '반대 자료를 확인하세요. 0건이나 실패는 반례 부재의 증명이 아닙니다.');
@@ -84,6 +90,7 @@ export function inspectResearch(input: ReviewInput, plan: Plan, evidence: Resear
     for (const attempt of attempts.filter(a => a.revision === input.expected_revision && a.issue_ids.includes(issue.id) && ['failed', 'empty', 'pending'].includes(a.status))) {
       gap('SEARCH_INCOMPLETE', `${attempt.attempt_id}: ${attempt.status}; ${attempt.error_code ?? '추가 확인 필요'}`);
     }
+    inspectLegalApplicability(analysis, issue, plan, evidence, checkCitation, block, gap);
     for (const role of analysis.timing.date_roles) if (!plan.event_dates.some(d => d.role === role)) block('DATE_ROLE_NOT_FOUND', role);
     for (const role of issue.required_date_roles) {
       const date = plan.event_dates.find(d => d.role === role)!;

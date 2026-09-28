@@ -3,6 +3,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { calendarValue } from './dates.js';
 import { publicSessionInstructions, publicSessionSchema } from './publicAccess.js';
+import { applicabilityInstructions } from './legalApplicability.js';
 
 const text = (max: number) => z.string().min(1).max(max).refine(v => v.trim().length > 0, 'Must not be blank');
 const id = z.string().regex(/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/);
@@ -56,12 +57,26 @@ const Answer = z.discriminatedUnion('kind', [
 export const Citation = z.object({ evidence_id: uuid, passage_id: text(80), quote: text(3000),
   relation: z.enum(['direct', 'analogy', 'background']), reason: text(2000), bridge_reason: text(2000).optional() }).strict();
 const assessment = { status: z.enum(['addressed', 'unresolved', 'not_required']), reason: text(2000) };
+const citedAssessment = z.object({ status: z.enum(['addressed', 'unresolved']), reason: text(2000),
+  citations: z.array(Citation).max(8) }).strict();
+const LegalBasis = z.object({
+  statutes: z.array(z.object({ citation: Citation, version: text(100), date_roles: ids(12), reason: text(2000) }).strict()).max(8),
+  temporal_application: citedAssessment,
+  authorities: z.array(z.object({ evidence_id: uuid,
+    kind: z.enum(['supreme_court', 'lower_court', 'constitutional_court', 'tax_appeal', 'administrative_interpretation', 'other']),
+    disposition: z.enum(['applied', 'analogy', 'distinguished', 'unresolved']), statute_evidence_ids: z.array(uuid).max(8),
+    law_version_relation: z.enum(['same_rule', 'unchanged_relevant_rule', 'different_rule', 'unverified']),
+    reason: text(2000), subsequent_review: citedAssessment,
+  }).strict()).max(32),
+}).strict();
 const IssueAnalysis = z.object({ issue_id: id, conclusion_mode: z.enum(['definitive', 'conditional', 'withheld']),
   withholding_reason: z.string().max(2000), claims: z.array(z.object({ id, text: text(3000), requirements: z.array(text(1000)).min(1).max(8),
     fact_ids: ids(40), citations: z.array(Citation).max(8) }).strict()).max(12),
-  counter_evidence: z.array(z.object({ evidence_id: uuid, disposition: z.enum(['resolved', 'unresolved', 'irrelevant']), reason: text(2000) }).strict()).max(32),
+  counter_evidence: z.array(z.object({ evidence_id: uuid, disposition: z.enum(['resolved', 'unresolved', 'irrelevant']), reason: text(2000),
+    resolution_citations: z.array(Citation).max(8).optional() }).strict()).max(32),
   unknowns: z.array(text(1000)).max(20), next_queries: z.array(text(1000)).max(12),
   timing: z.object({ ...assessment, date_roles: ids(12) }).strict(), exceptions: z.object(assessment).strict(),
+  legal_basis: LegalBasis.optional(), // Legacy callers receive a review gap rather than a schema error.
 }).strict();
 const ScopeAssessment = z.object({ track_id: id,
   status: z.enum(['supported', 'excluded', 'conditional', 'unresolved', 'pending', 'deferred', 'overflow']),
@@ -80,6 +95,8 @@ export const researchSchemas = {
 export type Plan = z.infer<typeof ResearchPlan>;
 export type RetrieveInput = z.infer<typeof researchSchemas.research_legal_sources>;
 export type ReviewInput = z.infer<typeof researchSchemas.review_legal_reasoning>;
+export type CitationInput = z.infer<typeof Citation>;
+export type IssueAnalysisInput = z.infer<typeof IssueAnalysis>;
 export type ScopeAssessmentInput = z.infer<typeof ScopeAssessment>;
 export type InterviewAnswer = z.infer<typeof researchSchemas.answer_legal_question>;
 export type ResearchTool = keyof typeof researchSchemas;
@@ -100,7 +117,8 @@ const descriptions: Record<ResearchTool, string> = {
 };
 export const researchTools: Tool[] = (Object.keys(researchSchemas) as ResearchTool[]).map(name => {
   const { $schema: _schema, ...inputSchema } = zodToJsonSchema(researchSchemas[name], { $refStrategy: 'none' });
-  return { name, description: publicSessionInstructions + descriptions[name], inputSchema: { ...inputSchema,
+  return { name, description: publicSessionInstructions + descriptions[name]
+    + (name === 'start_legal_research' || name === 'review_legal_reasoning' ? applicabilityInstructions : ''), inputSchema: { ...inputSchema,
     properties: { ...('properties' in inputSchema ? inputSchema.properties as object : {}), client_session: publicSessionSchema } } as Tool['inputSchema'],
     annotations: { readOnlyHint: name === 'get_legal_research', destructiveHint: false, idempotentHint: name === 'get_legal_research', openWorldHint: name === 'research_legal_sources' } };
 });
