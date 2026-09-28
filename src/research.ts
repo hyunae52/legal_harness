@@ -8,7 +8,7 @@ import { inspectResearch } from './researchReview.js';
 import { interviewState, applyInterviewAnswer, type Deferral } from './researchInterview.js';
 import { actorBudgetKey } from './publicAccess.js';
 
-export const researchPolicyVersion = 'research-v3-scope-completion-20260923';
+export const researchPolicyVersion = 'research-v4-legal-applicability-20260928';
 const defaults = { ttlMs: 1_800_000, maxSessions: 50, maxSessionsPerActor: 5, maxReceipts: 32, maxAttempts: 40,
   maxSessionBytes: 1_048_576, maxTotalBytes: 8_388_608, receiptBytes: 131_072, metadataReserve: 8192 };
 export interface ResearchOptions { now?: () => number; limits?: Partial<typeof defaults>; policyVersion?: string }

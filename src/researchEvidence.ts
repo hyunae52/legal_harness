@@ -113,9 +113,9 @@ export function adaptResearchEvidence(tool: string, args: RecordValue, response:
     else if (tool === 'get_decision_text') {
       const texts = textBlocks(result), u = unit('document', null, label(args.id), 'unknown', 'unknown');
       texts.forEach((text, i) => {
-        const sections = [...text.matchAll(/^(?:【([^】]+)】|\[([^\]]+)\]|(?:■|▶)\s*([^\r\n]+))\s*\r?\n/gm)];
+        const sections = [...text.matchAll(/^(?:【([^】]+)】|\[([^\]]+)\]|(?:■|▶)\s*([^\r\n]+)|((?:판시사항|판결요지|판결내용|판결전문|참조조문|참조판례|전문|이유|주문|결정요지|회신|질의|사실관계)):)\s*\r?\n/gm)];
         for (let n = 0; n < sections.length; n++) {
-          if (!/^(?:판시사항|판결요지|판결내용|판결전문|이유|주문|결정요지|회신|질의|사실관계)$/.test((sections[n][1] ?? sections[n][2] ?? sections[n][3]).trim())) continue;
+          if (!/^(?:판시사항|판결요지|판결내용|판결전문|참조조문|전문|이유|주문|결정요지|회신|질의|사실관계)$/.test((sections[n][1] ?? sections[n][2] ?? sections[n][3] ?? sections[n][4]).replace(/\s+/g, ''))) continue;
           u.body_scope = args.full === true && !shortened(text) ? 'body_returned' : 'partial';
           add(u, `content[${i}].text`, text, sections[n].index! + sections[n][0].length, sections[n + 1]?.index ?? text.length);
         }

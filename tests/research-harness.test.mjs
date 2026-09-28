@@ -31,6 +31,8 @@ async function fixture(t, opts = {}) {
     { name: 'get_law_text', inputSchema: { type: 'object' } },
   ] }), close: async () => {}, callTool: async (name, args) => {
     calls.push({ name, args });
+    if (name === 'get_law_text' && args.lawId === 'SYNTHETIC-STATUTE') return { server: { name: 'korean-law-mcp', version: 'fixture' },
+      result: { content: [{ type: 'text', text: '법령명: 합성법\n시행일: 20200101\n제1조(원가)\n합성 법령 및 부칙의 적용 근거.' }] } };
     if (opts.operation) return opts.operation(name, args);
     const data = exampleDocument();
     return { server: { name: 'korean-taxlaw', version: '2.0.0' }, result: {
@@ -95,11 +97,16 @@ async function seed(f, p = plan()) {
   r = await f.request('retrieve', retrieveInput(r.body)); assert.equal(r.status, 200, JSON.stringify(r.body));
   r = await f.request('retrieve', { ...retrieveInput(r.body), purpose: 'counter' });
   assert.equal(r.status, 200, JSON.stringify(r.body));
+  r = await f.request('retrieve', { ...retrieveInput(r.body), purpose: 'timing', tool: 'get_law_text', arguments: { lawId: 'SYNTHETIC-STATUTE' } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
   return r.body;
 }
 function reviewInput(state) {
   const support = state.evidence.find(e => e.purpose === 'support');
   const counter = state.evidence.find(e => e.purpose === 'counter');
+  const statute = state.evidence.find(e => e.tool === 'get_law_text');
+  const cite = e => ({ evidence_id: e.evidence_id, passage_id: e.passages[0].passage_id, quote: e.passages[0].text,
+    relation: 'direct', reason: '합성 적용 관계 원문 확인' });
   return { research_id: state.research_id, expected_revision: state.revision, expected_state_version: state.state_version,
     draft_answer: '합성 사건의 원가를 구분할 수 있습니다.', correction_needed: false, analysis: [{
       issue_id: 'cost', conclusion_mode: 'definitive', withholding_reason: '',
@@ -110,6 +117,13 @@ function reviewInput(state) {
       unknowns: [], next_queries: [],
       timing: { status: 'not_required', reason: '시점을 요건으로 등록하지 않은 합성 사례', date_roles: [] },
       exceptions: { status: 'addressed', reason: '반환된 합성 규정의 예외 문구 검토' },
+      ...(statute ? { legal_basis: {
+        statutes: [{ citation: cite(statute), version: statute.document_version, date_roles: state.plan.issues[0].required_date_roles, reason: '합성 법령 적용 근거' }],
+        temporal_application: { status: 'addressed', reason: '합성 시점 적용 검토', citations: [cite(statute)] },
+        authorities: [support, counter].filter(e => e.passages.length).map(e => ({ evidence_id: e.evidence_id, kind: 'administrative_interpretation',
+          disposition: e === support ? 'applied' : 'distinguished', statute_evidence_ids: [statute.evidence_id], law_version_relation: 'same_rule',
+          reason: '합성 법령과 사실의 대응', subsequent_review: { status: 'addressed', reason: '합성 후속 처리 확인', citations: [cite(e)] } })),
+      } } : {}),
     }] };
 }
 const codes = result => result.findings.map(f => f.code);
@@ -277,7 +291,7 @@ test('RH-08/09: delayed retrieval rejects conflicting operations and immediately
   } finally { release.resolve(); }
   const completed = await pending; assert.equal(completed.status, 200);
   const stale = await f.request('review', input); assert.equal(stale.status, 409); assert.equal(stale.body.code, 'RESEARCH_STATE_CHANGED');
-  assert.equal(f.calls.length, 3);
+  assert.equal(f.calls.length, 4);
 });
 
 test('RH-08: lifetime attempt and receipt limits reserve before upstream; update does not replenish attempts', async t => {
@@ -311,7 +325,7 @@ test('RH-10: a reported correction and instructions inside source text never pub
   assert.equal(f.writes(), 0);
   const rejected = await f.request('retrieve', { ...retrieveInput(state), tool: 'execute_tool', arguments: { tool_name: 'create_correction_pr' } });
   assert.equal(rejected.status, 400); assert.equal(rejected.body.code, 'RESEARCH_TOOL_NOT_ALLOWED');
-  assert.equal(f.calls.length, 2);
+  assert.equal(f.calls.length, 3);
 });
 
 test('RH-03/04: partial text can match a quote without becoming complete evidence; discovery and unknown cannot', async t => {
