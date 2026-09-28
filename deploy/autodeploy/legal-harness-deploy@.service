@@ -9,6 +9,7 @@ User=cta
 Group=cta
 UMask=0077
 ExecStart=/usr/bin/python3 /opt/legal-harness-deployer/worker.py execute %i
+ExecStopPost=/usr/bin/python3 /opt/legal-harness-deployer/worker.py cleanup %i
 Restart=no
 RuntimeMaxSec=1800
 TimeoutStopSec=120

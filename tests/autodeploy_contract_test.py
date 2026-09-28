@@ -137,6 +137,15 @@ class DeploymentContract(unittest.TestCase):
                 d.phase_rollback()
             stop=['sudo','-n','systemctl','stop',w.SERVICE];restart=['sudo','-n','systemctl','restart',w.SERVICE]
             self.assertIn(stop,calls);self.assertIn(restart,calls);self.assertLess(calls.index(stop),calls.index(restart))
+    def test_stop_post_cleanup_works_without_record_or_configuration(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=pathlib.Path(temp);job=root/'jobs/7-2-8-1';job.mkdir(parents=True);token=job/'token';token.write_text('synthetic')
+            with patch.object(w,'ROOT',root):
+                with self.assertRaises(p.Rejected):w.cleanup_token('../../outside')
+                self.assertTrue(token.exists());w.cleanup_token('7-2-8-1');self.assertFalse(token.exists())
+                w.cleanup_token('7-2-8-1')
+        unit=(pathlib.Path(__file__).resolve().parents[1]/'deploy/autodeploy/legal-harness-deploy@.service').read_text()
+        self.assertIn('ExecStopPost=/usr/bin/python3 /opt/legal-harness-deployer/worker.py cleanup %i',unit)
     def test_other_job_fence_is_not_removed(self):
         with tempfile.TemporaryDirectory() as temp:
             marker=pathlib.Path(temp)/'maintenance.json';marker.write_text(json.dumps({'job':'9-2-8-1'}))

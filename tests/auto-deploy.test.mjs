@@ -9,7 +9,7 @@ import * as yaml from 'js-yaml';
 const exec=promisify(execFile);
 test('auto-deploy: server identity, archive, command and recovery contracts',async()=>{
   const result=await exec(process.platform==='win32'?'python':'python3',['tests/autodeploy_contract_test.py'],{timeout:20000,windowsHide:true});
-  assert.match(result.stderr,/Ran 21 tests/);assert.match(result.stderr,/OK/);
+  assert.match(result.stderr,/Ran 22 tests/);assert.match(result.stderr,/OK/);
 });
 test('auto-deploy: export binds passed package bytes to a clean, exact main source',async()=>{
   const parent=resolve('.runtime/export-contract');await mkdir(parent,{recursive:true});

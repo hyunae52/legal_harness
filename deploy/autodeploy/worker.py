@@ -21,6 +21,10 @@ def prop(name, service=SERVICE): return run(['systemctl','show',service,'--prope
 def health():
     with urllib.request.urlopen('http://127.0.0.1:3100/health', timeout=5) as response: return json.load(response)
 
+def cleanup_token(job):
+    require(JOB.fullmatch(job),'INVALID_JOB')
+    (ROOT/'jobs'/job/'token').unlink(missing_ok=True)
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs): return None
 
@@ -269,6 +273,7 @@ def execute(job):
 
 if __name__=='__main__':
     os.umask(0o077)
+    if len(sys.argv)==3 and sys.argv[1]=='cleanup': cleanup_token(sys.argv[2]); raise SystemExit(0)
     if len(sys.argv)==3 and sys.argv[1]=='execute': raise SystemExit(execute(sys.argv[2]))
     if len(sys.argv)==4 and sys.argv[1]=='phase': raise SystemExit(0 if Deployment(sys.argv[2]).phase(sys.argv[3])['status']=='pass' else 1)
     raise SystemExit(2)
