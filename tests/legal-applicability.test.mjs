@@ -102,3 +102,26 @@ test('AP-06: MCP contract teaches applicability, subsequent rulings and explicit
   assert.match(t.description, /사건 이후/);
   assert.match(t.description, /경과조치/);
 });
+
+for (const location of ['temporal', 'counter_resolution', 'subsequent']) test('AP-07: ancillary ' + location + ' authorities need applicability review', () => {
+  const s = scenario(), id = '00000000-0000-4000-8000-000000000005';
+  const body = '새 합성 해석의 적용 관계도 확인해야 한다.';
+  s.evidence.push(receipt(id, 'get_tax_document', { structuredContent: { document: { ntstDcmId: 'case-3', productionDate: '20260903', answer: body } } }, 'context'));
+  const a = s.input.analysis[0], ref = citation(id, body);
+  if (location === 'temporal') a.legal_basis.temporal_application.citations.push(ref);
+  if (location === 'counter_resolution') Object.assign(a.counter_evidence[0], { disposition: 'resolved', resolution_citations: [ref] });
+  if (location === 'subsequent') a.legal_basis.authorities[0].subsequent_review.citations.push(ref);
+  assert.ok(codes(s.run()).includes('AUTHORITY_REVIEW_REQUIRED'));
+  assert.equal(s.run().status, 'blocked');
+  a.legal_basis.authorities.push({ ...structuredClone(a.legal_basis.authorities[0]), evidence_id: id,
+    subsequent_review: { status: 'addressed', reason: '새 해석의 후속 처리 확인 범위를 기록했다.', citations: [ref] } });
+  assert.equal(s.run().status, 'structurally_complete');
+});
+
+test('AP-08: an ancillary statute also needs version and date review', () => {
+  const s = scenario(), id = '00000000-0000-4000-8000-000000000005';
+  s.evidence.push(receipt(id, 'get_law_text', { content: [{ type: 'text', text: '법령명: 추가 합성법\n시행일: 20200101\n제1조(적용)\n' + lawText }] }, 'context', { mst: '101' }));
+  s.input.analysis[0].legal_basis.temporal_application.citations.push(citation(id, lawText));
+  assert.ok(codes(s.run()).includes('STATUTE_REVIEW_REQUIRED'));
+  assert.equal(s.run().status, 'blocked');
+});

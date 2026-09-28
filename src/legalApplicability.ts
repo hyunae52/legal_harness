@@ -1,7 +1,7 @@
 import type { CitationInput, IssueAnalysisInput, Plan } from './researchContracts.js';
 import type { ResearchEvidence } from './researchEvidence.js';
 
-export const applicabilityInstructions = '사실·쟁점·날짜 역할을 먼저 확인하고 사건에 적용되는 법령·시행령·부칙(시행일·적용례·경과조치)을 기준으로 판례·해석례를 교차 검토하세요. 검색 순서는 자유지만 사례의 결론만 가져오지 마세요. 사건 이후 선고·발행된 자료도 당시 적용 법령을 해석했다면 검토 대상이며 사건일을 자료 발행일의 검색 상한으로 쓰지 마세요. legal_basis.statutes에 실제 법령 passage 인용과 unit.document_version 그대로의 version, date_roles, 적용 이유를 제출하세요. temporal_application에는 부칙과 개정의 적용 관계 및 실제 원문 citations를 제출하세요. authorities에는 주장에 인용하거나 반론으로 받은 각 판례·해석례의 종류, 적용/유추/구별/미해결, statute_evidence_ids, law_version_relation, 사실 차이와 채택 이유를 제출하세요. 같은 규정은 same_rule, 개정됐어도 관련 규정이 유지되면 unchanged_relevant_rule, 다른 규정은 different_rule, 미확인은 unverified입니다. subsequent_review에는 심급·확정·파기·판례변경·후속 해석 확인 범위와 원문을 남기세요. 적용 가능한 대법원 법리를 우선 검토하되 법령 개정·사실 차이를 먼저 확인하고, 하급심과 심사/심판 결정·행정해석을 구분하세요. 헌재 결정이나 위임의 위법성도 관련되면 별도 쟁점으로 검토하세요. 법문과 달라 보인다는 모델 판단만으로 자료를 버리지 마세요. 해결된 반론에는 resolution_citations를 붙이고, 배제한 자료도 이유를 남기세요. 답변에 법리상 결론·다른 행정 실무·적용/구별 이유와 미확인점을 표시하세요. 이 연결 검사는 법률적 타당성 인증이 아닙니다. ';
+export const applicabilityInstructions = '사실·쟁점·날짜 역할을 먼저 확인하고 사건에 적용되는 법령·시행령·부칙(시행일·적용례·경과조치)을 기준으로 판례·해석례를 교차 검토하세요. 검색 순서는 자유지만 사례의 결론만 가져오지 마세요. 사건 이후 선고·발행된 자료도 당시 적용 법령을 해석했다면 검토 대상이며 사건일을 자료 발행일의 검색 상한으로 쓰지 마세요. legal_basis.statutes에 실제 법령 passage 인용과 unit.document_version 그대로의 version, date_roles, 적용 이유를 제출하세요. temporal_application에는 부칙과 개정의 적용 관계 및 실제 원문 citations를 제출하세요. authorities에는 주장·시점·반론 해결·후속 처리에 인용하거나 반론으로 받은 각 판례·해석례의 종류, 적용/유추/구별/미해결, statute_evidence_ids, law_version_relation, 사실 차이와 채택 이유를 제출하세요. 같은 규정은 same_rule, 개정됐어도 관련 규정이 유지되면 unchanged_relevant_rule, 다른 규정은 different_rule, 미확인은 unverified입니다. subsequent_review에는 심급·확정·파기·판례변경·후속 해석 확인 범위와 원문을 남기세요. 적용 가능한 대법원 법리를 우선 검토하되 법령 개정·사실 차이를 먼저 확인하고, 하급심과 심사/심판 결정·행정해석을 구분하세요. 헌재 결정이나 위임의 위법성도 관련되면 별도 쟁점으로 검토하세요. 법문과 달라 보인다는 모델 판단만으로 자료를 버리지 마세요. 해결된 반론에는 resolution_citations를 붙이고, 배제한 자료도 이유를 남기세요. 답변에 법리상 결론·다른 행정 실무·적용/구별 이유와 미확인점을 표시하세요. 이 연결 검사는 법률적 타당성 인증이 아닙니다. ';
 
 type Finding = (code: string, detail: string) => void;
 const isStatute = (e: ResearchEvidence | undefined) => e?.tool === 'get_law_text' || e?.tool === 'check_legal_sources';
@@ -43,7 +43,12 @@ export function inspectLegalApplicability(analysis: IssueAnalysisInput, issue: P
   const authorities = new Map(basis.authorities.map(a => [a.evidence_id, a]));
   if (authorities.size !== basis.authorities.length) block('DUPLICATE_AUTHORITY', '같은 자료는 한 번만 평가하세요.');
   const cited = analysis.claims.flatMap(c => c.citations);
-  const required = new Set([...cited.map(c => c.evidence_id), ...analysis.counter_evidence.map(c => c.evidence_id)]);
+  // Timing, counter resolution and subsequent-treatment sources can change a
+  // conclusion too. Their receipts must not bypass the same applicability map.
+  const allCitations = [...cited, ...temporal.citations,
+    ...analysis.counter_evidence.flatMap(c => c.resolution_citations ?? []),
+    ...basis.authorities.flatMap(a => a.subsequent_review.citations)];
+  const required = new Set([...allCitations.map(c => c.evidence_id), ...analysis.counter_evidence.map(c => c.evidence_id)]);
   for (const id of required) {
     const e = byId.get(id);
     if (isStatute(e)) {
@@ -55,7 +60,7 @@ export function inspectLegalApplicability(analysis: IssueAnalysisInput, issue: P
     if (!receipt) block('EVIDENCE_NOT_FOUND', id);
     else if (isStatute(receipt)) block('AUTHORITY_SOURCE_REQUIRED', id);
     else if (!receipt.issue_ids.includes(issue.id)) {
-      if (!cited.some(c => c.evidence_id === id && c.bridge_reason)) block('ISSUE_BRIDGE_REQUIRED', id);
+      if (!allCitations.some(c => c.evidence_id === id && c.bridge_reason)) block('ISSUE_BRIDGE_REQUIRED', id);
     }
     if (!authority.statute_evidence_ids.length) gap('AUTHORITY_STATUTE_REQUIRED', id);
     if (new Set(authority.statute_evidence_ids).size !== authority.statute_evidence_ids.length

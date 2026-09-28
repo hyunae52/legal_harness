@@ -30,7 +30,7 @@
 | --- | --- |
 | `statutes` | 실제 법령 `citation`, 해당 passage가 속한 unit의 `document_version`을 그대로 쓴 `version`, `date_roles`, 적용 이유 `reason`. 조회 도구 종류, 원문 인용, 관측 버전·식별자, 날짜 역할을 검사한다. |
 | `temporal_application` | 부칙·개정의 적용 관계, `addressed/unresolved`, 이유, 원문 `citations`. 시점 공백과 인용 누락·위조를 검사한다. |
-| `authorities` | 주장에 인용하거나 반론으로 제출한 자료의 `evidence_id`, 종류 `kind`, `applied/analogy/distinguished/unresolved`, 적용 법령 ID 목록, 관련 규정의 동일성, 이유, 후속 처리 검토. 누락·중복·잘못된 참조와 제출 내용 사이의 모순을 검사한다. |
+| `authorities` | 주장·시점·반론 해결·후속 처리에 인용하거나 반론으로 제출한 자료의 `evidence_id`, 종류 `kind`, `applied/analogy/distinguished/unresolved`, 적용 법령 ID 목록, 관련 규정의 동일성, 이유, 후속 처리 검토. 누락·중복·잘못된 참조와 제출 내용 사이의 모순을 검사한다. |
 | `authorities[].subsequent_review` | 심급·확정·파기·판례변경·후속 해석에 관해 확인한 범위, 상태, 이유, 원문 인용. 미확인 상태는 공백이다. |
 | `counter_evidence[].resolution_citations` | 반론을 `resolved`로 선언할 때의 원문 근거. 이유만 적고 근거 없이 해결했다고 하면 공백이다. |
 
