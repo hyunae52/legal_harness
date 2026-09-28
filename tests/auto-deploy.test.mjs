@@ -6,10 +6,34 @@ import {readFile,mkdir,mkdtemp,writeFile,rm} from 'node:fs/promises';
 import {resolve,join,sep} from 'node:path';
 import {createHash} from 'node:crypto';
 import * as yaml from 'js-yaml';
+import {performRollout} from '../scripts/rollout-gate.mjs';
+import {runRemotePhase} from '../deploy/remote-phase.mjs';
 const exec=promisify(execFile);
 test('auto-deploy: server identity, archive, command and recovery contracts',async()=>{
   const result=await exec(process.platform==='win32'?'python':'python3',['tests/autodeploy_contract_test.py'],{timeout:20000,windowsHide:true});
-  assert.match(result.stderr,/Ran 22 tests/);assert.match(result.stderr,/OK/);
+  assert.match(result.stderr,/Ran 24 tests/);assert.match(result.stderr,/OK/);
+});
+test('auto-deploy: actual worker timeout event reaches the rollout uncertainty boundary',async()=>{
+  const code=`import pathlib,sys,tempfile,subprocess
+sys.path.insert(0,str(pathlib.Path.cwd()/'deploy/autodeploy'))
+import worker as w
+with tempfile.TemporaryDirectory() as temp:
+ d=object.__new__(w.Deployment);d.job='7-2-8-1';d.directory=pathlib.Path(temp);d.record=d.directory/'record.json';d.data={'events':[]}
+ def activate():
+  if sys.argv[1]=='timeout':raise subprocess.TimeoutExpired(['systemctl','restart'],100)
+  raise w.Rejected('COMPLETED_FAILURE')
+ d.phase_activate=activate
+ event=d.phase('activate')
+ sys.exit(1 if event['status']=='failed' else 0)`;
+  for(const mode of ['timeout','completed']){
+    const calls=[];let fenced=false;
+    const outcome=await performRollout({fence:async()=>{fenced=true;},drain:async()=>{},
+      activate:()=>runRemotePhase('activate',()=>exec(process.platform==='win32'?'python':'python3',['-c',code,mode],{windowsHide:true})),
+      verifyCandidate:async()=>assert.fail('failed activation cannot verify'),rollback:async()=>calls.push('rollback'),
+      verifyPrevious:async()=>calls.push('verify-previous'),resume:async()=>{calls.push('resume');fenced=false;}});
+    if(mode==='timeout'){assert.equal(outcome.status,'operation_state_unknown');assert.deepEqual(calls,[]);assert.equal(fenced,true);}
+    else{assert.equal(outcome.status,'previous_restored_verified');assert.deepEqual(calls,['rollback','verify-previous','resume']);assert.equal(fenced,false);}
+  }
 });
 test('auto-deploy: export binds passed package bytes to a clean, exact main source',async()=>{
   const parent=resolve('.runtime/export-contract');await mkdir(parent,{recursive:true});

@@ -3,6 +3,7 @@ from unittest.mock import patch
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]/'deploy/autodeploy'))
 import protocol as p
 import worker as w
+import receiver as receiver
 
 HEAD='a'*40
 PROTECTION={'migrations':'1'*64,'deployer':'2'*64,'tax_provider':'3'*64,'law_version':'4.14.2'}
@@ -116,7 +117,8 @@ class DeploymentContract(unittest.TestCase):
             (previous/'dist/index.js').write_text('old')
             prior={'head':'b'*40,'path':str(previous),'dependencies':{'sha256':'old'}}
             d.data={'events':[],'head':HEAD,'previous_pid':'999999999','previous_path':str(previous),'previous_head':'b'*40,
-                'previous_entry':w.sha(previous/'dist/index.js'),'dependencies':{'sha256':'new'},'previous_active':prior}
+                'previous_entry':w.sha(previous/'dist/index.js'),'dependencies':{'sha256':'new'},'previous_active':prior,
+                'files':{},'package_sha256':'4'*64,'artifact_digest':'sha256:'+'5'*64}
             d.fence=lambda action:None;d.fence_present=lambda:True;d.files=lambda:None;d.providers=lambda:None;d.ready=lambda head:{'release_commit':head}
             with patch.object(w,'ROOT',root),patch.object(w,'MARKER',root/'maintenance.json'),patch.object(w,'run',return_value='{"status":"pass"}'),contextlib.redirect_stdout(io.StringIO()):
                 with patch.object(w,'prop',return_value=str(d.candidate)):
@@ -133,10 +135,16 @@ class DeploymentContract(unittest.TestCase):
             dropin=root/'dropin.conf';dropin.write_text(HEAD)
             d.fence=lambda a:None;d.idle=lambda:(_ for _ in ()).throw(ConnectionError('unhealthy candidate'))
             calls=[]
-            with patch.object(w,'DROPIN',dropin),patch.object(w,'prop',side_effect=lambda name:{'KillMode':'control-group','MainPID':'0','ActiveState':'active'}[name]),patch.object(w,'run',side_effect=lambda args,**kwargs:calls.append(args)):
+            values={'KillMode':'control-group','MainPID':'0','ActiveState':'inactive','ControlGroup':'','Job':''}
+            with patch.object(w,'DROPIN',dropin),patch.object(w,'prop',side_effect=lambda name:values[name]),patch.object(w,'run',side_effect=lambda args,**kwargs:calls.append(args)):
                 d.phase_rollback()
             stop=['sudo','-n','systemctl','stop',w.SERVICE];restart=['sudo','-n','systemctl','restart',w.SERVICE]
             self.assertIn(stop,calls);self.assertIn(restart,calls);self.assertLess(calls.index(stop),calls.index(restart))
+            for field,value in [('MainPID','123'),('ActiveState','active'),('Job','pending-job')]:
+                with self.subTest(field=field),patch.object(w,'DROPIN',dropin),patch.object(w,'prop',side_effect=lambda name:{**values,field:value}[name]),patch.object(w,'run',side_effect=lambda args,**kwargs:calls.append(args)):
+                    calls.clear()
+                    with self.assertRaises(p.Rejected):d.phase_rollback()
+                    self.assertNotIn(restart,calls)
     def test_stop_post_cleanup_works_without_record_or_configuration(self):
         with tempfile.TemporaryDirectory() as temp:
             root=pathlib.Path(temp);job=root/'jobs/7-2-8-1';job.mkdir(parents=True);token=job/'token';token.write_text('synthetic')
@@ -144,8 +152,44 @@ class DeploymentContract(unittest.TestCase):
                 with self.assertRaises(p.Rejected):w.cleanup_token('../../outside')
                 self.assertTrue(token.exists());w.cleanup_token('7-2-8-1');self.assertFalse(token.exists())
                 w.cleanup_token('7-2-8-1')
+            for state in ['queued','running','deployed']:
+                token.write_text('synthetic');status=job/'status.json';status.write_text(json.dumps({'job':'7-2-8-1','status':state}))
+                marker=root/'maintenance.json';marker.write_text('{}')
+                with patch.object(w,'ROOT',root),patch.object(w,'MARKER',marker):w.cleanup_token('7-2-8-1')
+                self.assertFalse(token.exists());self.assertTrue(marker.exists())
+                data=json.loads(status.read_text());self.assertEqual(data['status'],'deployed' if state=='deployed' else 'failed')
+                if state!='deployed':self.assertTrue(data['operator_check_required'])
         unit=(pathlib.Path(__file__).resolve().parents[1]/'deploy/autodeploy/legal-harness-deploy@.service').read_text()
         self.assertIn('ExecStopPost=/usr/bin/python3 /opt/legal-harness-deployer/worker.py cleanup %i',unit)
+    def test_same_head_retry_requires_matching_package_files_path_and_dependencies(self):
+        with tempfile.TemporaryDirectory() as temp,patch.object(w,'ROOT',pathlib.Path(temp)):
+            d=object.__new__(w.Deployment);d.data={'head':HEAD};package=tar_fixture();files=p.package_files(package)
+            for name,content in files.items():
+                path=d.candidate/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(content)
+            manifest={'package_sha256':hashlib.sha256(package).hexdigest()}
+            active={'head':HEAD,'path':str(d.candidate),'package_sha256':manifest['package_sha256'],
+                'files':{name:hashlib.sha256(content).hexdigest() for name,content in files.items()},'dependencies':{'sha256':'expected'}}
+            d.dependencies=lambda path:{'sha256':'expected'};d.ready=lambda head:None
+            with patch.object(w,'prop',return_value=str(d.candidate)):
+                d.verify_existing(active,manifest,package)
+                for field,value in [('head','b'*40),('path','/other'),('package_sha256','different'),('files',{}),('dependencies',{})]:
+                    with self.subTest(field=field),self.assertRaises(p.Rejected):d.verify_existing({**active,field:value},manifest,package)
+                with self.assertRaises(p.Rejected):d.verify_existing({},manifest,package)
+                (d.candidate/'dist/index.js').write_text('tampered')
+                with self.assertRaises(p.Rejected):d.verify_existing(active,manifest,package)
+    def test_receiver_reconciles_dead_workers_but_preserves_pending_start_jobs(self):
+        import datetime,os
+        with tempfile.TemporaryDirectory() as temp:
+            root=pathlib.Path(temp);directory=root/'jobs/7-2-8-1';directory.mkdir(parents=True)
+            for state,age,unit,pending,expected in [('queued',90,'inactive','pending','queued'),('queued',1,'inactive','','queued'),
+                ('queued',90,'inactive','','failed'),('running',1,'failed','','failed'),('running',90,'active','','running')]:
+                (directory/'token').write_text('synthetic')
+                stamp=(datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(seconds=age)).isoformat()
+                (directory/'status.json').write_text(json.dumps({'job':'7-2-8-1','status':state,'updated_at':stamp}))
+                output=io.StringIO()
+                with patch.object(w,'ROOT',root),patch.object(receiver,'ROOT',root),patch.dict(os.environ,{'SSH_ORIGINAL_COMMAND':'status 7-2-8-1'}),patch.object(receiver,'prop',side_effect=lambda name,service:unit if name=='ActiveState' else pending),contextlib.redirect_stdout(output):receiver.main()
+                self.assertEqual(json.loads(output.getvalue())['status'],expected)
+                self.assertEqual((directory/'token').exists(),expected!='failed')
     def test_other_job_fence_is_not_removed(self):
         with tempfile.TemporaryDirectory() as temp:
             marker=pathlib.Path(temp)/'maintenance.json';marker.write_text(json.dumps({'job':'9-2-8-1'}))

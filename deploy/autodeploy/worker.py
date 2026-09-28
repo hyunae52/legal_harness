@@ -17,13 +17,19 @@ def save(path, value):
     os.replace(temporary, path)
 def run(args, timeout=60, **kwargs):
     return subprocess.check_output(args, text=True, stderr=subprocess.PIPE, timeout=timeout, **kwargs).strip()
-def prop(name, service=SERVICE): return run(['systemctl','show',service,'--property='+name,'--value'])
+def prop(name, service=SERVICE): return run(['systemctl','show',service,'--property='+name,'--value'],timeout=5)
 def health():
     with urllib.request.urlopen('http://127.0.0.1:3100/health', timeout=5) as response: return json.load(response)
 
 def cleanup_token(job):
     require(JOB.fullmatch(job),'INVALID_JOB')
-    (ROOT/'jobs'/job/'token').unlink(missing_ok=True)
+    directory=ROOT/'jobs'/job
+    (directory/'token').unlink(missing_ok=True)
+    status=directory/'status.json'
+    if status.exists():
+        data=json.loads(status.read_text())
+        if data['status'] in ('queued','running'):
+            save(status,{**data,'status':'failed','error_code':'WORKER_STOPPED','updated_at':now(),'operator_check_required':MARKER.exists()})
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs): return None
@@ -125,8 +131,10 @@ class Deployment:
         artifact=select_artifact(artifacts['artifacts'],run_id,attempt,head)
         manifest,package=decode_bundle(gh.archive(artifact['id']),artifact,run_id,attempt,head,self.config['protection'])
         self.providers(); current=health()
+        active=json.loads((ROOT/'active.json').read_text()) if (ROOT/'active.json').exists() else {}
         if current.get('release_commit')==head:
-            self.ready(head); return {'already_active':True}
+            self.verify_existing(active,manifest,package)
+            return {'already_active':True}
         previous=pathlib.Path(prop('WorkingDirectory'))
         require(previous.is_dir() and previous.is_absolute(),'PREVIOUS_RELEASE_MISSING')
         self.ready(current['release_commit'])
@@ -134,7 +142,6 @@ class Deployment:
             previous_config=DROPIN.read_text() if DROPIN.exists() else None,previous_pid=prop('MainPID'),
             artifact_digest=artifact['digest'],package_sha256=manifest['package_sha256'])
         root=ROOT/'releases'; root.mkdir(exist_ok=True)
-        active=json.loads((ROOT/'active.json').read_text()) if (ROOT/'active.json').exists() else {}
         self.data['previous_active']=active
         expected=active.get('dependencies') if active.get('path')==str(previous) else self.config.get('initial_dependencies') if self.config.get('initial_path')==str(previous) else None
         require(expected and self.dependencies(previous)==expected,'PREVIOUS_DEPENDENCIES_CHANGED')
@@ -167,6 +174,13 @@ class Deployment:
         conf='[Service]\nWorkingDirectory='+str(self.candidate)+'\nExecStart=\nExecStart=/usr/bin/node '+str(self.candidate/'dist/index.js')+'\nReadOnlyPaths='+str(self.candidate)+'\nEnvironment=TAXLAB_RELEASE_COMMIT='+head+'\n'
         (self.directory/'candidate.conf').write_text(conf)
         return {'head':head,'package_sha256':manifest['package_sha256']}
+    def verify_existing(self,active,manifest,package):
+        require(active.get('head')==self.data['head'] and active.get('path')==str(self.candidate)
+            and active.get('package_sha256')==manifest['package_sha256'],'ACTIVE_BASELINE_MISMATCH')
+        self.data['files']={name:hashlib.sha256(content).hexdigest() for name,content in package_files(package).items()}
+        require(active.get('files')==self.data['files'] and prop('WorkingDirectory')==str(self.candidate),'ACTIVE_FILES_MISMATCH')
+        self.files();require(active.get('dependencies')==self.dependencies(self.candidate),'ACTIVE_DEPENDENCIES_MISMATCH')
+        self.ready(self.data['head'])
     def phase_fence(self):
         require(self.github().get('git/ref/heads/main')['object']['sha']==self.data['head'],'SUPERSEDED_BEFORE_ACTIVATION')
         self.providers(); self.files(); self.ready(self.data['previous_head'])
@@ -195,7 +209,8 @@ class Deployment:
         # Commit the next deployment's baseline before opening public traffic.
         # A crash after resume must not leave an active release with no baseline.
         save(ROOT/'active.json',{'head':self.data['head'],'path':str(self.candidate),'previous_path':self.data['previous_path'],
-            'dependencies':self.data['dependencies'],'job':self.job})
+            'dependencies':self.data['dependencies'],'job':self.job,'files':self.data['files'],
+            'package_sha256':self.data['package_sha256'],'artifact_digest':self.data['artifact_digest']})
         return {'health':h,'smoke':result}
     def phase_rollback(self):
         self.fence('-C')
@@ -204,8 +219,12 @@ class Deployment:
         # Public ingress is still fenced and smoke performs only reads. A broken
         # candidate's health endpoint cannot be a prerequisite for restoring it.
         require(prop('KillMode')=='control-group','PROCESS_CLEANUP_POLICY_CHANGED')
+        group=prop('ControlGroup')
+        require(group in ('','/system.slice/'+SERVICE),'UNEXPECTED_CONTROL_GROUP')
         run(['sudo','-n','systemctl','stop',SERVICE],timeout=100)
-        require(prop('MainPID')=='0','CANDIDATE_PROCESS_ALIVE')
+        require(prop('MainPID')=='0' and prop('ActiveState') in ('inactive','failed') and not prop('Job'),'CANDIDATE_PROCESS_ALIVE')
+        events=pathlib.Path('/sys/fs/cgroup'+group+'/cgroup.events')
+        if group and events.exists():require('populated 0' in events.read_text().splitlines(),'CANDIDATE_CHILDREN_ALIVE')
         if self.data['previous_config'] is None:
             if DROPIN.exists():
                 require(self.data['head'] in DROPIN.read_text(),'DROPIN_CHANGED')

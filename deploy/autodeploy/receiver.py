@@ -1,6 +1,7 @@
 """OpenSSH forced command: bounded submit/status, no shell or arbitrary paths."""
 import json, os, subprocess, sys
-from worker import ROOT, Deployment, save, now
+from worker import ROOT, save, now, prop, cleanup_token
+import datetime
 from protocol import command, Rejected, require
 
 def main():
@@ -27,10 +28,13 @@ def main():
             raise Rejected('JOB_LAUNCH_FAILED')
     require((directory/'status.json').is_file(),'JOB_NOT_FOUND')
     data=json.loads((directory/'status.json').read_text())
-    if data['status']=='running':
-        state=subprocess.check_output(['systemctl','show','legal-harness-deploy@'+job+'.service','--property=ActiveState','--value'],text=True,timeout=5).strip()
-        if state not in ('active','activating','deactivating'):
-            data.update(status='failed',error_code='WORKER_STOPPED',operator_check_required=True)
+    if data['status'] in ('queued','running'):
+        unit='legal-harness-deploy@'+job+'.service'
+        state=prop('ActiveState',unit);pending=prop('Job',unit)
+        age=(datetime.datetime.now(datetime.timezone.utc)-datetime.datetime.fromisoformat(data['updated_at'])).total_seconds()
+        # Allow the bounded submit/start interval; pending systemd jobs remain live.
+        if state in ('inactive','failed') and not pending and (data['status']=='running' or age>30):
+            cleanup_token(job);data=json.loads((directory/'status.json').read_text())
     print(json.dumps(data))
 
 if __name__=='__main__':
