@@ -21,17 +21,19 @@ with tempfile.TemporaryDirectory() as temp:
  d=object.__new__(w.Deployment);d.job='7-2-8-1';d.directory=pathlib.Path(temp);d.record=d.directory/'record.json';d.data={'events':[]}
  def activate():
   if sys.argv[1]=='timeout':raise subprocess.TimeoutExpired(['systemctl','restart'],100)
+  if sys.argv[1]=='signal':raise subprocess.CalledProcessError(-9,['systemctl','restart'])
+  if sys.argv[1]=='sudo-signal':raise subprocess.CalledProcessError(137,['sudo','systemctl','restart'])
   raise w.Rejected('COMPLETED_FAILURE')
  d.phase_activate=activate
  event=d.phase('activate')
  sys.exit(1 if event['status']=='failed' else 0)`;
-  for(const mode of ['timeout','completed']){
+  for(const mode of ['timeout','signal','sudo-signal','completed']){
     const calls=[];let fenced=false;
     const outcome=await performRollout({fence:async()=>{fenced=true;},drain:async()=>{},
       activate:()=>runRemotePhase('activate',()=>exec(process.platform==='win32'?'python':'python3',['-c',code,mode],{windowsHide:true})),
       verifyCandidate:async()=>assert.fail('failed activation cannot verify'),rollback:async()=>calls.push('rollback'),
       verifyPrevious:async()=>calls.push('verify-previous'),resume:async()=>{calls.push('resume');fenced=false;}});
-    if(mode==='timeout'){assert.equal(outcome.status,'operation_state_unknown');assert.deepEqual(calls,[]);assert.equal(fenced,true);}
+    if(mode!=='completed'){assert.equal(outcome.status,'operation_state_unknown');assert.deepEqual(calls,[]);assert.equal(fenced,true);}
     else{assert.equal(outcome.status,'previous_restored_verified');assert.deepEqual(calls,['rollback','verify-previous','resume']);assert.equal(fenced,false);}
   }
 });

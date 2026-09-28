@@ -259,7 +259,8 @@ class Deployment:
             event.update(status='failed',error_code=str(error) if isinstance(error,Rejected) else type(error).__name__)
             # Killing systemctl's client cannot cancel a job already queued in PID 1.
             # The shared rollout gate must not race it with rollback or resume.
-            if isinstance(error,subprocess.TimeoutExpired):event['operation_state_unknown']=True
+            if isinstance(error,subprocess.TimeoutExpired) or (isinstance(error,subprocess.CalledProcessError)
+                and (error.returncode<0 or error.returncode>=128)):event['operation_state_unknown']=True
         finally:
             event['finished_at']=now(); self.data['events'].append(event); save(self.record,self.data)
             print(json.dumps(event),flush=True)
