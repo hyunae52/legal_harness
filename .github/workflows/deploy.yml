@@ -1,0 +1,72 @@
+name: Deploy
+on:
+  workflow_run:
+    workflows: [Review]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      review_run_id:
+        description: Successful main push Review run ID
+        required: true
+        type: string
+      review_attempt:
+        description: Review run attempt
+        required: true
+        default: '1'
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: legal-harness-production-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: >-
+      github.repository == 'hyunae52/legal_harness' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: production
+    steps:
+      - name: Resolve reviewed source
+        id: source
+        env:
+          REVIEW_RUN_ID: ${{ github.event.workflow_run.id || inputs.review_run_id }}
+          REVIEW_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.review_attempt }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, urllib.request
+          run=os.environ['REVIEW_RUN_ID']; attempt=os.environ['REVIEW_ATTEMPT']
+          assert re.fullmatch('[1-9][0-9]{0,19}',run) and re.fullmatch('[1-9][0-9]{0,19}',attempt)
+          url=f'https://api.github.com/repos/hyunae52/legal_harness/actions/runs/{run}/attempts/{attempt}'
+          request=urllib.request.Request(url,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+          with urllib.request.urlopen(request,timeout=30) as response: data=json.load(response)
+          assert data['event']=='push' and data['head_branch']=='main' and data['conclusion']=='success'
+          assert data['repository']['id']==1376493772 and data['head_repository']['id']==1376493772
+          assert data['path']=='.github/workflows/review.yml' and re.fullmatch('[a-f0-9]{40}',data['head_sha'])
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output: output.write('head='+data['head_sha']+'\n')
+          PY
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          ref: ${{ steps.source.outputs.head }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Deploy verified main package
+        env:
+          SOURCE_REVIEW_RUN_ID: ${{ github.event.workflow_run.id || inputs.review_run_id }}
+          SOURCE_REVIEW_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.review_attempt }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GCE_DEPLOY_HOST: ${{ vars.GCE_DEPLOY_HOST }}
+          GCE_DEPLOY_USER: ${{ vars.GCE_DEPLOY_USER }}
+          GCE_DEPLOY_PRIVATE_KEY: ${{ secrets.GCE_DEPLOY_PRIVATE_KEY }}
+          GCE_DEPLOY_KNOWN_HOSTS: ${{ secrets.GCE_DEPLOY_KNOWN_HOSTS }}
+        run: node scripts/auto-deploy-client.mjs

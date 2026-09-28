@@ -24,10 +24,26 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
-      - run: npm ci --ignore-scripts --omit=optional --no-audit --no-fund
-      - run: npm run audit:runtime
-      - run: npm run security:secrets
-      - run: npm run review
-      - run: npm run review:package
-      # No production secrets, publishing, merging or deployment in this job.
+      - name: npm ci --ignore-scripts --omit=optional --no-audit --no-fund
+        run: npm ci --ignore-scripts --omit=optional --no-audit --no-fund
+      - name: npm run audit:runtime
+        run: npm run audit:runtime
+      - name: npm run security:secrets
+        run: npm run security:secrets
+      - name: npm run review
+        run: npm run review
+      - name: npm run review:package
+        run: npm run review:package
+      - name: Export tested deployment package
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: node scripts/export-deploy-package.mjs
+      - name: Store tested deployment package
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: law-release-${{ github.sha }}-${{ github.run_attempt }}
+          path: .runtime/deploy-artifact/*
+          if-no-files-found: error
+          retention-days: 14
+      # No production secrets, merging or activation in this job.
       # A green PR job alone is NOT independent AI or human batch approval.
