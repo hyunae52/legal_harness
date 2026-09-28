@@ -1,6 +1,7 @@
 // Explicit live integration test: public official documents, no production account or credentials.
 import assert from 'node:assert/strict';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { setTimeout as delay } from 'node:timers/promises';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { KoreanLawClient, koreanLawOptionsFromEnv } from '../dist/koreanLawClient.js';
@@ -9,6 +10,7 @@ import { createApp } from '../dist/app.js';
 
 if (!process.argv.includes('--live')) throw new Error('Use --live to query public NTS documents.');
 if (!taxLawOptionsFromEnv()) throw new Error('Run the pinned tax-law installer first.');
+const pin = JSON.parse(await readFile(new URL('../upstreams/korean-taxlaw-mcp.json', import.meta.url), 'utf8'));
 const law = createLegalRetrievalClient(new KoreanLawClient(koreanLawOptionsFromEnv({})));
 const runtime = createApp({ law, env: { TAXLAB_API_KEY: 'local-smoke-only' } });
 const server = runtime.app.listen(0, '127.0.0.1');
@@ -19,7 +21,15 @@ const client = new Client({ name: 'taxlab-live-taxlaw-check', version: '1' });
 const evidence = { observed_at: new Date().toISOString(), scope: 'local Express REST and SSE to pinned real tax-law stdio child', calls: [], checks: [] };
 async function call(name, args, expectedError) {
   const start = Date.now();
-  const result = await client.callTool({ name, arguments: args }, undefined, { timeout: 60000 });
+  let result;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    result = await client.callTool({ name, arguments: args }, undefined, { timeout: 60000 });
+    if (expectedError || result.structuredContent?.error?.code !== 'RATE_LIMITED' || attempt === 2) break;
+    const retry = result.structuredContent.error.detail?.retryAfterSec;
+    assert.ok(Number.isFinite(retry) && retry >= 0 && retry <= 10, 'source retry delay must be bounded');
+    evidence.checks.push({ rate_limited_tool: name, retry_after_sec: retry });
+    await delay((retry + 1) * 1000);
+  }
   evidence.calls.push({ name, args, duration_ms: Date.now() - start, result });
   if (expectedError) {
     assert.equal(result.isError, true);
@@ -33,6 +43,25 @@ try {
   const tools = await client.listTools({}, { timeout: 30000 });
   evidence.tool_names = tools.tools.map(t => t.name);
   for (const name of ['lookup_tax_document', 'search_tax_interpretations', 'search_tax_decisions', 'get_tax_document', 'tax_research']) assert.ok(evidence.tool_names.includes(name));
+  for (const [tool, type, query] of [
+    ['search_tax_interpretations', 'curated_issue', '상속'],
+    ['search_tax_decisions', 'taxpayer_protection', '세무조사'],
+  ]) {
+    assert.ok(tools.tools.find(t => t.name === tool).inputSchema.properties.type.enum.includes(type));
+    const listing = await call(tool, { type, query, limit: 1 });
+    assert.equal(listing.items.length, 1);
+    const documentId = listing.items[0].ntstDcmId;
+    const detail = await call('get_tax_document', { ntst_dcm_id: documentId, detail: 'full', body_limit: 5000 });
+    assert.equal(detail.document.ntstDcmId, documentId);
+    assert.ok(['fullText', 'facts', 'question', 'answer', 'reasoning', 'conclusion', 'claimantView', 'agencyView', 'preamble'].some(key => detail.document[key]?.length));
+    evidence.checks.push({ type, ntst_dcm_id: documentId, body: 'provided' });
+  }
+  const audit = await call('search_tax_decisions', { type: 'audit_appeal', query: '2024심사636', attachment_status: true, limit: 1 });
+  assert.equal(audit.items.length, 1);
+  assert.equal(audit.items[0].documentNumber, '2024심사636');
+  assert.equal(audit.items[0].attachment.available, true);
+  assert.equal(audit.items[0].attachment.availabilityCheck, 'file_signature_prefix_only');
+  await call('search_tax_interpretations', { type: 'curated_issue', query: '상속', match: 'any' }, 'INVALID_INPUT');
   const search = await call('search_tax_interpretations', { query: '서면-2020-부동산-4503', limit: 3 });
   assert.equal(search.items[0].documentNumber, '서면-2020-부동산-4503');
   const docs = [
@@ -72,7 +101,8 @@ try {
   assert.equal(rest.status, 200);
   evidence.rest = await rest.json();
   assert.equal(evidence.rest.data.evidence.upstream_name, 'korean-taxlaw');
-  assert.equal(evidence.rest.data.evidence.upstream_version, '2.0.0.post1');
+  assert.equal(evidence.rest.data.evidence.upstream_version, pin.version);
+  assert.equal(evidence.rest.data.result._meta['legal-harness/taxlaw'].commit, pin.commit);
   assert.equal(evidence.rest.data.result.structuredContent.document.documentNumber, '서면-2020-부동산-4503');
   evidence.status = 'passed';
 } catch (error) {

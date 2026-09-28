@@ -64,7 +64,7 @@
   },
   {
     "name": "search_tax_interpretations",
-    "description": "국세청 세법해석례(예규: 사전답변·질의회신·과세기준자문·고시서면질의)를 검색한다. 결과는 요지까지만 담은 후보 목록이며 본문은 포함하지 않는다 — 필요한 문서만 get_tax_document 로 상세 조회할 것. 공백 구분 낱말은 AND, match='any' 는 OR, exclude 는 NOT. 문서번호를 알면 lookup_tax_document 를 쓸 것.",
+    "description": "국세청 세법해석례(예규: 사전답변·질의회신·과세기준자문·고시서면질의)를 검색한다. type='curated_issue' 는 같은 해석례를 쟁점별로 다시 묶은 자주찾는 쟁점별 사례(13)다. 13은 일반 텍스트 query와 단일 세목만 지원하며 OR·제외어·정렬·법령/조문·날짜 필터는 지원하지 않는다. 결과는 요지까지만 담은 후보 목록이며 본문은 포함하지 않는다 — 필요한 문서만 get_tax_document 로 상세 조회할 것. 공백 구분 낱말은 AND, match='any' 는 OR, exclude 는 NOT. 문서번호를 알면 lookup_tax_document 를 쓸 것.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -94,13 +94,14 @@
         },
         "type": {
           "default": "all",
-          "description": "all(기본) | advance(사전답변) | written(질의회신) | advisory(과세기준자문) | notice_written(고시서면질의)",
+          "description": "all(기본) | advance(사전답변) | written(질의회신) | advisory(과세기준자문) | notice_written(고시서면질의) | curated_issue(13 자주찾는 쟁점별 사례)",
           "enum": [
             "all",
             "advance",
             "written",
             "advisory",
-            "notice_written"
+            "notice_written",
+            "curated_issue"
           ],
           "type": "string"
         },
@@ -235,7 +236,7 @@
   },
   {
     "name": "search_tax_decisions",
-    "description": "국세청·조세심판원·법원의 판례·결정례(과세적부·이의신청·심사청구·심판청구·판례·헌재)를 검색한다. 결과는 본문 없는 후보 목록 — 필요한 문서만 get_tax_document 로 조회할 것. 결정결과(인용·기각·국승·국패 등)와 귀속연도 필터 지원. 사건번호를 알면 case_number 로 exact lookup 이 수행된다.",
+    "description": "국세청·조세심판원·법원의 판례·결정례(과세적부·이의신청·심사청구·심판청구·판례·헌재)를 검색한다. type='audit_appeal'(11 감사원 심사청구)·'taxpayer_protection'(14 납세자보호위원회 심의사례)은 원본이 별도 모듈로 제공하는 문서구분이다 — 감사원 심사청구는 본문이 없고 첨부 PDF/HWP 로만 존재한다(attachment_status=true 로 파일 서명 앞부분 확인, 전체 파일 검증 아님). 11·14는 일반 텍스트 query·날짜만 지원하며 OR·제외어·정렬·세목 필터는 지원하지 않는다. 11의 결정번호는 query에 넣는다. 11·14에서는 case_number exact lookup을 지원하지 않는다. 결과는 본문 없는 후보 목록 — 필요한 문서만 get_tax_document 로 조회할 것. 결정결과(인용·기각·국승·국패 등)와 귀속연도 필터는 05~10 에만 적용된다. 사건번호를 알면 case_number 로 exact lookup 이 수행된다.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -265,7 +266,7 @@
         },
         "type": {
           "default": "all",
-          "description": "all(기본) | pre_assessment(과세적부) | objection(이의신청) | review(심사청구) | tribunal(심판청구) | court(판례) | constitutional(헌재)",
+          "description": "all(기본, 05~10) | pre_assessment(과세적부) | objection(이의신청) | review(심사청구) | tribunal(심판청구) | court(판례) | constitutional(헌재) | audit_appeal(11 감사원 심사청구) | taxpayer_protection(14 납세자보호위원회 심의사례)",
           "enum": [
             "all",
             "pre_assessment",
@@ -273,7 +274,9 @@
             "review",
             "tribunal",
             "court",
-            "constitutional"
+            "constitutional",
+            "audit_appeal",
+            "taxpayer_protection"
           ],
           "type": "string"
         },
@@ -423,6 +426,11 @@
           "maximum": 100,
           "minimum": 1,
           "type": "integer"
+        },
+        "attachment_status": {
+          "default": false,
+          "description": "audit_appeal(11) 전용. 행당 메타데이터 및 최대 4 KiB 파일 서명 요청으로 확인한다. 전체 파일 무결성은 검증하지 않는다.",
+          "type": "boolean"
         }
       },
       "additionalProperties": false
