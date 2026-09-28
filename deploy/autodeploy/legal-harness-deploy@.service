@@ -1,0 +1,18 @@
+[Unit]
+Description=Legal Harness verified deployment %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cta
+Group=cta
+UMask=0077
+ExecStart=/usr/bin/python3 /opt/legal-harness-deployer/worker.py execute %i
+Restart=no
+RuntimeMaxSec=1800
+TimeoutStopSec=120
+KillMode=control-group
+MemoryMax=384M
+CPUQuota=70%
+TasksMax=64

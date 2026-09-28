@@ -67,6 +67,8 @@ try {
   const {stdout:imported}=await exec(process.execPath,['--input-type=module','-e',"const {GateEngine}=await import('k-tax-agent-backend/dist/gates.js');console.log(new GateEngine().rules.length)"],{cwd:prefix,env,windowsHide:true,timeout:10000});assert.equal(imported.trim(),'10');
   const digest=createHash('sha256').update(await readFile(artifact)).digest('hex');
   await writeFile(join(work,'evidence.json'),JSON.stringify({status:'pass',artifact,sha256:digest,files:packed.files.length,checks:['clean_install','stdio_sse_public_call','public_doctor','legacy_authenticated_doctor','packaged_rules','published_lock','installed_dependency_versions','installed_research_app_and_bridge','stateless_http_public_session_contract'],versions,fixture_only:true},null,2));
+  const head=(await exec('git',['rev-parse','HEAD'],{cwd:root,windowsHide:true})).stdout.trim();
+  await writeFile(join(root,'.runtime/package-smoke-latest.json'),JSON.stringify({status:'pass',head,artifact,sha256:digest})+'\n');
   console.log(JSON.stringify({status:'pass',artifact,sha256:digest,checks:9,versions}));
 } finally {
   await client.close();await transport.close();await runtime.close();server.closeAllConnections();await new Promise(r=>server.close(r));
