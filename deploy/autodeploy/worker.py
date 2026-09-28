@@ -131,6 +131,7 @@ class Deployment:
             artifact_digest=artifact['digest'],package_sha256=manifest['package_sha256'])
         root=ROOT/'releases'; root.mkdir(exist_ok=True)
         active=json.loads((ROOT/'active.json').read_text()) if (ROOT/'active.json').exists() else {}
+        self.data['previous_active']=active
         expected=active.get('dependencies') if active.get('path')==str(previous) else self.config.get('initial_dependencies') if self.config.get('initial_path')==str(previous) else None
         require(expected and self.dependencies(previous)==expected,'PREVIOUS_DEPENDENCIES_CHANGED')
         keep={str(previous),active.get('previous_path','')}
@@ -187,12 +188,20 @@ class Deployment:
         require(not pathlib.Path('/proc',self.data['previous_pid']).exists(),'PREVIOUS_PROCESS_ALIVE')
         result=json.loads(run(['python3',str(BIN/'smoke.py')],timeout=180))
         require(result['status']=='pass','MCP_SMOKE_FAILED')
+        # Commit the next deployment's baseline before opening public traffic.
+        # A crash after resume must not leave an active release with no baseline.
+        save(ROOT/'active.json',{'head':self.data['head'],'path':str(self.candidate),'previous_path':self.data['previous_path'],
+            'dependencies':self.data['dependencies'],'job':self.job})
         return {'health':h,'smoke':result}
     def phase_rollback(self):
         self.fence('-C')
-        if prop('ActiveState')=='active': self.idle()
         if DROPIN.exists():
             require(DROPIN.read_text() in ((self.directory/'candidate.conf').read_text(),self.data['previous_config']),'DROPIN_CHANGED')
+        # Public ingress is still fenced and smoke performs only reads. A broken
+        # candidate's health endpoint cannot be a prerequisite for restoring it.
+        require(prop('KillMode')=='control-group','PROCESS_CLEANUP_POLICY_CHANGED')
+        run(['sudo','-n','systemctl','stop',SERVICE],timeout=100)
+        require(prop('MainPID')=='0','CANDIDATE_PROCESS_ALIVE')
         if self.data['previous_config'] is None:
             if DROPIN.exists():
                 require(self.data['head'] in DROPIN.read_text(),'DROPIN_CHANGED')
@@ -205,6 +214,8 @@ class Deployment:
     def phase_verify_previous(self):
         self.providers(); h=self.ready(self.data['previous_head'])
         require(prop('WorkingDirectory')==self.data['previous_path'] and sha(pathlib.Path(self.data['previous_path'])/'dist/index.js')==self.data['previous_entry'],'PREVIOUS_RELEASE_MISMATCH')
+        if self.data['previous_active']:save(ROOT/'active.json',self.data['previous_active'])
+        else:(ROOT/'active.json').unlink(missing_ok=True)
         return {'health':h}
     def phase_resume(self):
         previous=self.data['events'][-1]
@@ -223,6 +234,9 @@ class Deployment:
             event['status']='pass'
         except Exception as error:
             event.update(status='failed',error_code=str(error) if isinstance(error,Rejected) else type(error).__name__)
+            # Killing systemctl's client cannot cancel a job already queued in PID 1.
+            # The shared rollout gate must not race it with rollback or resume.
+            if isinstance(error,subprocess.TimeoutExpired):event['operation_state_unknown']=True
         finally:
             event['finished_at']=now(); self.data['events'].append(event); save(self.record,self.data)
             print(json.dumps(event),flush=True)
@@ -246,9 +260,6 @@ def execute(job):
             require((deployment.directory/'rollout.json').is_file(),'ROLLOUT_RESULT_MISSING')
             outcome=json.loads((deployment.directory/'rollout.json').read_text())
             success=outcome['status']=='candidate_active_verified' and outcome['public_resumed'] is True
-            if success:
-                save(ROOT/'active.json',{'head':deployment.data['head'],'path':str(deployment.candidate),'previous_path':deployment.data['previous_path'],
-                    'dependencies':deployment.data['dependencies'],'job':job})
             deployment.state('deployed' if success else 'failed',head=deployment.data['head'],rollout=outcome)
             return 0 if success else 1
         except Exception as error:

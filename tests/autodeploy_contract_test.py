@@ -1,4 +1,4 @@
-import copy, hashlib, io, json, pathlib, sys, tarfile, tempfile, unittest, zipfile
+import contextlib, copy, hashlib, io, json, pathlib, subprocess, sys, tarfile, tempfile, unittest, zipfile
 from unittest.mock import patch
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]/'deploy/autodeploy'))
 import protocol as p
@@ -100,6 +100,43 @@ class DeploymentContract(unittest.TestCase):
     def test_resume_requires_successful_verification(self):
         d=object.__new__(w.Deployment);d.job='7-2-8-1';d.data={'events':[{'phase':'activate','status':'pass'}]}
         with self.assertRaisesRegex(p.Rejected,'RESUME_NOT_VERIFIED'):d.phase_resume()
+    def test_systemd_timeout_is_uncertain_even_after_local_command_is_killed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            d=object.__new__(w.Deployment);d.job='7-2-8-1';d.directory=pathlib.Path(temp)
+            d.record=d.directory/'record.json';d.data={'events':[]}
+            def restart():raise subprocess.TimeoutExpired(['systemctl','restart',w.SERVICE],100)
+            d.phase_activate=restart
+            with contextlib.redirect_stdout(io.StringIO()):event=d.phase('activate')
+            self.assertEqual(event['status'],'failed')
+            self.assertTrue(event.get('operation_state_unknown'))
+    def test_verified_baseline_survives_worker_exit_after_resume_and_restores_on_rollback(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=pathlib.Path(temp);d=object.__new__(w.Deployment);d.job='7-2-8-1';d.directory=root/'job';d.directory.mkdir()
+            d.record=d.directory/'record.json';previous=root/'previous';(previous/'dist').mkdir(parents=True)
+            (previous/'dist/index.js').write_text('old')
+            prior={'head':'b'*40,'path':str(previous),'dependencies':{'sha256':'old'}}
+            d.data={'events':[],'head':HEAD,'previous_pid':'999999999','previous_path':str(previous),'previous_head':'b'*40,
+                'previous_entry':w.sha(previous/'dist/index.js'),'dependencies':{'sha256':'new'},'previous_active':prior}
+            d.fence=lambda action:None;d.fence_present=lambda:True;d.files=lambda:None;d.providers=lambda:None;d.ready=lambda head:{'release_commit':head}
+            with patch.object(w,'ROOT',root),patch.object(w,'MARKER',root/'maintenance.json'),patch.object(w,'run',return_value='{"status":"pass"}'),contextlib.redirect_stdout(io.StringIO()):
+                with patch.object(w,'prop',return_value=str(d.candidate)):
+                    self.assertEqual(d.phase('verify-candidate')['status'],'pass')
+                    self.assertEqual(json.loads((root/'active.json').read_text())['head'],HEAD)
+                    d.phase_resume()
+                    self.assertEqual(json.loads((root/'active.json').read_text())['dependencies'],{'sha256':'new'})
+                with patch.object(w,'prop',return_value=str(previous)):
+                    d.phase_verify_previous();self.assertEqual(json.loads((root/'active.json').read_text()),prior)
+    def test_unhealthy_candidate_can_roll_back_without_a_working_health_endpoint(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=pathlib.Path(temp);d=object.__new__(w.Deployment);d.directory=root
+            d.data={'head':HEAD,'previous_config':None};(root/'candidate.conf').write_text(HEAD)
+            dropin=root/'dropin.conf';dropin.write_text(HEAD)
+            d.fence=lambda a:None;d.idle=lambda:(_ for _ in ()).throw(ConnectionError('unhealthy candidate'))
+            calls=[]
+            with patch.object(w,'DROPIN',dropin),patch.object(w,'prop',side_effect=lambda name:{'KillMode':'control-group','MainPID':'0','ActiveState':'active'}[name]),patch.object(w,'run',side_effect=lambda args,**kwargs:calls.append(args)):
+                d.phase_rollback()
+            stop=['sudo','-n','systemctl','stop',w.SERVICE];restart=['sudo','-n','systemctl','restart',w.SERVICE]
+            self.assertIn(stop,calls);self.assertIn(restart,calls);self.assertLess(calls.index(stop),calls.index(restart))
     def test_other_job_fence_is_not_removed(self):
         with tempfile.TemporaryDirectory() as temp:
             marker=pathlib.Path(temp)/'maintenance.json';marker.write_text(json.dumps({'job':'9-2-8-1'}))
