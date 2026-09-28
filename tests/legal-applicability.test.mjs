@@ -125,3 +125,48 @@ test('AP-08: an ancillary statute also needs version and date review', () => {
   assert.ok(codes(s.run()).includes('STATUTE_REVIEW_REQUIRED'));
   assert.equal(s.run().status, 'blocked');
 });
+
+test('AP-09: a date used by the analysis needs a law link even if omitted from required roles', () => {
+  const s = scenario();
+  s.plan.issues[0].required_date_roles = [];
+  s.input.analysis[0].legal_basis.statutes[0].date_roles = [];
+  assert.ok(codes(s.run()).includes('LAW_DATE_ROLE_REQUIRED'));
+  assert.equal(s.run().status, 'blocked');
+});
+
+test('AP-10: a non-required date used by the analysis cannot hide its uncertainty', () => {
+  const s = scenario();
+  s.plan.issues[0].required_date_roles = [];
+  s.plan.event_dates[0].basis = 'assumed';
+  assert.ok(codes(s.run()).includes('DATE_UNCONFIRMED'));
+  assert.equal(s.run().status, 'blocked');
+});
+
+test('AP-11: a statute date link must also be addressed in timing review', () => {
+  const s = scenario();
+  s.plan.issues[0].required_date_roles = [];
+  s.input.analysis[0].timing.date_roles = [];
+  assert.ok(codes(s.run()).includes('DATE_ROLE_NOT_ADDRESSED'));
+  assert.equal(s.run().status, 'blocked');
+});
+
+test('AP-12: spaced judgment headings preserve reasons and the order', () => {
+  const text = '=== 합성 판결 ===\n전문:\n【주    문】\n원심판결을 파기한다.\n【이    유】\n관련 조문의 적용 관계를 설명한다.';
+  const e = adaptResearchEvidence('get_decision_text', { domain: 'precedent', id: '1', full: true }, { result: { content: [{ type: 'text', text }] } });
+  assert.equal(e.body_scope, 'body_returned');
+  assert.ok(e.passages.some(p => p.text.includes('원심판결을 파기한다.')));
+  assert.ok(e.passages.some(p => p.text.includes('관련 조문의 적용 관계를 설명한다.')));
+});
+
+test('AP-13: a used date cannot be marked timing not required', () => {
+  const s = scenario(); s.plan.issues[0].required_date_roles = [];
+  s.input.analysis[0].timing.status = 'not_required';
+  assert.ok(codes(s.run()).includes('TIMING_REVIEW_REQUIRED'));
+  assert.equal(s.run().status, 'blocked');
+});
+
+test('AP-14: an unrelated unknown date is not silently made a required condition', () => {
+  const s = scenario();
+  s.plan.event_dates.push({ role: 'unrelated', value: null, precision: 'unknown', basis: 'unknown', source: '' });
+  assert.equal(s.run().status, 'structurally_complete');
+});

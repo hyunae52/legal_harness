@@ -91,13 +91,15 @@ export function inspectResearch(input: ReviewInput, plan: Plan, evidence: Resear
       gap('SEARCH_INCOMPLETE', `${attempt.attempt_id}: ${attempt.status}; ${attempt.error_code ?? '추가 확인 필요'}`);
     }
     inspectLegalApplicability(analysis, issue, plan, evidence, checkCitation, block, gap);
-    for (const role of analysis.timing.date_roles) if (!plan.event_dates.some(d => d.role === role)) block('DATE_ROLE_NOT_FOUND', role);
-    for (const role of issue.required_date_roles) {
-      const date = plan.event_dates.find(d => d.role === role)!;
+    const usedDateRoles = new Set([...issue.required_date_roles, ...analysis.timing.date_roles,
+      ...(analysis.legal_basis?.statutes.flatMap(s => s.date_roles) ?? [])]);
+    for (const role of usedDateRoles) {
+      const date = plan.event_dates.find(d => d.role === role);
+      if (!date) { block('DATE_ROLE_NOT_FOUND', role); continue; }
       if (!analysis.timing.date_roles.includes(role)) gap('DATE_ROLE_NOT_ADDRESSED', role);
       if (date.precision !== 'day' || date.basis !== 'provided') gap('DATE_UNCONFIRMED', `${role}: ${date.precision}/${date.basis}`);
     }
-    if (analysis.timing.status === 'unresolved' || (issue.required_date_roles.length && analysis.timing.status !== 'addressed')) gap('TIMING_REVIEW_REQUIRED', analysis.timing.reason);
+    if (analysis.timing.status === 'unresolved' || (usedDateRoles.size && analysis.timing.status !== 'addressed')) gap('TIMING_REVIEW_REQUIRED', analysis.timing.reason);
     if (analysis.exceptions.status === 'unresolved') gap('EXCEPTIONS_UNRESOLVED', analysis.exceptions.reason);
     if (analysis.unknowns.length) gap('DECLARED_UNKNOWNS', analysis.unknowns.join('; '));
     const hasGaps = findings.slice(beginning).some(f => f.severity === 'needs_info');

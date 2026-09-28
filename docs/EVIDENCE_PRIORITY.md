@@ -38,6 +38,8 @@
 
 기존 입력에서 `legal_basis`가 없으면 HTTP 구문 오류 대신 `LEGAL_BASIS_REQUIRED` 공백을 반환한다. 공백 있는 `definitive`는 `blocked`, 공백과 후속 확인을 적은 `conditional/withheld`는 `needs_info`다. 일반 법령 조회에는 이 연구 계약을 강제하지 않는다.
 
+필수 날짜뿐 아니라 분석과 법령 연결에 실제로 사용한 날짜도 교차 검토한다. `required_date_roles`에서 빠졌다는 이유로 사용한 날짜의 불확실성이나 법령 연결 누락을 무시하지 않는다. 해당 쟁점에서 사용하지 않은 다른 날짜를 일괄 필수 조건으로 만들지는 않는다.
+
 ## 검사 범위
 
 자료 종류, 관련 규정 동일성, 채택 이유, 후속 처리의 의미는 **모델의 제출 내용**이다. 서버가 법적 효력을 판정하거나 모든 후속 판례를 찾아냈다고 보증하지 않는다. `structurally_complete`는 제출된 연결의 구조 검사이며 `legal_verification=unverified`, `semantic_support=unverified`를 유지한다. 이 도구를 호출하지 않은 LLM 답변도 감시하지 않는다.

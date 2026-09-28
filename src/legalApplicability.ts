@@ -34,7 +34,9 @@ export function inspectLegalApplicability(analysis: IssueAnalysisInput, issue: P
       coveredDates.add(role);
     }
   }
-  for (const role of issue.required_date_roles) if (!coveredDates.has(role)) gap('LAW_DATE_ROLE_REQUIRED', role);
+  for (const role of new Set([...issue.required_date_roles, ...analysis.timing.date_roles])) {
+    if (!coveredDates.has(role)) gap('LAW_DATE_ROLE_REQUIRED', role);
+  }
   const temporal = basis.temporal_application;
   if (temporal.status === 'unresolved') gap('TEMPORAL_APPLICATION_UNRESOLVED', temporal.reason);
   if (!temporal.citations.length) gap('TEMPORAL_SOURCE_REQUIRED', '부칙·개정 적용 관계의 원문 근거를 제출하세요.');
