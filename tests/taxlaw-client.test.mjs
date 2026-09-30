@@ -27,7 +27,7 @@ test('pinned lookup schema exposes duplicate-number context', () => {
 });
 
 test('NTS application failures cannot become successful retrievals even when MCP isError is false', () => {
-  for (const [code, status] of Object.entries({ NOT_FOUND: 404, DETAIL_NOT_AVAILABLE: 502, UPSTREAM_ERROR: 502, PARSE_ERROR: 502, RATE_LIMITED: 429, INVALID_INPUT: 400, AMBIGUOUS_DOCUMENT_NUMBER: 409, TIMEOUT: 504 })) {
+  for (const [code, status] of Object.entries({ NOT_FOUND: 404, DETAIL_NOT_AVAILABLE: 502, UPSTREAM_ERROR: 502, PARSE_ERROR: 502, RATE_LIMITED: 429, INVALID_INPUT: 400, AMBIGUOUS_DOCUMENT_NUMBER: 409, LOOKUP_INCOMPLETE: 502, TIMEOUT: 504 })) {
     assert.throws(() => normalizeTaxLawResult(response(code, { ok: false, error: { code, message: 'source result' } })), error =>
       error.code === 'MCP_TOOL_ERROR' && error.status === status && error.result.isError && error.result.structuredContent.error.code === code);
   }
@@ -36,6 +36,19 @@ test('NTS application failures cannot become successful retrievals even when MCP
   }
   const empty = normalizeTaxLawResult(response('OK', { total: 0, items: [] }));
   assert.equal(empty.isError, false); assert.equal(empty.structuredContent.total, 0);
+});
+
+test('incomplete candidate lookup preserves the source guardrail and pagination evidence', () => {
+  const payload = { ok: false, error: { code: 'LOOKUP_INCOMPLETE', message: 'Candidate search is incomplete.',
+    detail: { query: 'fixture-number', pagesChecked: 10, total: 301 } },
+    guardrail: 'Do not assert uniqueness or absence; select a source document ID.' };
+  assert.throws(() => normalizeTaxLawResult(response('LOOKUP_INCOMPLETE', payload)), error => {
+    assert.equal(error.code, 'MCP_TOOL_ERROR');
+    assert.equal(error.status, 502);
+    assert.equal(error.result.isError, true);
+    assert.deepEqual(error.result.structuredContent, payload);
+    return true;
+  });
 });
 
 test('real tax-law child uses no OC key, preserves structured facts and survives source errors', async t => {
@@ -155,4 +168,13 @@ test('authenticated REST and SSE expose NTS tools and actual provider provenance
   assert.equal(read._meta['legal-harness/evidence'].upstream_name, 'korean-taxlaw');
   const unavailable = await mcp.callTool({ name: 'lookup_tax_document', arguments: { document_number: '__offline__' } });
   assert.equal(unavailable.isError, true); assert.equal(unavailable.structuredContent.error.code, 'UPSTREAM_ERROR');
+  const incomplete = await mcp.callTool({ name: 'lookup_tax_document', arguments: { document_number: '__incomplete__' } });
+  assert.equal(incomplete.isError, true);
+  assert.equal(incomplete.structuredContent.error.code, 'LOOKUP_INCOMPLETE');
+  assert.deepEqual(incomplete.structuredContent.error.detail, { pagesChecked: 10, total: 301 });
+  assert.equal(incomplete.structuredContent.guardrail, 'Do not invent a document.');
+  const restIncomplete = await fetch(origin + '/api/analyze', { method: 'POST', headers,
+    body: JSON.stringify({ tool: 'lookup_tax_document', query: 'lookup', arguments: { document_number: '__incomplete__' } }) });
+  assert.equal(restIncomplete.status, 502);
+  assert.deepEqual((await restIncomplete.json()).result.structuredContent, incomplete.structuredContent);
 });

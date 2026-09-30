@@ -93,6 +93,20 @@ try {
   });
   assert.equal(resolved.resolvedBy, 'document_number_and_context');
   assert.equal(resolved.document.ntstDcmId, '010000000000062896');
+  const unifiedAmbiguous = await call('search_taxlaw', { query: '법인46012-1784' }, 'AMBIGUOUS_DOCUMENT_NUMBER');
+  assert.equal(unifiedAmbiguous.error.detail.candidateCount, 2);
+  const unifiedResolved = await call('search_taxlaw', { query: '법인46012-1784 퇴직금' });
+  assert.equal(unifiedResolved.resolvedBy, 'document_number_and_context');
+  assert.equal(unifiedResolved.document.ntstDcmId, '010000000000062896');
+  for (const [query, domain, docClass] of [
+    ['감사원 심사청구 법인세', 'decision', '11'],
+    ['납세자 보호 위원회 심의 사례 세무조사', 'decision', '14'],
+    ['자주 찾는 쟁점별 사례 상속', 'interpretation', '13'],
+  ]) {
+    const unified = await call('search_taxlaw', { query, limit_per_domain: 1 });
+    assert.equal(unified.results[domain].docClass, docClass);
+    assert.equal(unified.results[domain].items.length, 1);
+  }
   const limited = await call('get_tax_document', { ntst_dcm_id: search.items[0].ntstDcmId, body_limit: 500 });
   assert.ok(JSON.stringify(limited).includes('나머지는 sourceUrl 원문에서 확인하세요'), 'truncation must not be silent');
   await call('lookup_tax_document', { document_number: '법규재산-0119' }, 'NOT_FOUND');

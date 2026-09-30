@@ -3,7 +3,7 @@
     "name": "lookup_tax_document",
     "description": "문서번호로 국세청 문서(해석례·판례·결정례 자동 판별)를 **정확히 일치할 때만** 본문까지 반환한다. 표기 편차('서면 2026 법규재산 0119' 등)는 자동 정규화한다. 동일 번호가 여러 건이면 context_query로 주제를 구분하며, 확정할 수 없으면 AMBIGUOUS_DOCUMENT_NUMBER를 반환한다. 없으면 NOT_FOUND — similarDocuments 는 번호가 일부 겹치는 별개 문서이며 정답이 아니다. 문서번호를 아는 경우 검색 대신 항상 이 도구를 먼저 쓸 것.",
     "inputSchema": {
-      "type": "object",
+      "additionalProperties": false,
       "properties": {
         "document_number": {
           "description": "문서번호. 표기 편차 자동 정규화.",
@@ -54,7 +54,7 @@
       "required": [
         "document_number"
       ],
-      "additionalProperties": false
+      "type": "object"
     },
     "_meta": {
       "fastmcp": {
@@ -66,7 +66,7 @@
     "name": "search_tax_interpretations",
     "description": "국세청 세법해석례(예규: 사전답변·질의회신·과세기준자문·고시서면질의)를 검색한다. type='curated_issue' 는 같은 해석례를 쟁점별로 다시 묶은 자주찾는 쟁점별 사례(13)다. 13은 일반 텍스트 query와 단일 세목만 지원하며 OR·제외어·정렬·법령/조문·날짜 필터는 지원하지 않는다. 결과는 요지까지만 담은 후보 목록이며 본문은 포함하지 않는다 — 필요한 문서만 get_tax_document 로 상세 조회할 것. 공백 구분 낱말은 AND, match='any' 는 OR, exclude 는 NOT. 문서번호를 알면 lookup_tax_document 를 쓸 것.",
     "inputSchema": {
-      "type": "object",
+      "additionalProperties": false,
       "properties": {
         "query": {
           "anyOf": [
@@ -226,7 +226,7 @@
           "type": "integer"
         }
       },
-      "additionalProperties": false
+      "type": "object"
     },
     "_meta": {
       "fastmcp": {
@@ -238,7 +238,7 @@
     "name": "search_tax_decisions",
     "description": "국세청·조세심판원·법원의 판례·결정례(과세적부·이의신청·심사청구·심판청구·판례·헌재)를 검색한다. type='audit_appeal'(11 감사원 심사청구)·'taxpayer_protection'(14 납세자보호위원회 심의사례)은 원본이 별도 모듈로 제공하는 문서구분이다 — 감사원 심사청구는 본문이 없고 첨부 PDF/HWP 로만 존재한다(attachment_status=true 로 파일 서명 앞부분 확인, 전체 파일 검증 아님). 11·14는 일반 텍스트 query·날짜만 지원하며 OR·제외어·정렬·세목 필터는 지원하지 않는다. 11의 결정번호는 query에 넣는다. 11·14에서는 case_number exact lookup을 지원하지 않는다. 결과는 본문 없는 후보 목록 — 필요한 문서만 get_tax_document 로 조회할 것. 결정결과(인용·기각·국승·국패 등)와 귀속연도 필터는 05~10 에만 적용된다. 사건번호를 알면 case_number 로 exact lookup 이 수행된다.",
     "inputSchema": {
-      "type": "object",
+      "additionalProperties": false,
       "properties": {
         "query": {
           "anyOf": [
@@ -433,7 +433,7 @@
           "type": "boolean"
         }
       },
-      "additionalProperties": false
+      "type": "object"
     },
     "_meta": {
       "fastmcp": {
@@ -445,7 +445,7 @@
     "name": "get_tax_document",
     "description": "국세청 문서 1건의 본문을 가져온다. ntst_dcm_id(검색 결과의 ID) 또는 document_number 로 지정한다. 본문은 절(사실관계·질의·회신·주장·판단·결론 등)로 분해되며, 절 분해가 본문을 다 담지 못할 때만 fullText 가 추가된다. 없는 절은 생략된다. 본문을 원본이 주지 않으면 DETAIL_NOT_AVAILABLE 로 알리고 본문을 생성하지 않는다.",
     "inputSchema": {
-      "type": "object",
+      "additionalProperties": false,
       "properties": {
         "ntst_dcm_id": {
           "anyOf": [
@@ -499,7 +499,7 @@
           "type": "string"
         }
       },
-      "additionalProperties": false
+      "type": "object"
     },
     "_meta": {
       "fastmcp": {
@@ -511,7 +511,7 @@
     "name": "search_tax_guidance",
     "description": "국세청 행정 해석기준을 검색한다. kind: basic_ruling(기본통칙, 조항 본문 포함) | execution_standard(집행기준, 조항명 목차만 — 원본이 본문 미제공) | notice(고시) | directive(훈령). 기본통칙·집행기준은 law_name 필수(예: '상속세 및 증여세법'). 법규가 아닌 내부 집행기준이다.",
     "inputSchema": {
-      "type": "object",
+      "additionalProperties": false,
       "properties": {
         "kind": {
           "description": "조회할 기준 종류",
@@ -576,7 +576,7 @@
       "required": [
         "kind"
       ],
-      "additionalProperties": false
+      "type": "object"
     },
     "_meta": {
       "fastmcp": {
@@ -588,7 +588,7 @@
     "name": "get_tax_guidance",
     "description": "기본통칙 또는 세법집행기준의 특정 조항 1건을 가져온다. search_tax_guidance 로 찾은 item_id, 또는 조항명 일부(title)로 지정한다.",
     "inputSchema": {
-      "type": "object",
+      "additionalProperties": false,
       "properties": {
         "kind": {
           "description": "기준 종류",
@@ -643,7 +643,7 @@
         "kind",
         "law_name"
       ],
-      "additionalProperties": false
+      "type": "object"
     },
     "_meta": {
       "fastmcp": {
@@ -655,7 +655,7 @@
     "name": "search_tax_forms",
     "description": "국세 법령서식·별표를 검색한다. 서식명·관련법령·개정일을 반환한다. 파일 실물은 제공하지 않고 조회 화면 URL 을 준다.",
     "inputSchema": {
-      "type": "object",
+      "additionalProperties": false,
       "properties": {
         "query": {
           "anyOf": [
@@ -693,7 +693,7 @@
           "type": "integer"
         }
       },
-      "additionalProperties": false
+      "type": "object"
     },
     "_meta": {
       "fastmcp": {
@@ -703,9 +703,9 @@
   },
   {
     "name": "search_taxlaw",
-    "description": "국세청 자료 전 영역을 한 번에 검색한다(해석례·결정례·고시훈령·서식). 질의에 문서번호가 섞여 있으면 exact lookup 을 최우선으로 시도한다. domains 를 생략하면 질의 표현('예규', '심판', '통칙', '적부' 등)을 보고 조회 영역을 자동 결정한다. 어느 영역을 봐야 할지 모를 때의 진입점으로 쓸 것.",
+    "description": "국세청 자료 전 영역을 한 번에 검색한다(해석례·결정례·고시훈령·서식). 질의에 문서번호가 섞여 있으면 exact lookup 을 최우선으로 시도한다. domains 를 생략하면 질의 표현('예규', '심판', '통칙', '적부' 등)을 보고 조회 영역을 자동 결정한다. 감사원 심사청구·납세자보호위원회·쟁점별 사례를 명시하면 전용 검색을 쓴다. 중복 문서번호는 AMBIGUOUS_DOCUMENT_NUMBER를 반환한다. 어느 영역을 봐야 할지 모를 때의 진입점으로 쓸 것.",
     "inputSchema": {
-      "type": "object",
+      "additionalProperties": false,
       "properties": {
         "query": {
           "description": "자연어 또는 키워드",
@@ -753,7 +753,7 @@
         },
         "limit_per_domain": {
           "default": 5,
-          "description": "영역별 결과 수",
+          "description": "영역 내 자료유형별 결과 수",
           "maximum": 50,
           "minimum": 1,
           "type": "integer"
@@ -762,7 +762,7 @@
       "required": [
         "query"
       ],
-      "additionalProperties": false
+      "type": "object"
     },
     "_meta": {
       "fastmcp": {
@@ -774,7 +774,7 @@
     "name": "tax_research",
     "description": "세무 쟁점 하나의 근거를 층별로 모은다: 기본통칙→집행기준→해석례→불복 결정례→판례·헌재. 각 층에 authorityLevel 을 붙인다. 법률적 판단은 하지 않으며 근거 수집만 한다. 법령 본문은 korean-law-mcp 를 쓸 것.",
     "inputSchema": {
-      "type": "object",
+      "additionalProperties": false,
       "properties": {
         "question": {
           "description": "세무 쟁점 질문(자연어)",
@@ -833,7 +833,7 @@
       "required": [
         "question"
       ],
-      "additionalProperties": false
+      "type": "object"
     },
     "_meta": {
       "fastmcp": {
@@ -845,7 +845,7 @@
     "name": "search_local_tax_interpretations",
     "description": "지방세(취득세·재산세·자동차세·주민세·지방소득세·등록면허세 등) 유권해석을 검색한다 — 행정안전부·법제처 해석. 결과는 본문 없는 후보 목록이며, 본문은 lookup_local_tax_document 로 조회할 것. 문서번호를 알면 document_number 로 exact lookup. 국세는 search_tax_interpretations 를 쓸 것.",
     "inputSchema": {
-      "type": "object",
+      "additionalProperties": false,
       "properties": {
         "query": {
           "anyOf": [
@@ -937,7 +937,7 @@
           "type": "integer"
         }
       },
-      "additionalProperties": false
+      "type": "object"
     },
     "_meta": {
       "fastmcp": {
@@ -949,7 +949,7 @@
     "name": "search_local_tax_decisions",
     "description": "지방세 사안의 불복 결정례·판례(조세심판원·감사원·법원·헌재)를 검색한다. 결과는 본문 없는 후보 목록 — 본문은 lookup_local_tax_document 로 조회할 것. 국세 사안은 search_tax_decisions 를 쓸 것.",
     "inputSchema": {
-      "type": "object",
+      "additionalProperties": false,
       "properties": {
         "query": {
           "anyOf": [
@@ -1041,7 +1041,7 @@
           "type": "integer"
         }
       },
-      "additionalProperties": false
+      "type": "object"
     },
     "_meta": {
       "fastmcp": {
@@ -1053,7 +1053,7 @@
     "name": "lookup_local_tax_document",
     "description": "지방세 문서를 문서번호 또는 문서 ID(+kind)로 조회해 본문까지 반환한다. 문서번호 표기 편차('부동산세제과-1794(2026.6.9.)호' 등)는 자동 정규화하며, **정확히 일치할 때만** 반환한다(부서명+일련번호 모두 일치). 없으면 NOT_FOUND — similarDocuments 는 일련번호가 겹치는 별개 문서이며 정답이 아니다.",
     "inputSchema": {
-      "type": "object",
+      "additionalProperties": false,
       "properties": {
         "document_number": {
           "anyOf": [
@@ -1139,7 +1139,7 @@
           "type": "string"
         }
       },
-      "additionalProperties": false
+      "type": "object"
     },
     "_meta": {
       "fastmcp": {
