@@ -59,6 +59,31 @@ const checks = [
       return { historical_annex_found: true };
     },
   },
+  {
+    name: 'annex_visible_tables', tool: 'get_annexes',
+    args: { lawName: '대기환경보전법 시행령', query: '별표8' },
+    verify(text) {
+      assert.match(text, /대기환경보전법 시행령/);
+      assert.match(text, /별표\s*8(?!\d)/);
+      assert.match(text, /파일 형식: HWP/);
+      const tables = (text.match(/<table\b/g) || []).length;
+      // This annex has five visible tables; its invisible layout frame must
+      // not turn the whole document into one giant HTML table.
+      assert.equal(tables, 5, 'Expected separate visible tables, not the outer layout frame');
+      return { visible_tables: tables };
+    },
+  },
+  {
+    name: 'annex_fraction', tool: 'get_annexes',
+    args: { lawName: '할부거래에 관한 법률 시행령', query: '별표1' },
+    verify(text) {
+      assert.match(text, /할부거래에 관한 법률 시행령/);
+      assert.match(text, /별표\s*1(?!\d)/);
+      assert.match(text, /파일 형식: HWP/);
+      assert.match(text.replace(/\s+/g, ''), /A=P×r×\$\\frac\{\(1\+r\)\^\{n\}\}\{\(1\+r\)\^\{n\}-1\}\$/);
+      return { fraction_preserved: true };
+    },
+  },
 ];
 async function check(item) {
   const start = performance.now();
@@ -75,12 +100,11 @@ async function check(item) {
 try {
   const catalog = await client.listTools();
   assert.equal(catalog.server?.name, 'korean-law');
-  assert.equal(catalog.server?.version, '4.15.0');
+  assert.equal(catalog.server?.version, '4.15.1');
   const annex = catalog.tools.find(t => t.name === 'get_annexes');
   assert.ok(annex?.inputSchema.properties?.date);
-  // The first three are distinct cold requests, matching the application's work limit.
-  await Promise.all(checks.slice(0, 3).map(check));
-  await check(checks[3]);
+  // Distinct cold requests in batches matching the application's work limit.
+  for (let i = 0; i < checks.length; i += 3) await Promise.all(checks.slice(i, i + 3).map(check));
   const report = { status: cases.every(c => c.status === 'pass') ? 'pass' : 'failed',
     checked_at: new Date().toISOString(), node: process.version, upstream: catalog.server,
     tool_count: catalog.tools.length, maximum_concurrent_calls: 3, cases,
