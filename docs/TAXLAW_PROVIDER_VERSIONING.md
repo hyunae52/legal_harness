@@ -97,8 +97,8 @@ VPS cron은 읽기 전용 상태 감시다. 실행 중인 버전, 포크 `main`,
 
 - 검토 포크: `hyunae52/korean-taxlaw-mcp`
 - 원본 저장소: `zisu17/korean-taxlaw-mcp`
-- 현재 고정 커밋: `5790d279d123d9991846b23749e08bd57e65474d`
-- 현재 패키지 버전: `2.0.0.post2`
+- 현재 고정 커밋: `16a08b9af70f49fc60a5f54ab0f9812be206c8f5`
+- 현재 패키지 버전: `2.1.0.post1`
 - 설치 기준: 위 커밋의 아카이브와 SHA-256 (태그 없이 고정)
 - 실행 방식: Legal Harness가 요청 시 Python MCP를 `stdio` 자식으로 실행
 - 운영 전환: 시험 완료 후 사람의 명시적 승인 필요
