@@ -140,6 +140,31 @@ test('Model recovery: a follow-up decision adopted during review becomes resumab
   } finally { f.service.close(); }
 });
 
+test('Model recovery: distinguished follow-up candidates expose their empty search obligation and actionable reference correction', async () => {
+  const f = subsequentFixture();
+  try {
+    const s = await f.finish(await f.law(await f.start())), input = coverageReview(s);
+    const e = s.evidence.find(e => e.identity?.document_number === '2021두2');
+    const work = s.review_worklist.find(c => c.evidence_ids.includes(e.evidence_id));
+    assert.deepEqual(work.subsequent_search_requirements, []);
+    const authority = { evidence_id: e.evidence_id, kind: 'supreme_court', disposition: 'distinguished',
+      statute_evidence_ids: [input.analysis[0].legal_basis.statutes[0].citation.evidence_id], law_version_relation: 'different_rule',
+      reason: '본문을 읽었으나 다른 규정의 후속 자료로 구별함',
+      subsequent_review: { status: 'addressed', reason: '새 법적 근거로 채택하지 않은 후속 발견 자료', citations: [],
+        search_attempt_ids: [s.coverage.obligations.find(o => o.purpose === 'subsequent').attempt_ids[0]] } };
+    input.analysis[0].legal_basis.authorities = [authority];
+    let result = inspectResearch(input, s.plan, s.evidence, s.attempts, s.ledger);
+    assert.ok(result.findings.some(f => f.code === 'SUBSEQUENT_REFERENCE_NOT_REQUIRED' && f.detail.includes('search_attempt_ids=[]')));
+    assert.ok(!result.findings.some(f => f.code === 'SUBSEQUENT_SEARCH_REQUIRED' && f.detail.startsWith(e.evidence_id)));
+    authority.subsequent_review.search_attempt_ids = [];
+    result = inspectResearch(input, s.plan, s.evidence, s.attempts, s.ledger);
+    assert.ok(!result.findings.some(f => f.code.startsWith('SUBSEQUENT_') && f.detail.startsWith(e.evidence_id)));
+    authority.disposition = 'applied'; authority.law_version_relation = 'same_rule';
+    result = inspectResearch(input, s.plan, s.evidence, s.attempts, s.ledger);
+    assert.ok(result.findings.some(f => f.code === 'SUBSEQUENT_SEARCH_REQUIRED' && f.detail.startsWith(e.evidence_id)));
+  } finally { f.service.close(); }
+});
+
 test('Model recovery: a neutral-search body can be assessed as contrary evidence without fetching it twice', async () => {
   const f = subsequentFixture();
   try {

@@ -85,7 +85,9 @@ export function inspectLegalApplicability(analysis: IssueAnalysisInput, issue: P
     const followupOnly = coverage?.candidates.some(c => c.key === (receipt?.identity ? documentKey(receipt.identity) : id)
       && c.discovery_role === 'subsequent') && authority.disposition === 'distinguished'
       && !cited.some(c => c.evidence_id === id && c.relation !== 'background');
-    const performed = (Boolean(followupOnly) && subsequent.length === 0 && ids.length === 0) || subsequent.length > 0 && subsequent.every(o => isCoverageComplete(o) && o.attempt_ids.every(a => ids.includes(a)))
+    const noFurtherSearch = Boolean(followupOnly) && subsequent.length === 0;
+    if (noFurtherSearch && ids.length) gap('SUBSEQUENT_REFERENCE_NOT_REQUIRED', id + ': 구별한 후속 발견 자료에 추가 검색 의무가 없습니다. 다른 자료의 조회 ID를 빼고 search_attempt_ids=[]로 수정하세요. 구별 이유를 유지하고 추가 조회를 만들지 마세요.');
+    const performed = noFurtherSearch || subsequent.length > 0 && subsequent.every(o => isCoverageComplete(o) && o.attempt_ids.every(a => ids.includes(a)))
       && ids.every(a => subsequent.some(o => o.attempt_ids.includes(a)));
     if (!performed) gap('SUBSEQUENT_SEARCH_REQUIRED', id + ': 동일 원문 재인용은 후속 검색 수행 증거가 아닙니다.');
     if ((!performed || subsequent.some(o => o.candidate_ids.length)) && !authority.subsequent_review.citations.length) gap('SUBSEQUENT_SOURCE_REQUIRED', id);
