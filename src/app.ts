@@ -10,7 +10,7 @@ import { ResearchCapacityError } from './researchRecovery.js';
 import { presentResearch } from './researchPresentation.js';
 import { GateEngine } from './gates.js';
 import { createAuthenticator } from './auth.js';
-import { retrievalEnvelope } from './evidence.js';
+import { retrievalEnvelope, rawStatuteNavigation } from './evidence.js';
 import { type SourceVerifier } from './sourceVerifier.js';
 import { safeToolDiagnostic } from './errorDiagnostics.js';
 import { landingHeaders, landingHtml } from './landing.js';
@@ -79,6 +79,9 @@ export function createApp(options: Options) {
   };
   const errorBody = (error: unknown) => {
     if (error instanceof ResearchCapacityError) return { status: error.status, body: error.publicBody() };
+    if (error instanceof ServiceError && error.code === 'PUBLIC_SESSION_REQUIRED') return { status: error.status, body: {
+      code: error.code, recovery: { available_actions: ['reuse_original_client_session', 'report_unrecoverable_session'], create_new_research: false,
+        note: '같은 대화의 최초 연구/PR 준비 응답에 있는 client_session을 후속 도구 인수에 그대로 넣으세요. 빠진 인수만 수정해 기존 작업을 이어가세요. 핸들을 복구할 수 없으면 결과 불명을 알리고 작업을 자동 재생성하지 마세요. 사용자에게 키를 발급받으라고 하지 마세요.' } } };
     if (error instanceof z.ZodError) return { status: 400, body: inputDiagnostics(error) };
     if (error instanceof LawMcpError && error.code==='MCP_TOOL_ERROR' && error.result) return {status:error.status,body:{code:error.code,result:safeToolDiagnostic(error.result,env)}};
     if (error instanceof ServiceError || error instanceof LawMcpError) return { status: error.status, body: { code: error.code } };
@@ -113,7 +116,9 @@ export function createApp(options: Options) {
     const result = await options.law.callTool(name, args);
     const evidence = { ...retrievalEnvelope(name, args, result.result, result.server?.version ?? version, dates),
       upstream_name: result.server?.name ?? 'unidentified' };
-    return { ...result, evidence, corrections: options.corrections?.search(correctionQuery) ?? { status: 'unavailable', items: [] } };
+    const reference = rawStatuteNavigation(name, args, result.result);
+    return { ...result, evidence, ...(reference ? { retrieval_reference: reference } : {}),
+      corrections: options.corrections?.search(correctionQuery) ?? { status: 'unavailable', items: [] } };
   };
   const submit = (actor: Actor, input: unknown) => {
     if (actor.kind === 'anonymous') throw new ServiceError(410, 'USE_CORRECTION_PR');
@@ -255,7 +260,8 @@ export function createApp(options: Options) {
             return { content: [{ type: 'text' as const, text: JSON.stringify(data) }], structuredContent: data };
           }
           const data = await retrieve(actor, name, args);
-          return { ...data.result, content: [...data.result.content, ...(data.corrections.items.length ? [{ type: 'text' as const, text: JSON.stringify({ merged_correction_notes: data.corrections }) }] : [])],
+          return { ...data.result, content: [...(data.retrieval_reference ? [{ type: 'text' as const, text: JSON.stringify({ retrieval_reference: data.retrieval_reference }) }] : []),
+            ...data.result.content, ...(data.corrections.items.length ? [{ type: 'text' as const, text: JSON.stringify({ merged_correction_notes: data.corrections }) }] : [])],
             _meta: { ...data.result._meta, 'legal-harness/evidence': data.evidence, 'legal-harness/corrections': data.corrections } };
         });
       } catch (error) {

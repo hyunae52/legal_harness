@@ -77,7 +77,8 @@ export function inspectLegalApplicability(analysis: IssueAnalysisInput, issue: P
       || authority.statute_evidence_ids.some(ref => !statuteIds.has(ref))) block('AUTHORITY_STATUTE_REFERENCE', id);
     if (authority.disposition === 'unresolved' || authority.law_version_relation === 'unverified') gap('AUTHORITY_LAW_UNRESOLVED', id);
     if (authority.disposition === 'applied' && authority.law_version_relation === 'different_rule') block('AUTHORITY_LAW_CONTRADICTION', id);
-    if (authority.disposition !== 'applied' && cited.some(c => c.evidence_id === id && c.relation === 'direct')) block('AUTHORITY_DISPOSITION_CONTRADICTION', id);
+    if (authority.disposition !== 'applied' && cited.some(c => c.evidence_id === id && c.relation === 'direct')) block('AUTHORITY_DISPOSITION_CONTRADICTION',
+      id + ': 사건 주장에 대한 direct 인용과 applied가 아닌 처리가 모순됩니다. 구별한 판결의 과거 사실·법리 설명 인용은 background로 표시하고, 현재 사건의 비교·적용 결론은 실제 적용 가능한 조문·후속 자료의 direct 인용으로 뒷받침하세요. 구별 판결을 억지로 applied로 바꾸거나 direct_support 같은 새 enum을 만들지 마세요.');
     if (authority.subsequent_review.status === 'unresolved') gap('SUBSEQUENT_TREATMENT_UNRESOLVED', id);
     const subsequent = coverage?.obligations.filter(o => o.issue_id === issue.id && o.purpose === 'subsequent'
       && o.document_key === (receipt?.identity ? documentKey(receipt.identity) : id)) ?? [];

@@ -97,6 +97,26 @@ test('PA-02 recovery: bounded research responses keep the private continuation t
   assert.equal(access.result(value),value,'authenticated responses are unchanged');
 });
 
+test('CF-05/12 session recovery: a missing handle explains how to resume without disclosing or recreating state',async t=>{
+  const f=await fixture(t), c=await f.mcp();
+  const started=(await c.callTool({name:'start_legal_research',arguments:{plan}})).structuredContent;
+  const missing=await c.callTool({name:'get_legal_research',arguments:{research_id:started.research_id}});
+  assert.equal(missing.isError,true);
+  const error=JSON.parse(missing.content[0].text);
+  assert.equal(error.code,'PUBLIC_SESSION_REQUIRED');
+  assert.ok(error.recovery,'the missing-handle response must explain continuation recovery');
+  assert.deepEqual(error.recovery.available_actions,['reuse_original_client_session','report_unrecoverable_session']);
+  assert.equal(error.recovery.create_new_research,false);
+  assert.equal(JSON.stringify(error).includes(started.client_session),false);
+  const rest=await f.request('/api/research/status',{research_id:started.research_id});
+  assert.equal(rest.status,401);
+  assert.deepEqual(rest.body,error);
+  const resumed=(await c.callTool({name:'get_legal_research',arguments:{research_id:started.research_id,client_session:started.client_session}})).structuredContent;
+  assert.equal(resumed.research_id,started.research_id);
+  assert.equal(resumed.revision,started.revision);
+  assert.equal(f.calls.length,0);
+});
+
 test('PA-03: capabilities accidentally included in sources or proposals never leave the server',async t=>{
   const f=await fixture(t), a=(await f.request('/api/research/start',{plan})).body;
   assert.equal((await f.request('/api/analyze',{query:a.client_session,tool:'search_law'})).body.code,'PRIVATE_SESSION_IN_CONTENT');
