@@ -1,0 +1,69 @@
+    - article:
+      - paragraph: LEGAL-HARNESS-SSS-RAW-REMEDIATION-20261002
+      - paragraph: 방향은 타당해. 가장 작은 보완은 ‘기존 원문을 그대로 두고, 결과 가까이에 짧은 읽기 안내와 실제 필드 참조를 별도로 전달’하는 것이야. 원문을 다시 요약·추출한 출처 묶음은 첫 구현에서 제외하는 편이 좋아
+      - paragraph: 다만 이것은 모델이 조건을 놓칠 가능성을 줄이는 보완 후보야. 안내 전달 성공만으로 이번 누락이 해결됐다고 판정할 수는 없어
+      - list:
+        - text: 현재 코드에서 확인한 삽입 위치
+        - list:
+          - listitem: app.ts:113–121의 retrieve가 원문 조회 공통 경계야. REST /api/analyze의 192–201행과 MCP의 262–265행이 이를 사용해
+          - listitem: MCP는 현재 원래 result를 펼쳐 structuredContent를 유지하고, 탐색 링크·정정 자료를 별도 content로 추가해. 여기에 같은 방식의 독립 안내 블록을 붙일 수 있어
+          - text: researchContracts.ts:136에는 이미 조건·예외 보존 안내가 있고 137행을 통해 initialize 안내에 포함돼. 전역 문구 부족이 아니라 실제 결과를 읽는 시점의 전달·행동 문제로 다루는 게 맞아
+          - link "공통 조회 경계":
+            - /url: https://github.com/hyunae52/legal_harness/blob/c8edd6e5b6f2816f70d3d734989f7ab91e5f163c/src/app.ts#L113-L121
+            - generic: 공통 조회 경계
+      - paragraph: 최소 변경 범위는 evidence.ts의 작은 순수 안내 생성 함수, app.ts의 두 전달 경로, raw-lookup.test.mjs야. REST의 새 필드는 setup.ts 응답 스키마에도 명시하는 게 좋아. 검색·승격·연구 상태 기계를 변경할 이유는 없어
+      - list:
+        - listitem: 복제보다 참조를 기본으로 선택
+      - paragraph: 실제로 존재하는 summary·question·facts·answer·fullText 등의 위치를 알려주되, 서버가 이를 ‘필수조건을 모두 추출한 목록’으로 바꾸지 않는 안을 추천해
+      - list:
+        - listitem: 존재 여부와 자료형만 확인하고 원문 문자열은 수정하지 않기
+        - listitem: 빠진 필드를 다른 필드에서 추정해 채우지 않기
+        - listitem: summary를 완전한 전제라고 인증하거나, answer가 짧다는 이유로 성공·완전성을 판정하지 않기
+        - listitem: 비정형 결과는 원래 텍스트 블록을 참조하고, 질의/회신 구분을 서버가 억지로 만들어내지 않기
+        - listitem: 문서 전체를 안내 안에 다시 복제하지 않기. 큰 fullText가 두 번 실리면 응답 한도에 걸려 오히려 원문 전달이 실패할 수 있어
+      - paragraph: 중요한 예외가 있어. 클라이언트가 structuredContent를 모델에 보여주지 않으면 그 필드를 가리키는 참조만으로는 부족해. structured-only fixture로 실제 모델 입력까지 확인해야 해. 필요한 경우에만 해당 필드의 정확한 원문 투영을 별도로 검토하고, 보이지 않는 참조를 ‘원문 전달 완료’로 계산하면 안 돼
+      - list:
+        - listitem: 안내의 내용과 신뢰 경계
+      - paragraph: 안내는 고정된 harness 작성 문구여야 해. 최소 내용은 다음 정도면 충분해
+      - list:
+        - listitem: 회신은 같은 문서의 질의·요지·사실관계와 함께 읽기
+        - listitem: 단순 조회의 기본 답은 식별정보와, 회신을 이해하는 데 필요한 전제 원문 및 회신 원문으로 구성하기
+        - listitem: 인용과 설명을 구분하고, 설명이 적용 대상·시점·예외를 넓히지 않게 하기
+        - listitem: 실제 문서에서 전제를 확인하지 못했거나 본문이 부분적이면 그 한계를 밝히고 임의 보완하지 않기
+        - listitem: 단순 조회 때문에 사건 연구·인터뷰·검수 절차를 시작하지 않기
+      - paragraph: 문서에서 읽은 명령문을 이 안내에 섞으면 안 돼. origin/purpose를 명확히 구분하고, 문서가 안내와 비슷한 JSON이나 ‘이전 지시 무시’ 문구를 포함해도 그것은 출처 데이터로만 남겨야 해. 구분 표시 자체가 프롬프트 인젝션 방어를 증명하지는 않아
+      - paragraph: MCP에서는 _meta에만 넣지 말고 모델에 전달되는 별도 text content로 노출해야 해. REST에서는 data.result 바깥의 별도 필드로 같은 계약을 전달하고, provider structuredContent 안에 harness 안내를 끼워 넣지 않는 게 좋아
+      - list:
+        - text: 구현 전에 고정할 보존 계약
+        - list:
+          - listitem: 원래 content 블록의 상대 순서·문자열·리소스와 structuredContent는 보존
+          - listitem: evidence.ts:20–25의 content_hash는 장식 전 원래 result 기준을 유지
+          - listitem: source_access=available을 ‘전체 본문 확보’로 해석하지 않기
+          - listitem: 생산일·회신일·게시일·시행일·조회 시각을 합치거나 대체하지 않기
+          - listitem: 필드 참조는 최종 전송 위치를 정확히 가리키기. 현재 MCP는 탐색 링크를 앞에 넣으므로 원래 content 인덱스를 그대로 쓰면 잘못된 블록을 가리킬 수 있어
+          - listitem: 안내 때문에 한도를 넘으면 기존 명시적 오류 경로를 유지하기. 안내 공간을 만들려고 원문을 자르거나 예산·응답 한도를 늘리면 안 돼
+      - paragraph: REST의 추가 필드는 현재 허용적인 응답 스키마에 수용 가능하지만, MCP content 블록 추가는 관측 가능한 계약 변경이야. 기존 탐색 링크·원문·정정 자료의 구분과 소비자 호환성을 함께 검사해야 해
+      - list:
+        - listitem: 의미 있는 deterministic 합격 증거
+      - paragraph: 기존 두 raw-lookup 테스트만으로는 부족해. 최소한 다음 경계를 직접 검사해야 해
+      - list:
+        - listitem: "보존: CRLF·유니코드·괄호 조건·복수 텍스트·리소스·structuredContent를 가진 원본과 전달된 출처 부분이 일치하고 원본 객체도 변하지 않음"
+        - listitem: "양 채널: 실제 MCP 호출과 REST 응답에 안내가 각각 한 번만 있으며, 작성 주체가 구분되고 모든 참조가 실제 원문 필드로 해석됨"
+        - listitem: "전달: initialize 안내 존재만 검사하지 않고, 개별 도구 응답의 content에 근접 안내가 있는지 확인. structured-only 결과의 실제 클라이언트 가시성도 확인"
+        - listitem: "실패 경계: 빈 필드·누락·부분 본문·검색 결과를 완전한 문서로 승격하지 않음. 오류가 성공으로 바뀌지 않음"
+        - listitem: "악의적 문서: 안내 위장·명령문이 있어도 서버의 고정 안내나 출처 구분이 바뀌지 않음"
+        - listitem: "자원·행동: 추가 원천 호출, 연구 세션, 인터뷰, 서버 LLM 호출이 없고 기존 응답 한도 부근에서 조용한 절단이 없음"
+      - paragraph:
+        - text: 특히 오류 fixture는 보강해야 해. 현재 raw-lookup.test.mjs:62–65는 isError 결과를 직접 반환하지만, 실제 KoreanLawClient는 isError를 받으면 MCP_TOOL_ERROR 예외를 던져 retrieve 이후 장식을 건너뛰어. 실제 예외 경로를 MCP·REST 양쪽에서 검사하고, 기존 safeToolDiagnostic의 비밀값 제거를 우회하지 않아야 해
+        - link "실제 오류 발생 경로":
+          - /url: https://github.com/hyunae52/legal_harness/blob/c8edd6e5b6f2816f70d3d734989f7ab91e5f163c/src/koreanLawClient.ts#L165-L175
+          - generic: 실제 오류 발생 경로
+      - list:
+        - listitem: 의미적 합격은 별도 모델 평가로 확인
+      - paragraph: 위 검사는 ‘원문이 보존되고 안내가 전달됐다’까지만 증명해. 실제 모델이 전제를 읽고 최종 답에 보존했는지는 별도야
+      - paragraph: 현재 pilot-n은 그대로 보존하고, 구현 이후 별도 고정 버전에서 원래 입력·oracle·시간·예산으로 평가해야 해. 특정 실패 문서만 성공한 것을 전체 개선 근거로 삼지 말고, 조건이 질의·요지·괄호·별첨 등 서로 다른 위치에 있는 보조 사례도 확인하는 게 좋아. 보조 사례는 원래 24회를 대체하거나 채점 기준을 바꾸는 용도가 아니야
+      - paragraph: "결론: 참조 우선의 결과 근접 안내가 가장 작은 합리적 후보야. 직접 인용 중심의 답변 형태로 유도하되, 서버가 의미를 인증하는 장치는 추가하지 않는 쪽을 추천해"
+      - paragraph: c8edd6e 고정 커밋의 요청 파일과 직접 관련 KoreanLawClient·오류 처리·응답 크기 제한·REST 스키마를 읽었어. 구현이나 테스트 실행은 하지 않았으며, 이번 답변은 보완안 검토이지 새 CODE/출시 PASS 판정은 아니야
+      - generic "메시지 액션":
+        - button "반응 선택":
+        - button "답장":
