@@ -21,7 +21,9 @@ async function fixture(t, opts = {}) {
   let calls = 0;
   const law = { releaseVersion: 'fixture', close: async () => {},
     listTools: async () => ({ tools: [{ name: 'search_law', inputSchema: { type: 'object' } }] }),
-    callTool: async () => { calls++; await opts.operation?.(); return opts.result ?? { result: { content: [{ type: 'text', text: '합성 본문' }] } }; } };
+    callTool: async name => { calls++;
+      if (name === 'get_law_text') return { result: { content: [{ type: 'text', text: '법령명: 합성법\n시행일: 20200101\n제1조(합성 원가)\n공동 취득 원가의 부담자, 부담 금액 및 처분 연월일을 확인해야 한다.' }] } };
+      await opts.operation?.(); return opts.result ?? { result: { content: [{ type: 'text', text: '합성 본문' }] } }; } };
   const runtime = createApp({ law, authenticate: async req => {
     if (!['Bearer alice', 'Bearer bob'].includes(req.get('authorization'))) throw new ServiceError(401, 'UNAUTHORIZED');
     return { id: req.get('authorization').slice(7), kind: 'auth_user' };
@@ -50,7 +52,30 @@ async function fixture(t, opts = {}) {
 const rpc = (name, args = {}, id = 1) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } });
 const answer = (state, value) => ({ research_id: state.research_id, expected_revision: state.revision,
   expected_state_version: state.state_version, question_id: state.interview.next_question.question_id, answer: value });
-const ask = (f, route, body, actor) => f.request('/api/research/' + route, body, actor);
+const ask = async (f, route, body, actor) => {
+  const response = await f.request('/api/research/' + route, body, actor);
+  if (response.body?.response_mode === 'summary') {
+    const full = await f.request('/api/research/status', { research_id: response.body.research_id, view: 'full' }, actor);
+    assert.equal(full.status, 200); response.body = { ...full.body, ...(response.body.job ? { job: response.body.job } : {}) };
+  }
+  return response;
+};
+// Fixture law independently states these requirements. Ground them through the public
+// API before exercising interview transport; a declaration alone no longer asks a question.
+async function ground(f, state) {
+  if (!state.evidence.length) state = (await ask(f, 'retrieve', { research_id: state.research_id, expected_revision: state.revision,
+    tool: 'get_law_text', arguments: { lawId: 'SYNTHETIC', jo: '제1조' }, issue_ids: state.plan.issues.map(i => i.id), purpose: 'timing' })).body;
+  else if (state.evidence[0].revision !== state.revision) state = (await ask(f, 'reuse', { research_id: state.research_id, expected_revision: state.revision,
+    evidence_ids: state.evidence.map(e => e.evidence_id), issue_ids: state.plan.issues.map(i => i.id) })).body;
+  const e = state.evidence[0], passage = e.passages[0];
+  const assessments = state.requirements.filter(r => r.status === 'unresolved').map(r => ({ requirement_id: r.requirement_id,
+    status: 'required', reason: '합성 조문에 명시된 판단 요소', basis: { kind: 'source', version: e.document_version,
+      citation: { evidence_id: e.evidence_id, passage_id: passage.passage_id, quote: passage.text, relation: 'direct', reason: '합성 조문의 원가 요소' } } }));
+  if (assessments.length) state = (await ask(f, 'update', { research_id: state.research_id, expected_revision: state.revision,
+    expected_state_version: state.state_version, requirement_assessments: assessments })).body;
+  return state;
+}
+const startGrounded = async (f, p = plan()) => ground(f, (await ask(f, 'start', { plan: p })).body);
 const eventually = async predicate => {
   const end = Date.now() + 3000;
   while (!await predicate()) { if (Date.now() > end) assert.fail('bounded condition did not settle'); await new Promise(r => setTimeout(r, 5)); }
@@ -103,6 +128,7 @@ test('TI-03: SSE and in-flight HTTP share admission; disconnection holds real wo
 test('TI-04: retrieval rate is shared across REST/HTTP/SSE and actor buckets; local questions remain usable', async t => {
   let now = 0;
   const f = await fixture(t, { resourceOptions: { now: () => now, limits: { lookupRpm: 2, actorLookupRpm: 1 } } });
+  const state = await startGrounded(f); now = 60_001;
   const sse = await f.client('bob', 'sse');
   assert.equal((await f.request('/api/analyze', { query: '합성' })).status, 200);
   assert.equal((await f.request('/api/analyze', { query: '합성' })).status, 429);
@@ -110,17 +136,16 @@ test('TI-04: retrieval rate is shared across REST/HTTP/SSE and actor buckets; lo
   assert.equal(denied.body.result.isError, true); assert.match(denied.body.result.content[0].text, /LOOKUP_RATE_LIMIT/);
   assert.equal((await sse.callTool({ name: 'search_law', arguments: {} })).isError, undefined);
   assert.equal((await f.request('/api/analyze', { query: '합성' }, 'bob')).status, 429);
-  const state = (await ask(f, 'start', { plan: plan() })).body;
-  assert.ok(state.interview.next_question); assert.equal(f.calls(), 2);
+  assert.ok(state.interview.next_question); assert.equal(f.calls(), 3);
   const next = await ask(f, 'answer', answer(state, { kind: 'unknown', reason: '사용자가 모른다고 답함' }));
-  assert.equal(next.status, 200); assert.equal(f.calls(), 2);
-  now = 60_001;
+  assert.equal(next.status, 200); assert.equal(f.calls(), 3);
+  now = 120_002;
   assert.equal((await f.request('/api/analyze', { query: '합성' })).status, 200);
 });
 
 test('TI-05/06/07: one question, reuse known facts, revision bound answers and conservative evidence invalidation', async t => {
   const f = await fixture(t);
-  let state = (await ask(f, 'start', { plan: plan() })).body;
+  let state = await startGrounded(f);
   assert.ok(state.interview, 'research start must supply an interview next action');
   assert.equal(state.interview.next_question.target.id, 'payer');
   assert.deepEqual(state.interview.next_question.issue_ids, ['cost', 'timing']);
@@ -133,6 +158,7 @@ test('TI-05/06/07: one question, reuse known facts, revision bound answers and c
   state = good.body;
   assert.equal(state.revision, 2); assert.equal(state.plan.facts[1].status, 'provided');
   assert.equal(state.plan.facts[1].source, '현재 사용자 답변');
+  state = await ground(f, state);
   assert.equal(state.interview.next_question.target.id, 'amount');
   assert.equal((await ask(f, 'answer', input)).status, 409);
   const expiry = state.expires_at, revision = state.revision;
@@ -142,21 +168,22 @@ test('TI-05/06/07: one question, reuse known facts, revision bound answers and c
   const invalid = await ask(f, 'answer', answer(state, { kind: 'date', value: '2024-02-30', precision: 'day', source: '합성' }));
   assert.equal(invalid.status, 400);
   state = (await ask(f, 'answer', answer(state, { kind: 'date', value: '2024-09', precision: 'month', source: '사용자: 월만 확인됨' }))).body;
+  state = await ground(f, state);
   assert.equal(state.plan.event_dates[0].precision, 'month');
   assert.equal(state.interview.next_question, null);
   assert.equal(state.interview.next_action, 'conditional_or_withheld');
   assert.equal(state.interview.unresolved_count, 2);
   assert.equal(state.expires_at, expiry); assert.equal(state.legal_verification, 'unverified');
-  assert.equal(f.calls(), 0);
+  assert.equal(f.calls(), 1, 'only the initial legal basis is fetched; assessment and answers do not refetch it');
   const updated = await ask(f, 'update', { research_id: state.research_id, expected_revision: state.revision, plan: state.plan });
-  assert.equal(updated.body.interview.next_question.target.id, 'amount');
+  assert.equal((await ground(f, updated.body)).interview.next_question.target.id, 'amount');
 });
 
 test('TI-06/07: answers reject busy/stale state and retain observation history without replenishing attempts', async t => {
   const pending = Promise.withResolvers(); let entered = false;
   t.after(() => pending.resolve());
   const f = await fixture(t, { operation: async () => { entered = true; await pending.promise; } });
-  let state = (await ask(f, 'start', { plan: plan() })).body;
+  let state = await startGrounded(f);
   assert.ok(state.interview, 'research start must supply an interview next action');
   const oldAnswer = answer(state, { kind: 'fact', value: '공동 부담', source: '합성 진술' });
   const read = ask(f, 'retrieve', { research_id: state.research_id, expected_revision: state.revision,
@@ -165,8 +192,8 @@ test('TI-06/07: answers reject busy/stale state and retain observation history w
   assert.equal((await ask(f, 'answer', oldAnswer)).body.code, 'RESEARCH_BUSY');
   pending.resolve(); state = (await read).body;
   assert.equal((await ask(f, 'answer', oldAnswer)).body.code, 'RESEARCH_STATE_CHANGED');
-  assert.equal(state.attempts.length, 1);
-  assert.equal(state.attempts[0].search.status, 'partial');
+  assert.equal(state.attempts.length, 2);
+  assert.equal(state.attempts.at(-1).search.status, 'partial');
   const next = (await ask(f, 'answer', answer(state, oldAnswer.answer))).body;
   assert.deepEqual(next.attempts, state.attempts); assert.equal(next.last_review, null);
   assert.equal(next.remaining_attempts, state.remaining_attempts);
@@ -176,7 +203,17 @@ test('TI-06/07: answers reject busy/stale state and retain observation history w
 test('TI-09: interview works through a real stateless MCP call and advertised Actions schema', async t => {
   const f = await fixture(t), c = await f.client();
   const started = await c.callTool({ name: 'start_legal_research', arguments: { plan: plan() } });
-  const state = started.structuredContent;
+  const state = await ground(f, (await ask(f, 'status', { research_id: started.structuredContent.research_id })).body);
+  const e = state.evidence[0], passage = e.passages[0];
+  const necessity = { research_id: state.research_id, expected_revision: state.revision, expected_state_version: state.state_version,
+    requirement_assessments: [{ requirement_id: state.requirements[0].requirement_id, status: 'required',
+      reason: '합성 조문에 명시된 판단 요소', basis: { kind: 'source', version: e.document_version,
+        citation: { evidence_id: e.evidence_id, passage_id: passage.passage_id, quote: passage.text,
+          relation: 'direct', reason: '합성 조문의 원가 요소' } } }] };
+  const reassessed = await c.callTool({ name: 'update_legal_research', arguments: necessity });
+  assert.equal(reassessed.isError, undefined);
+  assert.equal(reassessed.structuredContent.state_version, state.state_version);
+  assert.equal(reassessed.structuredContent.response_mode, 'summary');
   const result = await c.callTool({ name: 'answer_legal_question', arguments: answer(state, { kind: 'unknown', reason: '합성 미상' }) });
   assert.deepEqual(JSON.parse(result.content[0].text), result.structuredContent);
   assert.equal(result.structuredContent.interview.next_question.target.id, 'amount');
@@ -185,7 +222,16 @@ test('TI-09: interview works through a real stateless MCP call and advertised Ac
   const validate = new Ajv2020({ strict: false, validateFormats: false }).compile(schema.paths['/api/research/answer'].post.requestBody.content['application/json'].schema);
   const valid = answer(state, { kind: 'unknown', reason: '합성 미상' });
   assert.equal(validate(valid), true); assert.equal(validate({ ...valid, answer: { kind: 'unknown', reason: '', value: 'forbidden' } }), false);
-  assert.equal(f.calls(), 0);
+  const updateSchema = schema.paths['/api/research/update'].post.requestBody.content['application/json'].schema;
+  const toolSchema = (await c.listTools()).tools.find(t => t.name === 'update_legal_research').inputSchema;
+  for (const contract of [updateSchema, toolSchema]) {
+    const update = new Ajv2020({ strict: false, validateFormats: false }).compile(contract);
+    assert.equal(update(necessity), true, JSON.stringify(update.errors));
+    assert.equal(update({ ...necessity, expected_state_version: undefined }), false);
+    assert.equal(update({ ...necessity, plan: plan() }), false);
+    assert.equal(update({ research_id: state.research_id, expected_revision: state.revision, plan: plan() }), true);
+  }
+  assert.equal(f.calls(), 1);
 });
 
 test('TI-04A: initialization/unknown requests use bounded ingress tokens and expired actor buckets recover', async t => {
@@ -207,9 +253,9 @@ test('TI-02/03: same request IDs cannot mix actors; research survives transport 
   const a = (await ask(f, 'start', { plan: plan() })).body;
   const b = (await ask(f, 'start', { plan: { ...plan(), query: '다른 합성 사건' } }, 'bob')).body;
   const [ra, rb, foreign] = await Promise.all([
-    f.request('/mcp', rpc('get_legal_research', { research_id: a.research_id }, 17)),
-    f.request('/mcp', rpc('get_legal_research', { research_id: b.research_id }, 17), 'bob'),
-    f.request('/mcp', rpc('get_legal_research', { research_id: a.research_id }, 17), 'bob'),
+    f.request('/mcp', rpc('get_legal_research', { research_id: a.research_id, view: 'plan' }, 17)),
+    f.request('/mcp', rpc('get_legal_research', { research_id: b.research_id, view: 'plan' }, 17), 'bob'),
+    f.request('/mcp', rpc('get_legal_research', { research_id: a.research_id, view: 'plan' }, 17), 'bob'),
   ]);
   for (const response of [ra, rb, foreign]) assert.equal(response.status, 200);
   assert.equal(ra.body.result.structuredContent.plan.query, '합성 공동취득 사례');
@@ -236,9 +282,11 @@ test('TI-03: authentication finishing after drain never enters the new transport
 });
 
 test('TI-07: storage rejection is atomic and repeated reads keep the same pending question', async t => {
-  const f = await fixture(t, { researchOptions: { limits: { maxSessionBytes: 1200 } } });
-  const p = { query: '합성', issues: [{ id: 'x', question: '합성 요건', required_fact_ids: ['f'], required_date_roles: [] }],
-    facts: [{ id: 'f', description: '합성 미상 사실', status: 'unknown', value: null, source: '' }], event_dates: [] };
+  // The trusted profile can ask without a source lookup. The fixture cap includes
+  // its new provenance records and reserved review slot, leaving <1KiB for answers.
+  const f = await fixture(t, { researchOptions: { limits: { maxSessionBytes: 7000 } } });
+  const p = { query: 'synthetic', issues: [{ id: 'x', question: 'synthetic', profile: 'temporary_two_homes', required_fact_ids: [], required_date_roles: [] }],
+    facts: [], event_dates: [] };
   const created = await ask(f, 'start', { plan: p }); assert.equal(created.status, 200);
   const initial = created.body; assert.ok(initial.interview);
   for (const value of [{ kind: 'fact', value: 'X'.repeat(2000), source: '합성 사용자 입력' }, { kind: 'unknown', reason: 'X'.repeat(1000) }]) {
@@ -246,7 +294,7 @@ test('TI-07: storage rejection is atomic and repeated reads keep the same pendin
     assert.equal(failed.status, 429); assert.equal(failed.body.code, 'RESEARCH_CAPACITY');
     const stored = (await ask(f, 'status', { research_id: initial.research_id })).body;
     assert.equal(stored.state_version, initial.state_version);
-    assert.deepEqual(stored.plan, p); assert.deepEqual(stored.interview, initial.interview);
+    assert.deepEqual(stored.plan, initial.plan); assert.deepEqual(stored.interview, initial.interview);
   }
 });
 
@@ -283,7 +331,7 @@ test('TI-05/08: no registered fact gaps does not promise source or legal complet
   assert.ok(state.interview);
   assert.equal(state.interview.next_question, null); assert.equal(state.interview.unresolved_count, 0);
   assert.equal(state.interview.next_action, 'research_sources_and_review');
-  assert.equal(state.interview.coverage, 'registered_requirements_only');
+  assert.equal(state.interview.coverage, 'provenance_assessed_registered_requirements');
   assert.equal(state.legal_verification, 'unverified');
   assert.equal(f.calls(), 0);
 });
@@ -299,7 +347,7 @@ test('TI-07/08: fact, date and unknown answers invalidate an existing current re
   for (const variant of ['fact', 'date', 'unknown']) {
     const p = plan();
     if (variant === 'date') p.issues.forEach(i => { i.required_fact_ids = []; });
-    let state = (await ask(f, 'start', { plan: p })).body;
+    let state = await startGrounded(f, p);
     const reviewed = await ask(f, 'review', withheldReview(state)); assert.equal(reviewed.status, 200);
     state = (await ask(f, 'status', { research_id: state.research_id })).body;
     assert.equal(state.last_review.current, true);
@@ -319,7 +367,7 @@ test('TI-07/08: fact, date and unknown answers invalidate an existing current re
 });
 
 test('TI-06: concurrent different answers apply once; ignored response recovers through status without replay', async t => {
-  const f = await fixture(t), state = (await ask(f, 'start', { plan: plan() })).body;
+  const f = await fixture(t), state = await startGrounded(f);
   const first = answer(state, { kind: 'fact', value: '합성 A 답변', source: 'A 진술' });
   const second = answer(state, { kind: 'fact', value: '합성 B 답변', source: 'B 진술' });
   const results = await Promise.all([ask(f, 'answer', first), ask(f, 'answer', second)]);

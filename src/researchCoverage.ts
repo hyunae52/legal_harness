@@ -4,7 +4,7 @@ import type { ResearchAttempt, ResearchEvidence } from './researchEvidence.js';
 import { documentKey, type SourceIdentity } from './researchIdentity.js';
 import { normalizedSearch, normalizeQuery, type SearchFamily, type SearchHit } from './researchSearch.js';
 
-export const coveragePolicy = 'research-v5-authority-coverage-20261001';
+export const coveragePolicy = 'research-v6-completion-recovery-20261002';
 export interface Candidate {
   candidate_id: string; key: string; identity: SourceIdentity; title: string; related_laws: string;
   discovered_in: string[]; issue_ids: string[]; first_revision: number; last_revision: number;

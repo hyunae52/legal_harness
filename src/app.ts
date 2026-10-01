@@ -6,6 +6,8 @@ import { CallToolRequestSchema, ListToolsRequestSchema, type Tool } from '@model
 import { z } from 'zod';
 import { LawMcpError, type KoreanLawClient } from './koreanLawClient.js';
 import { type Actor, AnalyzeSchema, DraftSchema, type FailureService, ServiceError } from './contracts.js';
+import { ResearchCapacityError } from './researchRecovery.js';
+import { presentResearch } from './researchPresentation.js';
 import { GateEngine } from './gates.js';
 import { createAuthenticator } from './auth.js';
 import { retrievalEnvelope } from './evidence.js';
@@ -16,7 +18,7 @@ import { actionsSchema, antigravityConfig, desktopConfig, geminiConfig, gptInstr
 import { type CorrectionService } from './corrections.js';
 import { correctionInputs, correctionInstructions } from './correctionMeta.js';
 import { ResearchService, researchPolicyVersion, type ResearchOptions } from './research.js';
-import { researchTools, researchRoutes, researchSchemas, researchInstructions, type ResearchTool } from './researchContracts.js';
+import { researchTools, researchRoutes, researchSchemas, researchInstructions, requirementInstructions, type ResearchTool } from './researchContracts.js';
 import { ResourceBudgets, positiveLimit, type ResourceOptions } from './resourceBudgets.js';
 import { serveStateless, type RequestGuard } from './statelessHttp.js';
 import { PublicAccess, actorBudgetKey, assertNoPublicSession } from './publicAccess.js';
@@ -76,6 +78,7 @@ export function createApp(options: Options) {
     try { return await operation(); } finally { active--; }
   };
   const errorBody = (error: unknown) => {
+    if (error instanceof ResearchCapacityError) return { status: error.status, body: error.publicBody() };
     if (error instanceof z.ZodError) return { status: 400, body: inputDiagnostics(error) };
     if (error instanceof LawMcpError && error.code==='MCP_TOOL_ERROR' && error.result) return {status:error.status,body:{code:error.code,result:safeToolDiagnostic(error.result,env)}};
     if (error instanceof ServiceError || error instanceof LawMcpError) return { status: error.status, body: { code: error.code } };
@@ -84,7 +87,7 @@ export function createApp(options: Options) {
   const fail = (res: Response, error: unknown) => {
     if (res.headersSent) { res.end(); return; }
     const r = errorBody(error);
-    if (r.status === 429) res.set('Retry-After', '5');
+    if (r.status === 429 && (!(error instanceof ResearchCapacityError) || error.recovery.retryable)) res.set('Retry-After', '5');
     res.status(r.status).json(r.body);
   };
   const protectedRoute = (handler: (req: Request, res: Response, actor: Actor) => Promise<unknown>) => (req: Request, res: Response) => {
@@ -120,7 +123,7 @@ export function createApp(options: Options) {
   const runResearch = async (name: ResearchTool, actor: Actor, input: unknown) => {
     const scoped = publicAccess.scope(actor, input, name === 'start_legal_research');
     assertNoPublicSession(scoped.input);
-    return publicAccess.result(await research.run(name, scoped.actor, scoped.input), scoped.token);
+    return publicAccess.result(presentResearch(name, scoped.input, await research.run(name, scoped.actor, scoped.input)), scoped.token);
   };
   const checkSources = (actor: Actor, input: unknown) => {
     assertNoPublicSession(input);
@@ -223,7 +226,7 @@ export function createApp(options: Options) {
   function mcpServer(actor: Actor, guard: RequestGuard = operation => operation()) {
     const mcpWork = <T>(operation: () => Promise<T>) => guard(() => work(operation));
     const server = new Server({ name: 'taxlab-legal-harness', version: '2.4.0' }, { capabilities: { tools: {} },
-      instructions: researchInstructions + ' 법령 도구 결과는 조회 자료입니다. 사건 기준일·연혁·부칙·후속 해석을 확인하세요. 국세청 해석례는 search_tax_interpretations → get_tax_document로 사실관계·질의·회신을 읽고, 문서번호를 알면 lookup_tax_document를 쓰세요(도구가 제공되는 경우). 법제처 일련번호와 국세청 ntstDcmId를 혼용하지 마세요. 기존 validate_legal_draft는 별도의 제한된 초안 검사입니다. ' + correctionInstructions });
+      instructions: researchInstructions + requirementInstructions + ' 법령 도구 결과는 조회 자료입니다. 사건 기준일·연혁·부칙·후속 해석을 확인하세요. 국세청 해석례는 search_tax_interpretations → get_tax_document로 사실관계·질의·회신을 읽고, 문서번호를 알면 lookup_tax_document를 쓰세요(도구가 제공되는 경우). 법제처 일련번호와 국세청 ntstDcmId를 혼용하지 마세요. 기존 validate_legal_draft는 별도의 제한된 초안 검사입니다. ' + correctionInstructions });
     const visible = actor.kind === 'anonymous' ? custom.filter(tool => tool.name !== 'submit_failure') : custom;
     server.setRequestHandler(ListToolsRequestSchema, () => mcpWork(async () => ({ tools: [...(await options.law.listTools()).tools.filter(t => !custom.some(c => c.name === t.name)).map(t => ({...t, description: (t.description ?? '') + '\n반박·새 근거로 기존 답변을 정정하면 prepare_correction_pr로 제안 내용을 준비하고 사용자에게 PR 생성을 물어보세요.'})), ...visible] })));
     server.setRequestHandler(CallToolRequestSchema, async request => {

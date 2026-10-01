@@ -1,0 +1,138 @@
+{
+  "status": "planning evidence; no new product tests or implementation",
+  "observed_at": "2026-10-01T14:49:12.075415+00:00",
+  "git_head": "1aa530c468c040a44b0ebccb4747f45fb7958d93",
+  "source_sha256": {
+    "src/research.ts": "daa47b43a8c7b3dc99fb1be96de5022406442aa8f9d92079b120f991cb52b5cc",
+    "src/researchCoverage.ts": "5afe6b98b6d2b5ba987fe1bda9a558d22c52a091732c96296942a00acdae9c48",
+    "src/researchContracts.ts": "afa82da650d71cebb62963e94c09646f281cd9d446143f484a1966988e85988f",
+    "src/researchReview.ts": "4469a4db3ce25dd87b8e05654e4f5c7ad556c55c89c46958fb2d7c8ed93002cb",
+    "src/researchInterview.ts": "5000f9fc712b1c03b346610665df450dfbacbdc061791e0284bd37a2882c6bf9",
+    "src/researchProgress.ts": "032af2b272df0bf8f0d3e3f8652e07f5d0344fe30eeccacff88ac26677e5b9eb"
+  },
+  "reuse_scope_loss": {
+    "trial": "remaining_two_homes-1",
+    "mcp_log_sha256": "051dfa6d94a3383307f8b7244e46ffd0a1fc8e832171a8e595670f1cb1e3de30",
+    "before": {
+      "mcp_call_index": 10,
+      "tool": "research_legal_sources",
+      "input_issue_ids": [
+        "I1",
+        "I2"
+      ],
+      "law_body_issue_ids": [
+        "I1",
+        "I2"
+      ],
+      "required_search_examples": [
+        {
+          "issue_id": "I1",
+          "tool": "search_decisions",
+          "query": "소득세법 시행령 제155조 신규 주택"
+        },
+        {
+          "issue_id": "I1",
+          "tool": "search_decisions",
+          "query": "소득세법 시행령 제155조 신규 주택 3주택"
+        },
+        {
+          "issue_id": "I1",
+          "tool": "search_tax_decisions",
+          "query": "일시적 2주택 비과세 취득 선후"
+        },
+        {
+          "issue_id": "I1",
+          "tool": "search_tax_interpretations",
+          "query": "일시적 2주택 비과세 취득 선후"
+        },
+        {
+          "issue_id": "I1",
+          "tool": "search_tax_decisions",
+          "query": "일시적 2주택 비과세 취득 선후"
+        },
+        {
+          "issue_id": "I1",
+          "tool": "search_tax_decisions",
+          "query": "일시적 2주택 비과세 취득 선후"
+        }
+      ]
+    },
+    "after": {
+      "mcp_call_index": 11,
+      "tool": "reuse_legal_evidence",
+      "input_issue_ids": [
+        "I3"
+      ],
+      "law_body_issue_ids": [
+        "I3"
+      ],
+      "required_search_examples": [
+        {
+          "issue_id": "I3",
+          "tool": "search_decisions",
+          "query": "소득세법 시행령 제155조"
+        },
+        {
+          "issue_id": "I3",
+          "tool": "search_decisions",
+          "query": "소득세법 시행령 제155조 적용 제외"
+        },
+        {
+          "issue_id": "I3",
+          "tool": "search_tax_decisions",
+          "query": "요건"
+        },
+        {
+          "issue_id": "I3",
+          "tool": "search_tax_interpretations",
+          "query": "요건"
+        },
+        {
+          "issue_id": "I3",
+          "tool": "search_tax_decisions",
+          "query": "요건"
+        },
+        {
+          "issue_id": "I3",
+          "tool": "search_tax_decisions",
+          "query": "요건"
+        }
+      ]
+    },
+    "capacity_observation": {
+      "mcp_call_index": 15,
+      "source_attempts": 11,
+      "remaining_attempts": 29,
+      "candidate_count": 128,
+      "candidate_overflow": true,
+      "metadata_bytes_recomputed_from_saved_response": 255928,
+      "metadata_limit_from_source": 262144,
+      "next_admission_reserve_from_source": 8192,
+      "following_capacity_error_call_indexes": [
+        16,
+        17,
+        19,
+        20
+      ],
+      "new_research_call_index": 21
+    },
+    "conclusion": "Same-revision reuse replaces original I1/I2 linkage with I3. Observed required queries then lose the temporary-home topic. The exact storage accounting explains the immediate capacity refusals, but does not establish every later model decision or the full timeout cause."
+  },
+  "unsupported_requirement": {
+    "trial": "subsequent_change-3",
+    "mcp_log_sha256": "4a567251cdfc972c5c7e872b9bf09366e8c65741b0af465a50a6ebf337f394ab",
+    "declared_at_mcp_call": 2,
+    "fact_id": "f_other_requirements",
+    "description": "합성평가법 제1조 특례의 등록 외 다른 요건 충족 여부",
+    "status": "unknown",
+    "present_in_required_fact_ids": true,
+    "last_review_status": "needs_info",
+    "last_finding_codes": [
+      "DECLARED_UNKNOWNS",
+      "REQUIRED_FACT_UNCONFIRMED",
+      "SCOPE_TRACK_OPEN"
+    ],
+    "conclusion": "A pre-source model hypothesis remained a required unknown after the complete synthetic article and successor decision were read. The final answer treated the unsupported additional condition as a prerequisite."
+  },
+  "privacy": "Only allowlisted scope, count, source-code identity and synthetic-condition observations are included; no research capability or raw model trace is published."
+}

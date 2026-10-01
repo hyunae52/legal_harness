@@ -16,6 +16,18 @@ import { safeToolDiagnostic } from '../dist/errorDiagnostics.js';
 const secret = 'synthetic-public-session-secret-0123456789abcdef';
 const plan = { query:'Synthetic public research', issues:[{id:'rule',question:'Which facts are missing?',required_fact_ids:['fact'],required_date_roles:[]}],
   facts:[{id:'fact',description:'Synthetic fact',status:'unknown',value:null,source:''}],event_dates:[] };
+
+test('CF-06/12: anonymous summary preserves the authoritative handle within its byte bound and isolates pages', async t => {
+  const f=await fixture(t), c=await f.mcp();
+  const a=(await c.callTool({name:'start_legal_research',arguments:{plan:{...plan,query:'합성 긴 질문 '.repeat(1500)}}})).structuredContent;
+  const b=(await c.callTool({name:'start_legal_research',arguments:{plan}})).structuredContent;
+  assert.equal(a.response_mode,'summary');assert.ok(Buffer.byteLength(JSON.stringify(a),'utf8')<=32768);
+  assert.equal(Object.keys(a)[0],'client_session');assert.ok(a.client_session);assert.equal(a.plan,undefined);
+  const read=(await c.callTool({name:'get_legal_research',arguments:{research_id:a.research_id,client_session:a.client_session,view:'requirements',limit:1}})).structuredContent;
+  assert.equal(read.page.total,1);assert.equal(read.items[0].status,'unresolved');
+  const denied=await c.callTool({name:'get_legal_research',arguments:{research_id:a.research_id,client_session:b.client_session,view:'requirements',limit:1}});
+  assert.equal(denied.isError,true);assert.match(denied.content[0].text,/RESEARCH_NOT_FOUND/);
+});
 const proposal = { request_id:'d4b0f635-8f10-4d30-8a5e-156f15c3e470',title:'Synthetic correction',previous_claim:'A synthetic prior claim',
   correction:'Check the missing fact first',why:'The synthetic case omitted a condition',sources:[{url:'https://law.go.kr/법령/소득세법',title:'Synthetic test source',supporting_excerpt:'Synthetic excerpt for transport tests'}],
   keywords:['synthetic'],next_checks:['Check the synthetic condition'],public_safe:true };

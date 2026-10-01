@@ -21,11 +21,10 @@ test('Pro F-6: an expired in-flight call keeps its reservation until actual sett
     { now: () => now, limits: { ttlMs: 50, yieldMs: 1, transientBytes: 20000, maxTotalBytes: 35000 } });
   const first = await f.law(await f.start()); assert.equal(first.pending, true);
   now = 100;
-  let second = await f.start();
-  await assert.rejects(() => f.law(second), e => e.code === 'RESEARCH_CAPACITY');
+  await assert.rejects(() => f.start(), e => e.code === 'RESEARCH_CAPACITY' && e.capacity_reason === 'shared_reservation');
   assert.equal(calls, 1, 'expired call is still consuming the global reservation');
   finish(); await new Promise(resolve => setTimeout(resolve, 10));
-  second = await f.law(second); assert.equal(second.job.status, 'completed'); assert.equal(calls, 2);
+  const second = await f.law(await f.start()); assert.equal(second.job.status, 'completed'); assert.equal(calls, 2);
   f.service.close();
 });
 

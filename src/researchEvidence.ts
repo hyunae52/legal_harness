@@ -24,6 +24,7 @@ export interface ResearchEvidence extends AdaptedEvidence {
   tool: string; arguments_hash: string; observed_at: string; expires_at: string;
 }
 export interface ResearchAttempt {
+  capacity_reason?: import('./researchRecovery.js').CapacityReason;
   obligation_id?: string;
   search_scope?: 'required' | 'exploratory'; obligation_purpose?: 'neutral' | 'counter' | 'subsequent' | 'amendment';
   requirement?: { document_key: string; document_number: string | null; document_version: string | null; role: string; date: string | null };
