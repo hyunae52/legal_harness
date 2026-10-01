@@ -4,7 +4,7 @@ import type { ResearchAttempt, ResearchEvidence } from './researchEvidence.js';
 import { documentKey, type SourceIdentity } from './researchIdentity.js';
 import { normalizedSearch, normalizeQuery, type SearchFamily, type SearchHit } from './researchSearch.js';
 
-export const coveragePolicy = 'research-v7-scope-promotion-20261002';
+export const coveragePolicy = 'research-v8-adopted-documents-20261002';
 export interface Candidate {
   candidate_id: string; key: string; identity: SourceIdentity; title: string; related_laws: string;
   discovered_in: string[]; issue_ids: string[]; first_revision: number; last_revision: number;
@@ -12,6 +12,8 @@ export interface Candidate {
   discovery_role?: 'primary' | 'subsequent' | 'exploratory'; statute?: SearchHit['statute'];
 }
 export interface CandidateLedger { candidates: Candidate[]; overflow: boolean }
+/** These discoveries open their own follow-up only when adopted as current grounds. */
+export const requiresCoreAdoption = (candidate: Candidate) => candidate.discovery_role === 'subsequent' || candidate.discovery_role === 'exploratory';
 export interface ResearchStep { tool: string; arguments: Record<string, unknown>; purpose: ResearchEvidence['purpose']; issue_ids: string[]; obligation_id: string }
 export interface Obligation {
   obligation_id: string; issue_id: string; family: SearchFamily; purpose: 'neutral' | 'counter' | 'subsequent' | 'amendment';
@@ -206,11 +208,14 @@ export function researchCoverage(plan: Plan, revision: number, evidence: Researc
       const seen = new Set<string>();
       for (const e of currentEvidence.filter(e => e.issue_ids.includes(issue.id) && e.identity && e.identity.family !== 'statute' && e.body_scope !== 'discovery_only')) {
         const key = documentKey(e.identity!) ?? e.evidence_id;
-        if (seen.has(key)) continue; seen.add(key);
+        if (seen.has(key)) continue;
         const candidate = ledger.candidates.find(c => candidateBody(c, [e]).length);
         // Follow-up discoveries are inspected, but only promoted legal grounds open another search generation.
-        if (candidate && candidate.discovery_role !== undefined && candidate.discovery_role !== 'primary'
+        if (candidate && requiresCoreAdoption(candidate)
           && e.purpose !== 'support' && !coreEvidenceIds.includes(e.evidence_id)) continue;
+        // An unadopted storage chunk must not hide a later adopted chunk of this
+        // document. Deduplicate only after the current issue's eligibility check.
+        seen.add(key);
         const kind = e.identity!.kind;
         if (kind === 'tax_appeal') {
           const type = e.identity!.observations.find(o => o.field === 'documentType')?.value ?? '';

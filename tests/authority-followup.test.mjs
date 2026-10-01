@@ -105,20 +105,161 @@ test('Rate-limited provider searches preserve a retry hint and are never zero re
   assert.equal(r.status, 'failed'); assert.equal(r.total, null); assert.equal(r.retry_after_ms, 2000);
 });
 
-function subsequentFixture() {
+function subsequentFixture({ longSuccessor = false } = {}) {
   return coverageFixture((name, args) => {
     if (name === 'get_law_text') return { result: { content: [{ type: 'text', text: '법령명: 합성법\n시행일: 20200101\n제1조(취득)\n합성 취득 요건과 부칙.' }] } };
     if (name === 'search_law') return { result: { content: [{ type: 'text', text: '검색 결과 (총 0건):' }] } };
     if (name === 'search_decisions') {
+      if (args.query === '보조 쟁점 탐색') return { result: { content: [{ type: 'text', text:
+        '판례 검색 결과 (총 1건, 1페이지)\n[extra] 합성 보조 판결\n  사건번호: 2022두3\n  법원: 대법원\n  선고일: 20210101' }] } };
       const next = args.query.includes('2020두1');
-      const found = next || !/변경|2021두2|적용 제외|예외/.test(args.query);
+      const found = next || !/변경|2021두2|2022두3|적용 제외|예외/.test(args.query);
       return { result: { content: [{ type: 'text', text: `판례 검색 결과 (총 ${found ? 1 : 0}건, 1페이지)\n` +
         (found ? `[${next ? 'next' : 'old'}] 합성 판결\n  사건번호: ${next ? '2021두2' : '2020두1'}\n  법원: 대법원\n  선고일: 20210101` : '') }] } };
     }
-    if (name === 'get_decision_text') return { result: { content: [{ type: 'text', text: `기본 정보:\n사건번호: ${args.id === 'next' ? '2021두2' : '2020두1'}\n법원: 대법원\n선고일: 20210101\n전문:\n합성 판결 요건.` }] } };
+    if (name === 'get_decision_text') return { result: { content: [{ type: 'text', text: `기본 정보:\n사건번호: ${args.id === 'next' ? '2021두2' : args.id === 'extra' ? '2022두3' : '2020두1'}\n법원: 대법원\n선고일: 20210101\n전문:\n`
+      + (longSuccessor && args.id === 'next' ? '합성 판결의 실제 적용 요건.\n'.repeat(7000) : '합성 판결 요건.') }] } };
     return providerResponse(name, args);
   });
 }
+
+async function splitSuccessor(t) {
+  const f = subsequentFixture({ longSuccessor: true }); t.after(() => f.service.close());
+  const s = await f.finish(await f.law(await f.start()));
+  const chunks = s.evidence.filter(e => e.identity?.document_number === '2021두2');
+  assert.ok(chunks.length > 1, 'real provider body must pass through actual multi-chunk storage');
+  assert.equal(new Set(chunks.map(e => e.manifest_id)).size, 1);
+  assert.ok(s.manifests.find(m => m.manifest_id === chunks[0].manifest_id)?.complete);
+  assert.ok(!s.coverage.obligations.some(o => o.document_key === 'moleg:precedent:next'));
+  const e = chunks.at(-1), input = coverageReview(s), a = input.analysis[0];
+  const citation = { evidence_id: e.evidence_id, passage_id: e.passages[0].passage_id,
+    quote: e.passages[0].text.slice(0, 100), relation: 'direct', reason: '후반부에 저장된 현재 적용 근거' };
+  const authority = { evidence_id: e.evidence_id, kind: 'supreme_court', disposition: 'applied',
+    statute_evidence_ids: [a.legal_basis.statutes[0].citation.evidence_id], law_version_relation: 'same_rule',
+    reason: '합성 후속 판결의 현재 적용', subsequent_review: { status: 'addressed', reason: '별도 후속 조회가 필요', citations: [], search_attempt_ids: [] } };
+  a.legal_basis.authorities = [authority];
+  return { f, s, chunks, e, input, a, citation, authority };
+}
+
+for (const slot of ['claim', 'temporal', 'counter']) test(`FU-04: adopted non-first ${slot} citation opens exactly one document follow-up through the real runner`, async t => {
+  const { f, s, chunks, e, input, a, citation } = await splitSuccessor(t);
+  if (slot === 'claim') a.claims[0].citations.push(citation);
+  else if (slot === 'temporal') a.legal_basis.temporal_application.citations.push(citation);
+  else a.counter_evidence = [{ evidence_id: s.evidence.find(e => e.identity?.document_number === '2020두1').evidence_id,
+    disposition: 'resolved', reason: '후속 판결 후반 원문으로 반론 해소', resolution_citations: [citation] }];
+  const selected = view => view.coverage.obligations.filter(o => o.document_key === 'moleg:precedent:next');
+  const before = inspectResearch(input, s.plan, s.evidence, s.attempts, s.ledger);
+  assert.equal(selected(before).length, 1);
+  assert.ok(selected(before)[0].next_step);
+  const reversed = inspectResearch(input, s.plan, [...s.evidence].reverse(), s.attempts, s.ledger);
+  assert.deepEqual(selected(reversed), selected(before), 'storage ordering cannot decide which adopted fragment counts');
+  assert.ok(before.findings.some(x => x.code === 'SUBSEQUENT_SEARCH_REQUIRED' && x.detail.startsWith(e.evidence_id)));
+  await f.service.run('review_legal_reasoning', { kind: 'auth_user', id: 'authority-fixture' }, input);
+  const observed = await f.service.run('get_legal_research', { kind: 'auth_user', id: 'authority-fixture' }, { research_id: s.research_id });
+  assert.ok(observed.review_adopted_evidence_ids.includes(e.evidence_id));
+  assert.equal(selected(observed).length, 1);
+  const count = f.calls.length, after = await f.finish(observed);
+  assert.ok(f.calls.slice(count).some(c => c.name === 'search_decisions' && c.args.query.includes('2021두2')));
+  assert.ok(selected(after).every(o => o.status.startsWith('completed')));
+  assert.equal(f.calls.slice(count).filter(c => c.name === 'get_decision_text').length, 0, 'stored successor is not fetched again');
+  assert.deepEqual(after.evidence.filter(x => chunks.some(c => c.evidence_id === x.evidence_id)), chunks);
+});
+
+for (const disposition of ['applied', 'analogy']) test(`FU-05: non-first ${disposition} authority without a claim citation still opens document follow-up`, async t => {
+  const { s, e, input, authority } = await splitSuccessor(t); authority.disposition = disposition;
+  const r = inspectResearch(input, s.plan, s.evidence, s.attempts, s.ledger);
+  assert.ok(r.coverage.obligations.some(o => o.document_key === 'moleg:precedent:next' && o.next_step));
+  assert.ok(r.findings.some(x => x.code === 'SUBSEQUENT_SEARCH_REQUIRED' && x.detail.startsWith(e.evidence_id)));
+});
+
+test('FU-06: non-first background or treatment-history citations alone preserve finite follow-up', async t => {
+  const { f, s, e, input, a, citation, authority } = await splitSuccessor(t);
+  authority.disposition = 'distinguished'; citation.relation = 'background';
+  a.legal_basis.temporal_application.citations.push(citation);
+  const check = () => {
+    const r = inspectResearch(input, s.plan, s.evidence, s.attempts, s.ledger);
+    assert.ok(!r.coverage.obligations.some(o => o.document_key === 'moleg:precedent:next'));
+    assert.ok(!r.findings.some(x => x.code === 'SUBSEQUENT_SEARCH_REQUIRED' && x.detail.startsWith(e.evidence_id)));
+  };
+  check(); a.legal_basis.temporal_application.citations.pop();
+  authority.subsequent_review.citations = [{ ...citation, relation: 'direct', reason: '판결 경과 설명에만 인용' }]; check();
+  const count = f.calls.length; await f.run(s);
+  assert.equal(f.calls.length, count);
+});
+
+for (const [slot, relation] of [['temporal', 'direct'], ['counter', 'analogy']])
+  test(`FU-07: adopted exploratory ${slot} ${relation} survives review, status and real runner; background stays optional`, async t => {
+    const f = subsequentFixture(); t.after(() => f.service.close());
+    let s = await f.finish(await f.law(await f.start()));
+    s = await f.api('research_legal_sources', s, { issue_ids: ['case'], purpose: 'context', tool: 'search_decisions',
+      arguments: { domain: 'precedent', query: '보조 쟁점 탐색', page: 1, display: 50 } });
+    assert.equal(s.attempts.at(-1).search_scope, 'exploratory');
+    const candidate = s.coverage.candidates.find(c => c.key === 'moleg:precedent:extra');
+    assert.equal(candidate.discovery_role, 'exploratory');
+    s = await f.api('research_legal_sources', s, { issue_ids: ['case'], purpose: 'context', tool: 'get_decision_text',
+      arguments: { domain: 'precedent', id: 'extra', full: true } });
+    const e = s.evidence.find(e => e.identity?.document_number === '2022두3'), input = coverageReview(s), a = input.analysis[0];
+    assert.equal(s.evidence.filter(x => x.identity?.document_number === '2022두3').length, 1);
+    const cite = { evidence_id: e.evidence_id, passage_id: e.passages[0].passage_id, quote: e.passages[0].text,
+      relation: 'background', reason: '보조 탐색으로 확인한 판결의 관계' };
+    if (slot === 'temporal') a.legal_basis.temporal_application.citations.push(cite);
+    else a.counter_evidence = [{ evidence_id: s.evidence.find(e => e.identity?.document_number === '2020두1').evidence_id,
+      disposition: 'resolved', reason: '보조 자료를 통한 반론 검토', resolution_citations: [cite] }];
+    const authority = { evidence_id: e.evidence_id, kind: 'supreme_court', disposition: 'distinguished',
+      statute_evidence_ids: [a.legal_basis.statutes[0].citation.evidence_id], law_version_relation: 'same_rule', reason: '적용하지 않은 보조 자료',
+      subsequent_review: { status: 'unresolved', reason: '현재 적용하지 않은 보조 판결', citations: [], search_attempt_ids: [] } };
+    a.legal_basis.authorities = [authority];
+    const work = view => view.coverage.obligations.filter(o => o.document_key === 'moleg:precedent:extra');
+    const read = () => f.service.run('get_legal_research', { kind: 'auth_user', id: 'authority-fixture' }, { research_id: s.research_id });
+    await f.service.run('review_legal_reasoning', { kind: 'auth_user', id: 'authority-fixture' }, input);
+    s = await read(); assert.equal(work(s).length, 0);
+    assert.ok(!s.review_adopted_evidence_ids.includes(e.evidence_id));
+    const calls = f.calls.length; await f.run(s); assert.equal(f.calls.length, calls);
+    s = await read(); input.expected_state_version = s.state_version;
+    cite.relation = relation; authority.disposition = relation === 'direct' ? 'applied' : 'analogy';
+    const reviewed = await f.service.run('review_legal_reasoning', { kind: 'auth_user', id: 'authority-fixture' }, input);
+    assert.equal(work(reviewed).length, 1);
+    s = await read(); assert.equal(work(s).length, 1, 'review-created obligation must remain visible to the runner');
+    assert.ok(s.review_adopted_evidence_ids.includes(e.evidence_id));
+    assert.deepEqual(work(s), work(reviewed));
+    const before = f.calls.length; s = await f.finish(s);
+    assert.ok(f.calls.slice(before).some(c => c.name === 'search_decisions' && c.args.query.includes('2022두3')));
+    assert.ok(work(s).every(o => o.status.startsWith('completed')));
+  });
+
+test('FU-08: exploratory background has no contradictory mandatory follow-up with an empty worklist', async t => {
+  const f = subsequentFixture(); t.after(() => f.service.close());
+  let s = await f.finish(await f.law(await f.start()));
+  s = await f.api('research_legal_sources', s, { issue_ids: ['case'], purpose: 'context', tool: 'search_decisions',
+    arguments: { domain: 'precedent', query: '보조 쟁점 탐색', page: 1, display: 50 } });
+  s = await f.api('research_legal_sources', s, { issue_ids: ['case'], purpose: 'context', tool: 'get_decision_text',
+    arguments: { domain: 'precedent', id: 'extra', full: true } });
+  const e = s.evidence.find(e => e.identity?.document_number === '2022두3'), input = coverageReview(s), a = input.analysis[0];
+  a.legal_basis.temporal_application.citations.push({ evidence_id: e.evidence_id, passage_id: e.passages[0].passage_id,
+    quote: e.passages[0].text, relation: 'background', reason: '현재 요건에 적용하지 않은 보조 판결의 배경 설명' });
+  a.legal_basis.authorities = [{ evidence_id: e.evidence_id, kind: 'supreme_court', disposition: 'distinguished',
+    statute_evidence_ids: [a.legal_basis.statutes[0].citation.evidence_id], law_version_relation: 'same_rule', reason: '다른 사실관계이므로 배경으로 구별',
+    subsequent_review: { status: 'addressed', reason: '새 법리로 채택하지 않은 보조 발견', citations: [], search_attempt_ids: [] } }];
+  const r = inspectResearch(input, s.plan, s.evidence, s.attempts, s.ledger);
+  assert.ok(!r.coverage.obligations.some(o => o.document_key === 'moleg:precedent:extra'));
+  assert.ok(!r.findings.some(x => x.code === 'SUBSEQUENT_SEARCH_REQUIRED' && x.detail.startsWith(e.evidence_id)));
+});
+
+test('FU-09: an earlier context receipt cannot suppress a later support receipt for the same document', async t => {
+  const f = subsequentFixture(); t.after(() => f.service.close());
+  let s = await f.finish(await f.law(await f.start()));
+  const original = s.evidence.find(e => e.identity?.document_number === '2021두2');
+  assert.equal(original.purpose, 'context');
+  s = await f.api('research_legal_sources', s, { issue_ids: ['case'], purpose: 'support', tool: 'get_decision_text',
+    arguments: { domain: 'precedent', id: 'next', full: true } });
+  const receipts = s.evidence.filter(e => e.identity?.document_number === '2021두2');
+  assert.equal(receipts.length, 2); assert.equal(receipts.at(-1).purpose, 'support');
+  assert.equal(receipts[0].response_hash, receipts[1].response_hash);
+  assert.equal(s.coverage.obligations.filter(o => o.document_key === 'moleg:precedent:next').length, 1);
+  const before = f.calls.length; s = await f.finish(s);
+  assert.ok(f.calls.slice(before).some(c => c.name === 'search_decisions' && c.args.query.includes('2021두2')));
+  assert.ok(s.coverage.obligations.filter(o => o.document_key === 'moleg:precedent:next').every(o => o.status.startsWith('completed')));
+});
 
 for (const slot of ['temporal', 'counter']) test(`FU-01/02: ${slot} use of a successor cannot evade adoption, contradiction checks or runner follow-up`, async t => {
   const f = subsequentFixture(); t.after(() => f.service.close());

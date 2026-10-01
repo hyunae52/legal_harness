@@ -37,7 +37,7 @@ test('SP-01/02: independent notice promotion closes a completed question at zero
   assert.equal(next.state_version, s.state_version + 1);
   assert.equal(next.last_review, null);
   for (const key of ['attempts', 'evidence', 'manifests', 'ledger', 'requirements', 'requirement_history',
-    'review_adopted_evidence_ids', 'expires_at']) assert.deepEqual(next[key], before[key], key);
+    'review_adopted_evidence_ids', 'evidence_bindings', 'jobs', 'expires_at']) assert.deepEqual(next[key], before[key], key);
   assert.equal(next.recovery.remaining_attempts, 0);
   const expectedPlan = structuredClone(s.plan);
   Object.assign(expectedPlan.scope_review.tracks[1], { issue_id: 'case', lifecycle: 'active' });
@@ -126,6 +126,34 @@ test('SP-04: only a deferred independent notice may be promoted and multi-promot
   bad.scope_promotions.push({ track_id: 'missing', issue_id: 'case' });
   await assert.rejects(f.service.run('update_legal_research', coverageActor, bad), e => e.code === 'SCOPE_PROMOTION_INVALID');
   assert.deepEqual(await read(f, s), s);
+});
+
+test('SP-08: populated bindings/history/jobs and an existing review survive failed promotion; old searches stay stale after a real plan change', async t => {
+  const f = coverageFixture(); t.after(() => f.service.close());
+  let s = await f.finish(await f.law(await f.start(planWithNotice())));
+  const attempts = s.attempts.map(a => a.attempt_id), p = structuredClone(s.plan);
+  p.facts[0].value = '실제로 보완된 취득 사실';
+  s = await f.api('update_legal_research', s, { plan: p });
+  const revision = s.revision;
+  s = await f.api('reuse_legal_evidence', s, { issue_ids: ['case'], evidence_ids: s.evidence.filter(e => e.body_scope === 'body_returned').map(e => e.evidence_id) });
+  await f.service.run('review_legal_reasoning', coverageActor, reviewNotice(s));
+  s = await read(f, s);
+  for (const key of ['evidence_bindings', 'requirement_history', 'jobs']) assert.ok(s[key].length, key);
+  assert.ok(s.last_review?.binding_hash); assert.ok(s.last_review?.snapshot_hash);
+  const before = structuredClone(s), calls = f.calls.length, limit = f.service.limits.maxSessionBytes;
+  f.service.limits.maxSessionBytes = 1;
+  try { await assert.rejects(f.service.run('update_legal_research', coverageActor, promotion(s)), e => e.code === 'RESEARCH_CAPACITY'); }
+  finally { f.service.limits.maxSessionBytes = limit; }
+  assert.deepEqual(await read(f, s), before);
+  s = await f.service.run('update_legal_research', coverageActor, promotion(s));
+  assert.equal(s.revision, revision); assert.equal(s.last_review, null);
+  for (const key of ['evidence_bindings', 'requirement_history', 'requirements', 'jobs', 'attempts', 'evidence', 'manifests'])
+    assert.deepEqual(s[key], before[key], key);
+  assert.equal(f.calls.length, calls); assert.equal(s.recovery.remaining_attempts, before.recovery.remaining_attempts);
+  assert.ok(!s.coverage.obligations.some(o => o.attempt_ids.some(id => attempts.includes(id))));
+  const result = await f.service.run('review_legal_reasoning', coverageActor, reviewNotice(s));
+  assert.equal(result.status, 'blocked'); assert.equal(result.declared_scope_review_complete, false);
+  assert.ok(result.findings.some(x => x.code === 'REQUIRED_SEARCH_INCOMPLETE'));
 });
 
 for (const variant of ['unknown_fact', 'partial_body', 'failed_search', 'wrong_issue', 'unresolved_analysis'])

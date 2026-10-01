@@ -7,7 +7,7 @@ import { adaptResearchEvidence, researchSourceTools, type ResearchEvidence, type
 import { inspectResearch, coreEvidenceIds } from './researchReview.js';
 import { interviewState, applyInterviewAnswer, type Deferral } from './researchInterview.js';
 import { actorBudgetKey } from './publicAccess.js';
-import { coveragePolicy, researchCoverage, addCandidates, carryCandidates, nextRequiredResearchStep, candidateBody, type CandidateLedger } from './researchCoverage.js';
+import { coveragePolicy, researchCoverage, addCandidates, carryCandidates, nextRequiredResearchStep, candidateBody, requiresCoreAdoption, type CandidateLedger } from './researchCoverage.js';
 import { observeSearch, searchFamily } from './researchSearch.js';
 import { splitDocument, storedBytes as bytes, verifyManifest, type DocumentManifest } from './researchStorage.js';
 import { researchProgress } from './researchProgress.js';
@@ -399,7 +399,7 @@ export class ResearchService {
     const input = researchSchemas.review_legal_reasoning.parse(raw), old = this.get(actor, input.research_id, input.expected_revision, true);
     if (input.expected_state_version !== old.state_version) throw new ServiceError(409, 'RESEARCH_STATE_CHANGED');
     const observed = this.evidence(old).filter(e => e.revision === old.revision);
-    const adopted = [...new Set(coreEvidenceIds(input).filter(id => old.ledger.candidates.some(c => c.discovery_role === 'subsequent'
+    const adopted = [...new Set(coreEvidenceIds(input).filter(id => old.ledger.candidates.some(c => requiresCoreAdoption(c)
       && candidateBody(c, observed).some(e => e.evidence_id === id))))].sort();
     // Carry review-generated obligations into the same runner/status policy. The model still
     // decides applicability; changing that declaration changes the review snapshot.

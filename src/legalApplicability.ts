@@ -1,7 +1,7 @@
 import type { CitationInput, IssueAnalysisInput, Plan } from './researchContracts.js';
 import type { ResearchEvidence } from './researchEvidence.js';
 import { documentKey } from './researchIdentity.js';
-import { isCoverageComplete, type Coverage } from './researchCoverage.js';
+import { isCoverageComplete, requiresCoreAdoption, type Coverage } from './researchCoverage.js';
 import { substantiveCitations } from './researchCitations.js';
 
 export const applicabilityInstructions = '사실·쟁점·날짜 역할을 먼저 확인하고 사건에 적용되는 법령·시행령·부칙(시행일·적용례·경과조치)을 기준으로 판례·해석례를 교차 검토하세요. 검색 순서는 자유지만 사례의 결론만 가져오지 마세요. 사건 이후 선고·발행된 자료도 당시 적용 법령을 해석했다면 검토 대상이며 사건일을 자료 발행일의 검색 상한으로 쓰지 마세요. legal_basis.statutes에 실제 법령 passage 인용과 unit.document_version 그대로의 version, date_roles, 적용 이유를 제출하세요. temporal_application에는 부칙과 개정의 적용 관계 및 실제 원문 citations를 제출하세요. authorities에는 주장·시점·반론 해결·후속 처리에 인용하거나 반론으로 받은 각 판례·해석례의 종류, 적용/유추/구별/미해결, statute_evidence_ids, law_version_relation, 사실 차이와 채택 이유를 제출하세요. 같은 규정은 same_rule, 개정됐어도 관련 규정이 유지되면 unchanged_relevant_rule, 다른 규정은 different_rule, 미확인은 unverified입니다. subsequent_review에는 심급·확정·파기·판례변경·후속 해석 확인 범위와 원문을 남기세요. 적용 가능한 대법원 법리를 우선 검토하되 법령 개정·사실 차이를 먼저 확인하고, 하급심과 심사/심판 결정·행정해석을 구분하세요. 헌재 결정이나 위임의 위법성도 관련되면 별도 쟁점으로 검토하세요. 법문과 달라 보인다는 모델 판단만으로 자료를 버리지 마세요. 해결된 반론에는 resolution_citations를 붙이고, 배제한 자료도 이유를 남기세요. 답변에 법리상 결론·다른 행정 실무·적용/구별 이유와 미확인점을 표시하세요. 이 연결 검사는 법률적 타당성 인증이 아닙니다. ';
@@ -83,7 +83,7 @@ export function inspectLegalApplicability(analysis: IssueAnalysisInput, issue: P
       && o.document_key === (receipt?.identity ? documentKey(receipt.identity) : id)) ?? [];
     const ids = authority.subsequent_review.search_attempt_ids ?? [];
     const followupOnly = coverage?.candidates.some(c => c.key === (receipt?.identity ? documentKey(receipt.identity) : id)
-      && c.discovery_role === 'subsequent') && authority.disposition === 'distinguished'
+      && requiresCoreAdoption(c)) && authority.disposition === 'distinguished'
       && !cited.some(c => c.evidence_id === id && c.relation !== 'background');
     const noFurtherSearch = Boolean(followupOnly) && subsequent.length === 0;
     if (noFurtherSearch && ids.length) gap('SUBSEQUENT_REFERENCE_NOT_REQUIRED', id + ': 구별한 후속 발견 자료에 추가 검색 의무가 없습니다. 다른 자료의 조회 ID를 빼고 search_attempt_ids=[]로 수정하세요. 구별 이유를 유지하고 추가 조회를 만들지 마세요.');

@@ -89,3 +89,9 @@ pilot-j에서 사실 보완 이력의 중복 저장과 판례 문서 version 미
 사용자가 SSS 검수를 요청했고, [완료 응답](AUTHORITY_COMPLETION_SSS_RESPONSE_2026-10-02.txt)의 판정은 **REVISE**다. 고지 승격으로 revision이 바뀌는 실제 실패와, 시점·반론 해소 인용의 후속 검색 누락 경로를 독립적으로 확인했다. SSS의 GitHub 코드 검토와 로컬 실행 검증 범위를 구분한다. 이를 Pro 구현 승인으로 표시하지 않는다.
 
 [최소 계획](../AUTHORITY_SCOPE_PROMOTION_FIX_PLAN.md)에 따라 원천 연구를 보존하는 제한적 고지 승격과 공통 인용 판정을 구현했다. [구현 기록](AUTHORITY_SCOPE_PROMOTION_IMPLEMENTATION_2026-10-02.md)에 RED의 실제 원인과 fixture 수정도 남겼다. 새 전체 검사 **323/323**, 설치 패키지 **9/9 PASS**다. 수정본 SSS 재검수와 동일 조건의 새 24회 평가 pilot-m은 아직 남아 있으며, main 병합·배포하지 않았다.
+
+## SSS 두 번째 검수와 채택 문서 보완
+
+`5d9be5b`를 실제로 읽은 [SSS 재검수](AUTHORITY_SCOPE_PROMOTION_SSS_RESPONSE_2026-10-02.txt)는 CODE REVISE / 출시 HOLD다. 고지 승격은 수용했지만 분할 원문과 보조 검색 자료를 채택할 때 review→runner 연결이 끊기는 두 경계를 지적했다. 코드 검수 완료 전에 시작했던 pilot-m의 미시작 20건을 취소하고 시작된 4건은 그대로 종료했다. 3건 의미 PASS와 1건 시간 초과를 [불완전 배치 기록](../evidence/authority-completion-pilot-m-cancelled-20261002.json)에 보존했다. 완료된 24회 평가로 계산하지 않는다.
+
+별도 폴더에서 두 결함과 보조 자료 배경 인용의 관련 모순을 8개 RED로 재현했다. 검색 적격성 이후 문서 중복을 제거하고, 선택적 발견의 채택 조건을 coverage·세션 저장·적용성 검사에서 공유했다. [보완 기록](AUTHORITY_ADOPTED_DOCUMENT_FIX_2026-10-02.md)에 변경 범위와 fixture 수정 한계가 있다. 관련 **100/100**, 기본 폴더 전체 **334/334**, 설치 **9/9 PASS**다. 수정본 SSS 재검수 후 새 전체 pilot-n을 실행하며 아직 main 병합·배포하지 않았다.
