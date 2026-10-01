@@ -95,7 +95,7 @@ export class ResearchService {
     const canRetrieve = Boolean(s && !pending && !hard && remaining > 0 && s.jobs.length < this.limits.maxAttempts
       && this.ledgerBytes(s) + this.limits.metadataReserve < this.limits.ledgerBytes);
     const actions = s ? ['read_stored_evidence'] : [];
-    if (s && !pending) actions.push('review', 'answer_with_gaps', 'fix_input', 'assess_requirements');
+    if (s && !pending) actions.push('review', 'answer_with_gaps', 'fix_input', 'assess_requirements', 'promote_independent_notice');
     if (canRetrieve) actions.push('retrieve');
     if (pending) actions.unshift('wait_for_job');
     else if (reason === 'shared_reservation') actions.unshift('wait_for_shared_resources');
@@ -313,6 +313,22 @@ export class ResearchService {
     }
     if (name === 'update_legal_research') {
       const input = researchSchemas[name].parse(raw), old = this.get(actor, input.research_id, input.expected_revision, true);
+      if (input.scope_promotions) {
+        if (input.expected_state_version !== old.state_version) throw new ServiceError(409, 'RESEARCH_STATE_CHANGED');
+        const plan = structuredClone(old.plan), seen = new Set<string>();
+        for (const change of input.scope_promotions) {
+          const track = plan.scope_review?.tracks.find(t => t.id === change.track_id);
+          if (seen.has(change.track_id) || !track || track.relation !== 'independent_notice'
+            || track.lifecycle !== 'deferred' || track.issue_id !== null || track.blocks_track_ids.length
+            || !plan.issues.some(i => i.id === change.issue_id)) throw new ServiceError(400, 'SCOPE_PROMOTION_INVALID');
+          seen.add(change.track_id);
+          track.issue_id = change.issue_id; track.lifecycle = 'active';
+        }
+        // This operation changes no research input or adopted authority. Fresh review is
+        // mandatory; a failed atomic save must leave the original session untouched.
+        const next = { ...old, plan, state_version: old.state_version + 1, last_review: null };
+        this.save(next); return this.view(next);
+      }
       if (input.requirement_assessments) {
         if (input.expected_state_version !== old.state_version) throw new ServiceError(409, 'RESEARCH_STATE_CHANGED');
         if (old.manifests.some(m => !verifyManifest(m, old.evidence))) throw new ServiceError(409, 'RESEARCH_MANIFEST_INVALID');

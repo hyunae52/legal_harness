@@ -120,6 +120,42 @@ function subsequentFixture() {
   });
 }
 
+for (const slot of ['temporal', 'counter']) test(`FU-01/02: ${slot} use of a successor cannot evade adoption, contradiction checks or runner follow-up`, async t => {
+  const f = subsequentFixture(); t.after(() => f.service.close());
+  const plan = coveragePlan();
+  plan.scope_review.tracks.push({ id: 'notice', party: '납세자', legal_question: '요청 밖 안내', factual_anchor_ids: ['known'],
+    relation: 'independent_notice', blocks_track_ids: [], issue_id: null, lifecycle: 'deferred' });
+  let s = await f.finish(await f.law(await f.start(plan))), input = coverageReview(s);
+  const e = s.evidence.find(e => e.identity?.document_number === '2021두2');
+  const old = s.evidence.find(e => e.identity?.document_number === '2020두1');
+  const citation = { evidence_id: e.evidence_id, passage_id: e.passages[0].passage_id, quote: e.passages[0].text,
+    relation: 'direct', reason: '현재 적용 시점 또는 반론 해소의 직접 근거' };
+  const a = input.analysis[0];
+  if (slot === 'temporal') a.legal_basis.temporal_application.citations.push(citation);
+  else a.counter_evidence = [{ evidence_id: old.evidence_id, disposition: 'resolved', reason: '후속 법리로 해소', resolution_citations: [citation] }];
+  a.legal_basis.authorities = [{ evidence_id: e.evidence_id, kind: 'supreme_court', disposition: 'distinguished',
+    statute_evidence_ids: [a.legal_basis.statutes[0].citation.evidence_id], law_version_relation: 'same_rule', reason: '구별 선언',
+    subsequent_review: { status: 'addressed', reason: '후속에서 발견', citations: [], search_attempt_ids: [] } }];
+  citation.relation = 'background';
+  const background = inspectResearch(input, s.plan, s.evidence, s.attempts, s.ledger);
+  assert.ok(!background.findings.some(x => ['AUTHORITY_DISPOSITION_CONTRADICTION', 'SUBSEQUENT_SEARCH_REQUIRED'].includes(x.code) && x.detail.startsWith(e.evidence_id)));
+  citation.relation = 'analogy';
+  const analogous = inspectResearch(input, s.plan, s.evidence, s.attempts, s.ledger);
+  assert.ok(analogous.coverage.obligations.some(o => o.document_key === 'moleg:precedent:next' && o.next_step));
+  citation.relation = 'direct';
+  const r = await f.service.run('review_legal_reasoning', { kind: 'auth_user', id: 'authority-fixture' }, input);
+  assert.ok(r.findings.some(x => x.code === 'AUTHORITY_DISPOSITION_CONTRADICTION' && x.detail.startsWith(e.evidence_id)));
+  assert.ok(r.findings.some(x => x.code === 'SUBSEQUENT_SEARCH_REQUIRED' && x.detail.startsWith(e.evidence_id)));
+  s = await f.service.run('get_legal_research', { kind: 'auth_user', id: 'authority-fixture' }, { research_id: s.research_id });
+  assert.ok(s.coverage.obligations.some(o => o.document_key === 'moleg:precedent:next' && o.next_step));
+  const adopted = s.review_adopted_evidence_ids;
+  s = await f.api('update_legal_research', s, { expected_state_version: s.state_version, scope_promotions: [{ track_id: 'notice', issue_id: 'case' }] });
+  assert.deepEqual(s.review_adopted_evidence_ids, adopted);
+  assert.ok(s.coverage.obligations.some(o => o.document_key === 'moleg:precedent:next' && o.next_step));
+  const calls = f.calls.length; await f.run(s);
+  assert.ok(f.calls.slice(calls).some(c => c.name === 'search_decisions' && c.args.query.includes('2021두2')));
+});
+
 test('Model recovery: a follow-up decision adopted during review becomes resumable runner work', async () => {
   const f = subsequentFixture();
   try {

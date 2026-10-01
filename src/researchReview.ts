@@ -5,8 +5,9 @@ import { inspectScopeCompletion } from './scopeCompletion.js';
 import { inspectLegalApplicability } from './legalApplicability.js';
 import { researchCoverage, candidateGaps, isCoverageComplete, type CandidateLedger } from './researchCoverage.js';
 import { makeRequirements, effectiveRequirements, requirementMissing, type Requirement } from './researchRequirements.js';
+import { substantiveCitations } from './researchCitations.js';
 
-export const coreEvidenceIds = (input: ReviewInput) => input.analysis.flatMap(a => [...a.claims.flatMap(c => c.citations.filter(c => c.relation !== 'background').map(c => c.evidence_id)),
+export const coreEvidenceIds = (input: ReviewInput) => input.analysis.flatMap(a => [...substantiveCitations(a).filter(c => c.relation !== 'background').map(c => c.evidence_id),
     ...(a.legal_basis?.authorities.filter(a => a.disposition === 'applied' || a.disposition === 'analogy').map(a => a.evidence_id) ?? [])]);
 export function inspectResearch(input: ReviewInput, plan: Plan, evidence: ResearchEvidence[], attempts: ResearchAttempt[], ledger?: CandidateLedger, registeredRequirements?: Requirement[]) {
   const core = coreEvidenceIds(input);

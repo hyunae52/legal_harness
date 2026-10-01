@@ -234,6 +234,38 @@ test('TI-09: interview works through a real stateless MCP call and advertised Ac
   assert.equal(f.calls(), 1);
 });
 
+test('SP-07: real MCP and REST promotion agree with both public exclusive-input schemas', async t => {
+  const f = await fixture(t), c = await f.client(), p = plan();
+  p.scope_review = { mode: 'question', tracks: [
+    { id: 'requested', party: '합성', legal_question: '원가', factual_anchor_ids: ['known'], relation: 'requested', blocks_track_ids: [], issue_id: 'cost', lifecycle: 'active' },
+    { id: 'notice', party: '합성', legal_question: '별도 효과 안내', factual_anchor_ids: ['known'], relation: 'independent_notice', blocks_track_ids: [], issue_id: null, lifecycle: 'deferred' },
+  ] };
+  const started = await c.callTool({ name: 'start_legal_research', arguments: { plan: p } }), s = started.structuredContent;
+  const good = { research_id: s.research_id, expected_revision: s.revision, expected_state_version: s.state_version,
+    scope_promotions: [{ track_id: 'notice', issue_id: 'cost' }] };
+  const schema = (await f.request('/openapi.json')).body.paths['/api/research/update'].post.requestBody.content['application/json'].schema;
+  const advertised = (await c.listTools()).tools.find(x => x.name === 'update_legal_research').inputSchema;
+  for (const contract of [schema, advertised]) {
+    const validate = new Ajv2020({ strict: false, validateFormats: false }).compile(contract);
+    assert.equal(validate(good), true, JSON.stringify(validate.errors));
+    assert.equal(validate({ ...good, expected_state_version: undefined }), false);
+    assert.equal(validate({ ...good, plan: p }), false);
+    assert.equal(validate({ ...good, requirement_assessments: [{ requirement_id: '00000000-0000-4000-8000-000000000001', status: 'unresolved', reason: '가설' }] }), false);
+    assert.equal(validate({ ...good, scope_promotions: [{ ...good.scope_promotions[0], legal_question: '다른 질문' }] }), false);
+  }
+  assert.equal((await ask(f, 'update', { ...good, plan: p })).status, 400);
+  const result = await c.callTool({ name: 'update_legal_research', arguments: good });
+  assert.equal(result.isError, undefined);
+  assert.equal(result.structuredContent.revision, s.revision);
+  assert.equal(result.structuredContent.state_version, s.state_version + 1);
+  const state = (await ask(f, 'status', { research_id: s.research_id })).body;
+  assert.equal(state.plan.scope_review.tracks[1].lifecycle, 'active');
+  assert.equal((await ask(f, 'update', good)).body.code, 'RESEARCH_STATE_CHANGED');
+  const second = (await ask(f, 'start', { plan: p })).body;
+  assert.equal((await ask(f, 'update', { ...good, research_id: second.research_id, expected_state_version: second.state_version })).status, 200);
+  assert.equal(f.calls(), 0);
+});
+
 test('TI-04A: initialization/unknown requests use bounded ingress tokens and expired actor buckets recover', async t => {
   let now = 0;
   const f = await fixture(t, { resourceOptions: { now: () => now, limits: { requestRpm: 3, actorRequestRpm: 2, maxActors: 1 } } });

@@ -65,7 +65,9 @@ export function inspectScopeCompletion(input: ReviewInput, plan: Plan, evidence:
     let closed = closedStatuses.has(assessment.status) && reasons.length === 0;
     if (closed) {
       const issueId = track.issue_id;
-      if (track.lifecycle !== 'active' || !issueId) invalidate('required_track_not_promoted', 'SCOPE_TRACK_NOT_PROMOTED');
+      if (track.lifecycle !== 'active' || !issueId) invalidate('required_track_not_promoted'
+        + (track.relation === 'independent_notice' && track.lifecycle === 'deferred' && !issueId
+          ? '; 기존 관련 issue_id에만 연결하려면 update_legal_research의 scope_promotions와 현재 revision/state를 사용하세요. 질문·사실·쟁점은 변경하지 않고 설명은 scope_assessments.reason에 작성한 뒤 다시 검수하세요.' : ''), 'SCOPE_TRACK_NOT_PROMOTED');
       if (!assessment.fact_ids.length || !assessment.evidence_ids.length) invalidate('closed_status_requires_fact_and_evidence');
       const analysis = issueId ? byAnalysis.get(issueId) : undefined;
       if (!analysis || analysis.conclusion_mode !== 'definitive') invalidate('closed_status_requires_definitive_issue_analysis');

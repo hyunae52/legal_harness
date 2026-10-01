@@ -1,0 +1,66 @@
+{
+  "status": "sss_fix_preflight_pass_not_release_approval",
+  "date_kst": "2026-10-02",
+  "parent_commit": "1fa386eff5083456fcbbb40aef6b711a437257ec",
+  "previous_product_commit": "e3cdac332581dba27c36d8173b05a6e25a18fcde",
+  "previous_batch": "pilot-l",
+  "previous_batch_result": "23 semantic PASS / 1 FAIL; normal control 2/3 complete; release gate FAIL",
+  "source_tree_sha256": "feeaade4eb483afbe0e61ea96e2f360c2464f4710188e27dcaac680353f19418",
+  "typescript_files": 42,
+  "source_digest_method": "sorted src/*.ts, Windows relative path UTF-8 + NUL + raw file bytes",
+  "policy": "research-v7-scope-promotion-20261002",
+  "changes": [
+    "CAS-guarded deferred independent-notice promotion to an existing issue, without changing research revision or replenishing budget; fresh review required.",
+    "Shared substantive citation collection for claims, temporal application and counter resolution, including follow-up adoption and runner work.",
+    "Treatment-history-only citations remain finite and validated; original body, fact, search and legal applicability blockers remain active."
+  ],
+  "full_review": {
+    "total": 323,
+    "passed": 323,
+    "failed": 0,
+    "skipped": 0
+  },
+  "package_install": {
+    "status": "pass",
+    "checks": 9,
+    "artifact_sha256": "4645dac0f956843f611fe81d215a7648fc9ee593938acff58626b1e1b793c657",
+    "is_ci_or_deploy_artifact": false
+  },
+  "logs": [
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/sss-scope-followup-red.log",
+      "sha256": "2b71099db9135214b36d7fc48907b9ac778174556d8b9ac5cd496eb847f9b73d"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/sss-scope-red-2.log",
+      "sha256": "dada699e68761f79634f73e314ad264f6d2138a9f9fbe1968e1361b7f8b9d2a6"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/sss-targeted-1.log",
+      "sha256": "cbbc411102d3a38120e4d7f5628e1e78bf9d3714563c07299908cb514744ad37"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/sss-full-review-1.log",
+      "sha256": "0a9fc5b0d4586cc98ae8da7c3f30f7d3938afe8583d1af466520a7710cd288bc"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/sss-package-1.log",
+      "sha256": "666068cadafd06f340ccd6e784d34cdbdbeaf2e7fecb919abfe861ec4721d99b"
+    }
+  ],
+  "red_evidence_limits": [
+    "Two citation-location tests in sss-scope-followup-red.log expose the original product defect. The scope test in that first log had an invalid fixture and is not product RED evidence.",
+    "sss-scope-red-2.log records corrected scope fixture RED before implementation.",
+    "sss-targeted-1.log has 89 PASS / 1 fixture comparison failure: transient retrieve job envelope versus canonical read. Corrected fixture before full review; no relaxed product guard."
+  ],
+  "reviewer": {
+    "name": "SSS Dot",
+    "previous_verdict": "REVISE",
+    "exact_fix_review": "pending",
+    "is_pro_implementation_approval": false
+  },
+  "next_batch": "pilot-m",
+  "protocol_sha256": "e2ae3e76f410d850b274116776c8fa8c37f4186b2274e79275360a05682429dd",
+  "model_evaluation": "not_started",
+  "production_deployment": "not_started"
+}
