@@ -123,7 +123,11 @@ export function adaptResearchEvidence(tool: string, args: RecordValue, response:
       }
     } else if (tool === 'get_law_text') law(result, 'document', null, args);
     else if (tool === 'get_decision_text') {
-      const texts = textBlocks(result), u = unit('document', null, label(args.id), 'unknown', 'unknown');
+      // Decision documents use their observed decision date as the version label,
+      // like NTS documents above. The response/passages still have exact hashes.
+      // This is not a statute effective date or a claim of current applicability.
+      const version = adapted.identity?.status === 'observed' ? label(adapted.identity.date) : 'unknown';
+      const texts = textBlocks(result), u = unit('document', null, label(args.id), version, 'unknown');
       texts.forEach((text, i) => {
         const sections = [...text.matchAll(/^(?:【([^】]+)】|\[([^\]]+)\]|(?:■|▶)\s*([^\r\n]+)|((?:판시사항|판결요지|판결내용|판결전문|참조조문|참조판례|전문|이유|주문|결정요지|회신|질의|사실관계)):)\s*\r?\n/gm)];
         for (let n = 0; n < sections.length; n++) {

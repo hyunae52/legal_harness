@@ -1,0 +1,242 @@
+{
+  "origin": "pilot-j/remaining_two_homes-1 first eight calls, synthetic user scenario; no continuation handles retained",
+  "plan": {
+    "query": "동일 세대가 일반 매매로 A주택(2016년 취득), C주택(2020년 취득), B주택(2026년 2월 취득)을 보유하다가 C주택을 2026년 4월 처분하여 A·B 두 채만 남긴 뒤 A주택을 2026년 12월 양도할 예정인 경우, 전체 비과세 요건이 아니라 소득세법 시행령상 일시적 2주택 특례의 '종전주택 취득 후 신규주택 취득'이라는 취득 순서 전제만 충족하는지. 2026년 양도 예정 시 적용 법령의 개정 연혁·부칙과 판례·국세청 예규의 충돌 여부도 검토한다.",
+    "facts": [
+      {
+        "id": "fact_housing_timeline",
+        "description": "A주택 2016년 취득, C주택 2020년 취득, B주택 2026년 2월 취득, C주택 2026년 4월 처분, A주택 2026년 12월 양도 예정",
+        "status": "provided",
+        "value": "A(2016 취득) → C(2020 취득) → B(2026-02 취득) → C(2026-04 처분) → A(2026-12 양도 예정)",
+        "source": "사용자 제공 합성 사례"
+      },
+      {
+        "id": "fact_homes_before_new_acquisition",
+        "description": "B주택 취득 직전 동일 세대는 A주택과 C주택을 보유",
+        "status": "provided",
+        "value": "B 취득 직전 2주택(A, C) 보유",
+        "source": "사용자 제공 합성 사례"
+      },
+      {
+        "id": "fact_housing_special_exceptions",
+        "description": "상속·혼인·임대 등 별도 특례 없음",
+        "status": "provided",
+        "value": "별도 특례 없음",
+        "source": "사용자 제공 합성 사례"
+      },
+      {
+        "id": "fact_same_household_normal_purchase",
+        "description": "모두 같은 세대가 일반 매매로 취득",
+        "status": "provided",
+        "value": "동일 세대, 일반 매매 취득",
+        "source": "사용자 제공 합성 사례"
+      },
+      {
+        "id": "fact_no_other_rights",
+        "description": "그 밖의 주택·입주권·분양권 없음",
+        "status": "provided",
+        "value": "없음",
+        "source": "사용자 제공 합성 사례"
+      },
+      {
+        "id": "fact_question_limited",
+        "description": "검토 범위는 전체 비과세 요건이 아니라 취득 순서 전제",
+        "status": "provided",
+        "value": "취득 순서 전제만 검토",
+        "source": "사용자 요청"
+      }
+    ],
+    "event_dates": [
+      {
+        "role": "old_home_acquired",
+        "value": "2016",
+        "precision": "year",
+        "basis": "provided",
+        "source": "사용자 제공: A주택 2016년 취득"
+      },
+      {
+        "role": "intermediate_home_acquired",
+        "value": "2020",
+        "precision": "year",
+        "basis": "provided",
+        "source": "사용자 제공: C주택 2020년 취득"
+      },
+      {
+        "role": "new_home_acquired",
+        "value": "2026-02",
+        "precision": "month",
+        "basis": "provided",
+        "source": "사용자 제공: B주택 2026년 2월 취득"
+      },
+      {
+        "role": "other_homes_disposed",
+        "value": "2026-04",
+        "precision": "month",
+        "basis": "provided",
+        "source": "사용자 제공: C주택 2026년 4월 처분"
+      },
+      {
+        "role": "old_home_transferred",
+        "value": "2026-12",
+        "precision": "month",
+        "basis": "provided",
+        "source": "사용자 제공: A주택 2026년 12월 양도 예정"
+      }
+    ],
+    "issues": [
+      {
+        "id": "issue_order",
+        "question": "B 취득 당시 이미 A와 C를 보유했지만 C 처분 후 A·B만 남았다는 사정으로, 일시적 2주택 특례의 종전주택-신규주택 취득 순서 전제를 충족하는가?",
+        "profile": "temporary_two_homes",
+        "required_fact_ids": [
+          "fact_housing_timeline",
+          "fact_homes_before_new_acquisition",
+          "fact_housing_special_exceptions",
+          "fact_same_household_normal_purchase",
+          "fact_no_other_rights",
+          "fact_question_limited"
+        ],
+        "required_date_roles": [
+          "old_home_acquired",
+          "intermediate_home_acquired",
+          "new_home_acquired",
+          "other_homes_disposed",
+          "old_home_transferred"
+        ]
+      },
+      {
+        "id": "issue_temporal",
+        "question": "2026년 12월 A 양도 예정에 적용되는 관련 법령의 개정 연혁과 부칙이 취득 순서 판단에 어떤 영향을 주는가?",
+        "profile": "general",
+        "required_fact_ids": [
+          "fact_housing_timeline",
+          "fact_question_limited"
+        ],
+        "required_date_roles": [
+          "old_home_acquired",
+          "intermediate_home_acquired",
+          "new_home_acquired",
+          "other_homes_disposed",
+          "old_home_transferred"
+        ]
+      },
+      {
+        "id": "issue_conflict",
+        "question": "취득 순서 및 중간주택 처분 후 2주택 잔존 사안에 관한 판례와 국세청 예규가 충돌하는가?",
+        "profile": "general",
+        "required_fact_ids": [
+          "fact_housing_timeline",
+          "fact_homes_before_new_acquisition",
+          "fact_housing_special_exceptions"
+        ],
+        "required_date_roles": [
+          "old_home_acquired",
+          "intermediate_home_acquired",
+          "new_home_acquired",
+          "other_homes_disposed",
+          "old_home_transferred"
+        ]
+      }
+    ],
+    "scope_review": {
+      "mode": "question",
+      "tracks": [
+        {
+          "id": "track_requested_order",
+          "issue_id": "issue_order",
+          "party": "동일 세대",
+          "relation": "requested",
+          "legal_question": "마지막에 A·B 두 채만 남은 것만으로 일시적 2주택 취득 순서 전제가 충족되는지",
+          "factual_anchor_ids": [
+            "fact_housing_timeline",
+            "fact_homes_before_new_acquisition"
+          ],
+          "blocks_track_ids": [],
+          "lifecycle": "active"
+        },
+        {
+          "id": "track_dependency_temporal",
+          "issue_id": "issue_temporal",
+          "party": "동일 세대",
+          "relation": "answer_dependency",
+          "legal_question": "2026년 예정 양도에 적용될 법령의 개정·부칙",
+          "factual_anchor_ids": [
+            "fact_housing_timeline"
+          ],
+          "blocks_track_ids": [
+            "track_requested_order"
+          ],
+          "lifecycle": "active"
+        },
+        {
+          "id": "track_dependency_conflict",
+          "issue_id": "issue_conflict",
+          "party": "동일 세대",
+          "relation": "answer_dependency",
+          "legal_question": "판례와 국세청 예규의 법리 및 충돌 여부",
+          "factual_anchor_ids": [
+            "fact_housing_timeline",
+            "fact_homes_before_new_acquisition"
+          ],
+          "blocks_track_ids": [
+            "track_requested_order"
+          ],
+          "lifecycle": "active"
+        },
+        {
+          "id": "track_notice_full_exemption",
+          "issue_id": null,
+          "party": "동일 세대",
+          "relation": "independent_notice",
+          "legal_question": "거주·보유·양도기한 등 전체 1세대1주택 비과세 요건 확정",
+          "factual_anchor_ids": [
+            "fact_question_limited"
+          ],
+          "blocks_track_ids": [],
+          "lifecycle": "deferred"
+        }
+      ]
+    }
+  },
+  "answers": [
+    {
+      "kind": "fact",
+      "value": "A주택 2016년 취득 → C주택 2020년 취득 → B주택 2026년 2월 취득 → C주택 2026년 4월 처분 → A주택 2026년 12월 양도 예정. B 취득 직전 A와 C의 2주택, C 처분 후 A와 B의 2주택이다.",
+      "source": "사용자 제공 합성 사례"
+    },
+    {
+      "kind": "fact",
+      "value": "B주택을 2026년 2월 취득하기 직전 같은 세대는 A주택(2016년 취득)과 C주택(2020년 취득) 두 채를 보유했다.",
+      "source": "사용자 제공 합성 사례"
+    },
+    {
+      "kind": "fact",
+      "value": "상속·혼인·임대 등 별도 특례는 없다. 모두 동일 세대가 일반 매매로 취득했다.",
+      "source": "사용자 제공 합성 사례"
+    },
+    {
+      "kind": "date",
+      "value": "2016",
+      "precision": "year",
+      "source": "사용자 제공: A주택 2016년 취득"
+    },
+    {
+      "kind": "date",
+      "value": "2026-02",
+      "precision": "month",
+      "source": "사용자 제공: B주택 2026년 2월 취득"
+    },
+    {
+      "kind": "date",
+      "value": "2026-04",
+      "precision": "month",
+      "source": "사용자 제공: C주택 2026년 4월 처분"
+    },
+    {
+      "kind": "date",
+      "value": "2026-12",
+      "precision": "month",
+      "source": "사용자 제공: A주택 2026년 12월 양도 예정"
+    }
+  ]
+}

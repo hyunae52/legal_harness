@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { ResearchService } from '../dist/research.js';
 import { coverageFixture, coveragePlan, coverageReview, providerResponse, coverageActor } from './fixtures/authority-provider.mjs';
 
 const requirementPlan = () => {
@@ -8,6 +10,33 @@ const requirementPlan = () => {
   p.facts.push({ id: 'unclassified', description: '등록 사실', status: 'unknown', value: null, source: '' });
   p.issues[0].required_fact_ids.push('unclassified'); return p;
 };
+
+test('CF-11: seven ordinary fact/date answers leave room for source research without duplicating unchanged requirement snapshots', async t => {
+  const fixture = JSON.parse(await readFile(new URL('./fixtures/authority-history-plan.json', import.meta.url), 'utf8'));
+  let calls = 0;
+  const service = new ResearchService({ callTool: async () => { calls++; return { result: { content: [{ type: 'text',
+    text: '법령명: 합성법\n시행일: 20200101\n제1조(합성 원문)\n합성 취득 순서의 확인 자료.' }] } }; } });
+  t.after(() => service.close());
+  let state = await service.run('start_legal_research', coverageActor, { plan: fixture.plan });
+  const ids = state.requirements.map(r => r.requirement_id);
+  for (const answer of fixture.answers) state = await service.run('answer_legal_question', coverageActor, {
+    research_id: state.research_id, expected_revision: state.revision, expected_state_version: state.state_version,
+    question_id: state.interview.next_question.question_id, answer
+  });
+  assert.equal(state.revision, 8); assert.equal(calls, 0);
+  assert.deepEqual(state.requirements.map(r => r.requirement_id), ids);
+  assert.equal(state.requirement_history.length, 7);
+  // Each fact revision remains auditable; unchanged requirement descriptions and scope
+  // are not seven separate semantic changes. Actual renames/resets are covered below.
+  assert.ok(state.requirement_history.every(h => h.before_hash !== h.after_hash));
+  assert.ok(Buffer.byteLength(JSON.stringify(state.requirement_history)) < 8192);
+  const read = await service.run('research_legal_sources', coverageActor, {
+    research_id: state.research_id, expected_revision: state.revision, issue_ids: state.plan.issues.map(i => i.id),
+    purpose: 'context', tool: 'get_law_text', arguments: { lawId: 'fixture', jo: '제1조' }
+  });
+  assert.equal(calls, 1); assert.equal(read.evidence[0].body_scope, 'body_returned');
+  assert.equal(read.plan.event_dates.find(d => d.role === 'new_home_acquired').precision, 'month');
+});
 async function prepared(t, required = false) {
   const text = required ? '합성 취득 요건과 등록 요건을 모두 충족해야 적용한다.' : '합성 취득 요건만 충족하면 등록하지 않아도 적용한다.';
   const f = coverageFixture((name, args) => name === 'get_law_text' ? { result: { content: [{ type: 'text',
@@ -17,6 +46,29 @@ async function prepared(t, required = false) {
   assert.ok(s.requirements, 'server must mint and retain requirement necessity records');
   return { f, s, text };
 }
+
+test('CF-10: observed judgment date identifies a necessity source without inventing an applicable statute version', async t => {
+  for (const observedDate of [true, false]) {
+    const service = new ResearchService({ callTool: async () => ({ result: { content: [{ type: 'text', text:
+      '기본 정보:\n사건번호: 2099두10002\n법원: 대법원\n' + (observedDate ? '선고일: 20990201\n' : '')
+      + '전문:\n[합성 판결] 신법상 취득에는 등록 요건을 요구하지 않는다.' }] } }) });
+    t.after(() => service.close());
+    let s = await service.run('start_legal_research', coverageActor, { plan: requirementPlan() });
+    s = await service.run('research_legal_sources', coverageActor, { research_id: s.research_id, expected_revision: s.revision,
+      issue_ids: ['case'], purpose: 'context', tool: 'get_decision_text', arguments: { id: 'synthetic-judgment', domain: 'prec', full: true } });
+    const e = s.evidence[0];
+    assert.equal(e.document_version, observedDate ? '20990201' : 'unknown');
+    assert.equal(e.statute_anchor, undefined); // A judgment's date does not become a law's effective date.
+    if (observedDate) {
+      const wrong = assessment(s, 'not_required_for_question'); wrong.requirement_assessments[0].basis.version = '20990101';
+      await assert.rejects(() => service.run('update_legal_research', coverageActor, wrong), e => e.code === 'REQUIREMENT_VERSION_MISMATCH');
+      const next = await service.run('update_legal_research', coverageActor, assessment(s, 'not_required_for_question'));
+      assert.equal(next.requirements.find(r => r.target.id === 'unclassified').status, 'not_required_for_question');
+      assert.deepEqual(next.evidence, s.evidence);
+    } else await assert.rejects(() => service.run('update_legal_research', coverageActor, assessment(s, 'not_required_for_question')),
+      e => e.code === 'REQUIREMENT_VERSION_MISMATCH');
+  }
+});
 function assessment(s, status, reason = '현재 합성 규정과 질문 범위의 대응', target = 'unclassified') {
   const r = s.requirements.find(r => r.target.id === target), e = s.evidence[0], p = e.passages[0];
   return { research_id: s.research_id, expected_revision: s.revision, expected_state_version: s.state_version,

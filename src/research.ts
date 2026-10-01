@@ -143,7 +143,11 @@ export class ResearchService {
   private requirements(s: Session) { return effectiveRequirements(s.requirements, s.plan, s.revision, this.evidence(s)); }
   private requirementHistory(s: Session, records: Requirement[], event: RequirementHistory['event'], reason: string): RequirementHistory[] {
     if (s.requirement_history.length >= 128) throw this.capacity('ledger_bytes', s);
-    const changed = records.filter(r => digest(r) !== digest(s.requirements.find(old => old.requirement_id === r.requirement_id)));
+    // The event already records the revision transition and hashes the full arrays.
+    // Copy snapshots only for actual necessity/scope changes, not a revision stamp
+    // on every unchanged requirement after each individual fact/date answer.
+    const semantic = (r?: Requirement) => r ? { ...r, revision: 0 } : null;
+    const changed = records.filter(r => digest(semantic(r)) !== digest(semantic(s.requirements.find(old => old.requirement_id === r.requirement_id))));
     return [...s.requirement_history, { revision: event === 'plan_revision' ? s.revision + 1 : s.revision,
       state_version: s.state_version + 1, event, before_hash: digest(s.requirements), after_hash: digest(records),
       requirement_ids: changed.map(r => r.requirement_id), reason,
