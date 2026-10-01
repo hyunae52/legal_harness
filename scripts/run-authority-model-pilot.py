@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import time
+from pilot_readiness import wait_for_ready
 
 root = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser()
@@ -34,7 +35,7 @@ workspace.mkdir()
 runtime = destination / 'runtime'
 snapshot_files = (list((root / 'src').glob('*.ts')) + list((root / 'dist').glob('*.js'))
                   + list((root / 'rules').glob('*.json')) + list((root / 'upstreams').glob('*.json'))
-                  + [root / 'scripts/authority-pilot-server.mjs', Path(__file__).resolve()])
+                  + [root / 'scripts/authority-pilot-server.mjs', root / 'scripts/pilot_readiness.py', Path(__file__).resolve()])
 for file in snapshot_files:
     target = runtime / file.relative_to(root)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -57,12 +58,7 @@ with (destination / 'server.log').open('wb') as log:
     server = subprocess.Popen(['node', str(runtime / 'scripts/authority-pilot-server.mjs'), args.scenario, str(destination)],
                               cwd=root, env=environment, stdin=subprocess.PIPE, stdout=log, stderr=log)
     try:
-        until = time.monotonic() + 45
-        while not (destination / 'ready.json').exists():
-            if server.poll() is not None or time.monotonic() >= until:
-                raise RuntimeError('Evaluation server did not start')
-            time.sleep(0.1)
-        endpoint = json.loads((destination / 'ready.json').read_text(encoding='utf-8'))['url']
+        endpoint = wait_for_ready(destination / 'ready.json', server)
         command = [args.codex, 'exec', '--ignore-user-config', '--ephemeral', '--skip-git-repo-check',
                    '-C', str(workspace), '-s', 'read-only', '-m', protocol['model_id'],
                    '-c', 'model_reasoning_effort="' + protocol['reasoning_effort'] + '"',
