@@ -71,6 +71,11 @@ export class PublicAccess {
     return { actor: { ...actor, id: 'anon-session:' + match[3] }, input: args, token };
   }
   result<T extends Record<string, unknown>>(value: T, token?: string): T & { client_session?: string } {
-    return token ? { ...value, client_session: token } : value;
+    if (!token) return value;
+    // Clients may truncate large research bodies. Keep the private continuation
+    // handle in their response prefix without accepting a payload-supplied value.
+    const result = { client_session: token, ...value };
+    result.client_session = token;
+    return result;
   }
 }

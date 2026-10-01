@@ -64,6 +64,27 @@ test('PA-02: research ownership travels across actual HTTP MCP, SSE and REST cli
   assert.equal((await f.request('/api/failures',{})).body.code,'USE_CORRECTION_PR');
 });
 
+test('PA-02 recovery: bounded research responses keep the private continuation token before large state',async t=>{
+  const f=await fixture(t), c=await f.mcp();
+  const started=await c.callTool({name:'start_legal_research',arguments:{plan}});
+  const state=started.structuredContent;
+  assert.ok(started.content[0].text.length>1024);
+  const prefix=started.content[0].text.slice(0,512);
+  assert.ok(prefix.includes(state.client_session),'continuation token must survive a bounded response prefix');
+  const read=await c.callTool({name:'get_legal_research',arguments:{research_id:state.research_id,client_session:state.client_session,evidence_ids:[]}});
+  assert.notEqual(read.isError,true);
+  assert.ok(read.content[0].text.slice(0,512).includes(state.client_session));
+  const rest=await f.request('/api/research/status',{research_id:state.research_id,client_session:state.client_session,evidence_ids:[]});
+  assert.ok(JSON.stringify(rest.body).slice(0,512).includes(state.client_session));
+  const access=new PublicAccess({TAXLAB_PUBLIC_ACCESS:'1',TAXLAB_PUBLIC_SESSION_SECRET:secret});
+  const value={large:'x'.repeat(8192),client_session:'untrusted-value'};
+  const result=access.result(value,state.client_session);
+  assert.equal(result.client_session,state.client_session,'server-issued token remains authoritative');
+  assert.ok(JSON.stringify(result).slice(0,512).includes(state.client_session));
+  assert.equal(value.client_session,'untrusted-value','formatting must not mutate the input');
+  assert.equal(access.result(value),value,'authenticated responses are unchanged');
+});
+
 test('PA-03: capabilities accidentally included in sources or proposals never leave the server',async t=>{
   const f=await fixture(t), a=(await f.request('/api/research/start',{plan})).body;
   assert.equal((await f.request('/api/analyze',{query:a.client_session,tool:'search_law'})).body.code,'PRIVATE_SESSION_IN_CONTENT');
