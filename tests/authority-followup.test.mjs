@@ -4,7 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { identityFromDocument } from '../dist/researchIdentity.js';
 import { researchCoverage } from '../dist/researchCoverage.js';
 import { observeSearch } from '../dist/researchSearch.js';
-import { coverageFixture, coveragePlan, providerResponse } from './fixtures/authority-provider.mjs';
+import { coverageFixture, coveragePlan, coverageReview, providerResponse } from './fixtures/authority-provider.mjs';
+import { inspectResearch } from '../dist/researchReview.js';
 
 test('Pro F-5: independent issuer and court conflicts cannot become Supreme Court evidence', () => {
   const doc = { id: 'a', documentType: '판결', issuingAgency: '대법원', court: '서울고등법원' };
@@ -103,4 +104,100 @@ test('Rate-limited provider searches preserve a retry hint and are never zero re
   const r = observeSearch('search_tax_decisions', { type: 'court', query: '쟁점', page: 1, limit: 20 },
     { result: { isError: true, structuredContent: { ok: false, error: { code: 'RATE_LIMITED', detail: { retryAfterSec: 2 } } } } });
   assert.equal(r.status, 'failed'); assert.equal(r.total, null); assert.equal(r.retry_after_ms, 2000);
+});
+
+function subsequentFixture() {
+  return coverageFixture((name, args) => {
+    if (name === 'get_law_text') return { result: { content: [{ type: 'text', text: '법령명: 합성법\n시행일: 20200101\n제1조(취득)\n합성 취득 요건과 부칙.' }] } };
+    if (name === 'search_law') return { result: { content: [{ type: 'text', text: '검색 결과 (총 0건):' }] } };
+    if (name === 'search_decisions') {
+      const next = args.query.includes('2020두1');
+      const found = next || !/변경|2021두2|적용 제외|예외/.test(args.query);
+      return { result: { content: [{ type: 'text', text: `판례 검색 결과 (총 ${found ? 1 : 0}건, 1페이지)\n` +
+        (found ? `[${next ? 'next' : 'old'}] 합성 판결\n  사건번호: ${next ? '2021두2' : '2020두1'}\n  법원: 대법원\n  선고일: 20210101` : '') }] } };
+    }
+    if (name === 'get_decision_text') return { result: { content: [{ type: 'text', text: `기본 정보:\n사건번호: ${args.id === 'next' ? '2021두2' : '2020두1'}\n법원: 대법원\n선고일: 20210101\n전문:\n합성 판결 요건.` }] } };
+    return providerResponse(name, args);
+  });
+}
+
+test('Model recovery: a follow-up decision adopted during review becomes resumable runner work', async () => {
+  const f = subsequentFixture();
+  try {
+    let s = await f.finish(await f.law(await f.start()));
+    const e = s.evidence.find(e => e.identity?.document_number === '2021두2'); assert.ok(e);
+    assert.equal(s.coverage.obligations.some(o => o.document_key === 'moleg:precedent:next'), false);
+    const input = coverageReview(s);
+    input.analysis[0].legal_basis.authorities = [{ evidence_id: e.evidence_id, kind: 'supreme_court', disposition: 'applied',
+      statute_evidence_ids: [input.analysis[0].legal_basis.statutes[0].citation.evidence_id], law_version_relation: 'same_rule',
+      reason: '새로 채택한 합성 법리', subsequent_review: { status: 'unresolved', reason: '이 판결 자체의 후속 검색 필요', citations: [] } }];
+    const review = await f.service.run('review_legal_reasoning', { kind: 'auth_user', id: 'authority-fixture' }, input);
+    s = await f.service.run('get_legal_research', { kind: 'auth_user', id: 'authority-fixture' }, { research_id: s.research_id });
+    assert.ok(s.coverage.obligations.some(o => o.document_key === 'moleg:precedent:next' && o.next_step));
+    assert.ok(review.state_version > input.expected_state_version);
+    const before = f.calls.length; s = await f.run(s);
+    assert.ok(f.calls.slice(before).some(c => c.name === 'search_decisions' && c.args.query.includes('2021두2')));
+  } finally { f.service.close(); }
+});
+
+test('Model recovery: a neutral-search body can be assessed as contrary evidence without fetching it twice', async () => {
+  const f = subsequentFixture();
+  try {
+    const s = await f.finish(await f.law(await f.start())), input = coverageReview(s);
+    const e = s.evidence.find(e => e.identity?.document_number === '2020두1'); assert.equal(e.purpose, 'context');
+    input.analysis[0].counter_evidence = [{ evidence_id: e.evidence_id, disposition: 'unresolved', reason: '새로 확인한 반대 법리' }];
+    const result = inspectResearch(input, s.plan, s.evidence, s.attempts, s.ledger);
+    assert.ok(!result.findings.some(f => f.code === 'COUNTER_SCOPE_MISMATCH'));
+    assert.ok(result.findings.some(f => f.code === 'UNRESOLVED_COUNTER'));
+    const foreign = s.evidence.map(x => x.evidence_id === e.evidence_id ? { ...x, issue_ids: ['other_issue'] } : x);
+    assert.ok(inspectResearch(input, s.plan, foreign, s.attempts, s.ledger).findings.some(f => f.code === 'COUNTER_SCOPE_MISMATCH'));
+  } finally { f.service.close(); }
+});
+
+test('Model recovery: one identical required query serves two registered issues without duplicate external calls', async () => {
+  const f = coverageFixture();
+  try {
+    const p = coveragePlan(); p.issues.push({ ...p.issues[0], id: 'timing', question: '같은 규정의 시점 적용' });
+    let s = await f.start(p);
+    s = await f.api('research_legal_sources', s, { issue_ids: ['case', 'timing'], purpose: 'timing', tool: 'get_law_text', arguments: { lawId: '100', jo: '제1조' } });
+    const before = f.calls.length; s = await f.run(s, { max_steps: 1 });
+    assert.equal(f.calls.length - before, 1);
+    const neutrals = s.coverage.obligations.filter(o => o.family === 'court' && o.purpose === 'neutral' && !o.channel);
+    assert.equal(neutrals.length, 2); assert.ok(neutrals.every(o => o.attempt_ids.length === 1));
+    assert.equal(new Set(neutrals.flatMap(o => o.attempt_ids)).size, 1);
+    assert.ok(s.coverage.obligations.filter(o => o.purpose === 'counter').every(o => o.status === 'not_attempted'));
+  } finally { f.service.close(); }
+});
+
+test('Model recovery: related issues sharing a two-home statute retain the case topic, unrelated VAT does not', async () => {
+  const f = coverageFixture((name, args) => name === 'get_law_text' && args.lawId === 'vat'
+    ? { result: { content: [{ type: 'text', text: '법령명: 부가가치세법\n시행일: 20200101\n제1조(합성 부가세)\n합성 원문' }] } } : providerResponse(name, args));
+  try {
+    const p = coveragePlan(); p.query = '일시적 2주택 취득 순서와 별도 용역'; p.issues[0].profile = 'temporary_two_homes';
+    p.issues.push({ ...p.issues[0], profile: 'general', id: 'timing', question: '같은 규정의 시점 적용' },
+      { id: 'vat', question: '별도 용역의 부가가치세', required_fact_ids: [], required_date_roles: [] });
+    let s = await f.start(p);
+    s = await f.api('research_legal_sources', s, { issue_ids: ['case', 'timing'], purpose: 'timing', tool: 'get_law_text', arguments: { lawId: '100', jo: '제1조' } });
+    s = await f.api('research_legal_sources', s, { issue_ids: ['vat'], purpose: 'timing', tool: 'get_law_text', arguments: { lawId: 'vat', jo: '제1조' } });
+    const firstQuery = issue => s.coverage.obligations.find(o => o.issue_id === issue && o.family === 'court' && o.purpose === 'neutral' && !o.channel).next_step.arguments.query;
+    assert.equal(firstQuery('case'), firstQuery('timing')); assert.ok(!firstQuery('vat').includes('신규 주택'));
+  } finally { f.service.close(); }
+});
+
+test('Pro F-3 model regression: an exact MST body resolves a failed law-ID read of that version', async () => {
+  const f = coverageFixture();
+  try {
+    let s = await f.start();
+    s = await f.api('research_legal_sources', s, { issue_ids: ['case'], purpose: 'context', tool: 'search_law', arguments: { query: '소득세법', display: 10 } });
+    const candidate = s.coverage.candidates[0];
+    s = await f.api('research_legal_sources', s, { issue_ids: ['case'], purpose: 'support', candidate_id: candidate.candidate_id,
+      tool: 'get_law_text', arguments: { lawId: '100', jo: '제1조' } });
+    assert.equal(s.attempts.at(-1).error_code, 'CANDIDATE_DOCUMENT_MISMATCH');
+    const failed = s.attempts.at(-1).attempt_id;
+    s = await f.api('research_legal_sources', s, { issue_ids: ['case'], purpose: 'support', tool: 'get_law_text', arguments: { mst: '999', jo: '제1조' } });
+    assert.ok(s.coverage.incomplete_attempts.some(a => a.attempt_id === failed), 'a different MST cannot satisfy it');
+    s = await f.api('research_legal_sources', s, { issue_ids: ['case'], purpose: 'support', tool: 'get_law_text', arguments: { mst: '200', jo: '제1조' } });
+    assert.ok(!s.coverage.incomplete_attempts.some(a => a.attempt_id === failed));
+    assert.ok(s.coverage.resolved_attempts.some(a => a.attempt_id === failed));
+  } finally { f.service.close(); }
 });

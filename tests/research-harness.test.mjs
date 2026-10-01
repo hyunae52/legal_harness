@@ -66,6 +66,38 @@ async function fixture(t, opts = {}) {
   return { request, calls, base, runtime, writes: () => writes };
 }
 
+test('Model recovery: invalid values return allowed enums and bounds without echoing submitted data', async t => {
+  const f = await fixture(t), s = (await f.request('start', { plan: plan() })).body;
+  const bad = await f.request('review', { research_id: s.research_id, expected_revision: 1, expected_state_version: s.state_version,
+    draft_answer: '합성 입력', correction_needed: false, analysis: [{ issue_id: 'cost', conclusion_mode: 'SECRET_INVALID_VALUE',
+      withholding_reason: '', claims: [], counter_evidence: [], unknowns: [], next_queries: [],
+      timing: { status: 'SECRET_INVALID_VALUE', reason: '합성', date_roles: [] }, exceptions: { status: 'addressed', reason: '합성' } }] });
+  assert.equal(bad.status, 400);
+  assert.deepEqual(bad.body.issues.find(i => i.path === 'analysis.0.timing.status').allowed_values, ['addressed', 'unresolved', 'not_required']);
+  assert.ok(!JSON.stringify(bad.body).includes('SECRET_INVALID_VALUE'));
+  const oversize = await f.request('run', { research_id: s.research_id, expected_revision: 1, request_id: randomUUID(), max_steps: 10 });
+  assert.equal(oversize.status, 400); assert.equal(oversize.body.issues[0].maximum, 4); assert.equal(f.calls.length, 0);
+});
+
+test('Model recovery: selected evidence reads preserve exact text, current review state, and actor isolation', async t => {
+  const f = await fixture(t), longPlan = plan(); longPlan.query += ' 확인된 배경 사실'.repeat(900);
+  let s = (await f.request('start', { plan: longPlan })).body;
+  for (const document_number of ['SYNTHETIC-1', 'SYNTHETIC-2']) s = (await f.request('retrieve', {
+    research_id: s.research_id, expected_revision: 1, issue_ids: ['cost'], purpose: 'support',
+    tool: 'lookup_tax_document', arguments: { document_number } })).body;
+  const calls = f.calls.length, e = s.evidence[0];
+  const summary = (await f.request('status', { research_id: s.research_id, evidence_ids: [] })).body;
+  assert.deepEqual(summary.evidence, []); assert.equal(summary.evidence_selection.total_evidence_count, 2);
+  assert.equal(summary.evidence_index.length, 2); assert.equal(summary.state_version, s.state_version);
+  const selected = (await f.request('status', { research_id: s.research_id, evidence_ids: [e.evidence_id] })).body;
+  assert.deepEqual(selected.evidence, [e]);
+  assert.ok(JSON.stringify(selected).slice(0, 3000).includes(sourceText), 'targeted source text must precede a long plan/history in clients that bound tool output');
+  const full = (await f.request('status', { research_id: s.research_id })).body;
+  assert.deepEqual(full.evidence, s.evidence); assert.equal(f.calls.length, calls);
+  assert.equal((await f.request('status', { research_id: s.research_id, evidence_ids: [randomUUID()] })).status, 400);
+  assert.equal((await f.request('status', { research_id: s.research_id, evidence_ids: [e.evidence_id] }, 'bob')).status, 404);
+});
+
 test('AC-16/23: new reuse operation works across REST and actual HTTP MCP without a new upstream lookup', async t => {
   const f = await fixture(t);
   let s = (await f.request('start', { plan: plan() })).body;

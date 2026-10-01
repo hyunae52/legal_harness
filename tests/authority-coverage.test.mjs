@@ -10,11 +10,29 @@ import { observeIdentity } from '../dist/researchIdentity.js';
 import { researchCoverage, addCandidates, carryCandidates, candidateGaps } from '../dist/researchCoverage.js';
 import { splitDocument, verifyManifest } from '../dist/researchStorage.js';
 import { applyResearchProfiles } from '../dist/researchProfiles.js';
+import { researchProgress } from '../dist/researchProgress.js';
 import { coverageFixture, coverageActor, coveragePlan, coverageReview, providerResponse } from './fixtures/authority-provider.mjs';
 
 const id = n => '00000000-0000-4000-8000-' + String(n).padStart(12, '0');
 const cite = e => ({ evidence_id: e.evidence_id, passage_id: e.passages[0].passage_id,
-  quote: e.passages[0].text, relation: 'direct', reason: '합성 원문과 요건을 대조했다.' });
+    quote: e.passages[0].text, relation: 'direct', reason: '합성 원문과 요건을 대조했다.' });
+
+test('Model recovery: a finished search batch cannot hide an unread body or an unreviewed candidate', async () => {
+  const f = coverageFixture();
+  try {
+    let s = await f.law(await f.start());
+    assert.equal(s.retrieval_progress.state, 'retrieving');
+    assert.equal(s.retrieval_progress.next_step.tool, 'search_decisions');
+    s = await f.finish(s);
+    assert.equal(s.retrieval_progress.state, 'ready_for_analysis');
+    assert.equal(s.review_worklist[0].status, 'applicability_review_required');
+    assert.equal(s.legal_verification, 'unverified');
+    const coverage = researchCoverage(s.plan, s.revision, [], s.attempts, s.ledger);
+    const progress = researchProgress(coverage);
+    assert.notEqual(progress.retrieval_progress.state, 'ready_for_analysis');
+    assert.ok(progress.retrieval_progress.missing_body_candidate_ids.length > 0);
+  } finally { f.service.close(); }
+});
 function missingCoverage() {
   const wrap = (n, tool, args, result, purpose) => ({ ...adaptResearchEvidence(tool, args,
     { server: { name: tool === 'get_law_text' ? 'korean-law-mcp' : 'korean-taxlaw', version: 'fixture' }, result }),
@@ -309,6 +327,16 @@ test('AC-15/18: ordinary one-to-two-home facts do not invent an intermediate dis
   assert.ok(!applied.issues[0].required_date_roles.includes('other_homes_disposed'));
   assert.equal(applied.issues[1].profile, undefined);
   assert.deepEqual(applied.issues[1].required_date_roles, []);
+});
+
+test('AC-15 regression from live model: negated other-home wording must not create a disposal event', () => {
+  const plan = simplePlan(); plan.query = '다른 주택 없이 계속 1주택을 보유하다 신규 주택을 취득한 일시적 2주택';
+  plan.issues[0].profile = 'temporary_two_homes';
+  plan.facts = [{ id: 'homes_before_new_acquisition', description: '신규 취득 직전 주택 수', status: 'provided',
+    value: '정확히 1주택', source: '사용자의 명시적 진술' }];
+  const result = applyResearchProfiles(plan);
+  assert.ok(!result.issues[0].required_date_roles.includes('other_homes_disposed'));
+  assert.ok(!result.event_dates.some(d => d.role === 'other_homes_disposed'));
 });
 
 test('AC-27: complete replacement closes the body gap but an old partial citation still fails', async () => {

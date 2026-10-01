@@ -20,6 +20,7 @@ import { researchTools, researchRoutes, researchSchemas, researchInstructions, t
 import { ResourceBudgets, positiveLimit, type ResourceOptions } from './resourceBudgets.js';
 import { serveStateless, type RequestGuard } from './statelessHttp.js';
 import { PublicAccess, actorBudgetKey, assertNoPublicSession } from './publicAccess.js';
+import { inputDiagnostics } from './inputDiagnostics.js';
 
 interface Options {
   law: Pick<KoreanLawClient, 'listTools' | 'callTool' | 'close' | 'releaseVersion'> & { taxlawRelease?: { version?: string; commit: string } | null };
@@ -75,7 +76,7 @@ export function createApp(options: Options) {
     try { return await operation(); } finally { active--; }
   };
   const errorBody = (error: unknown) => {
-    if (error instanceof z.ZodError) return { status: 400, body: { code: 'INVALID_INPUT', fields: error.issues.map(i => i.path.join('.')) } };
+    if (error instanceof z.ZodError) return { status: 400, body: inputDiagnostics(error) };
     if (error instanceof LawMcpError && error.code==='MCP_TOOL_ERROR' && error.result) return {status:error.status,body:{code:error.code,result:safeToolDiagnostic(error.result,env)}};
     if (error instanceof ServiceError || error instanceof LawMcpError) return { status: error.status, body: { code: error.code } };
     return { status: 500, body: { code: 'INTERNAL_ERROR' } };

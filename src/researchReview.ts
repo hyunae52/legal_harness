@@ -5,9 +5,10 @@ import { inspectScopeCompletion } from './scopeCompletion.js';
 import { inspectLegalApplicability } from './legalApplicability.js';
 import { researchCoverage, candidateGaps, isCoverageComplete, type CandidateLedger } from './researchCoverage.js';
 
-export function inspectResearch(input: ReviewInput, plan: Plan, evidence: ResearchEvidence[], attempts: ResearchAttempt[], ledger?: CandidateLedger) {
-  const core = input.analysis.flatMap(a => [...a.claims.flatMap(c => c.citations.filter(c => c.relation !== 'background').map(c => c.evidence_id)),
+export const coreEvidenceIds = (input: ReviewInput) => input.analysis.flatMap(a => [...a.claims.flatMap(c => c.citations.filter(c => c.relation !== 'background').map(c => c.evidence_id)),
     ...(a.legal_basis?.authorities.filter(a => a.disposition === 'applied' || a.disposition === 'analogy').map(a => a.evidence_id) ?? [])]);
+export function inspectResearch(input: ReviewInput, plan: Plan, evidence: ResearchEvidence[], attempts: ResearchAttempt[], ledger?: CandidateLedger) {
+  const core = coreEvidenceIds(input);
   const coverage = researchCoverage(plan, input.expected_revision, evidence, attempts, ledger, undefined, core);
   evidence = evidence.filter(e => e.revision === input.expected_revision);
   const findings: { code: string; severity: 'blocked' | 'needs_info'; issue_id?: string; detail: string }[] = [];
@@ -86,7 +87,9 @@ export function inspectResearch(input: ReviewInput, plan: Plan, evidence: Resear
       const receipt = byEvidence.get(counter.evidence_id);
       if (!receipt) block('EVIDENCE_NOT_FOUND', counter.evidence_id);
       else {
-        if (receipt.purpose !== 'counter' || !receipt.issue_ids.includes(issue.id)) block('COUNTER_SCOPE_MISMATCH', counter.evidence_id);
+        // A neutral search can discover the strongest contrary authority. Retrieval purpose is
+        // provenance, not a restriction on the later legal use of the observed body.
+        if (!receipt.issue_ids.includes(issue.id)) block('COUNTER_SCOPE_MISMATCH', counter.evidence_id);
         if (receipt.body_scope !== 'body_returned') gap('COUNTER_BODY_REQUIRED', counter.evidence_id);
       }
       if (counter.disposition === 'unresolved') gap('UNRESOLVED_COUNTER', counter.reason);

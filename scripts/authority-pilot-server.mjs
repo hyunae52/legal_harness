@@ -8,6 +8,7 @@ import { createApp } from '../dist/app.js';
 import { KoreanLawClient, koreanLawOptionsFromEnv, LawMcpError } from '../dist/koreanLawClient.js';
 import { createLegalRetrievalClient } from '../dist/taxLawClient.js';
 import { observeSearch } from '../dist/researchSearch.js';
+import { SourceVerifier } from '../dist/sourceVerifier.js';
 
 const [scenario, output] = process.argv.slice(2);
 if (!scenario || !output) throw Error('Usage: scenario output-directory');
@@ -58,7 +59,9 @@ const law = {
       ...(e.result ? { source_error: e.result.structuredContent?.error, result_hash: sha(e.result) } : {}) }); throw e; }
   },
 };
-const built = createApp({ law, env: { TAXLAB_PUBLIC_ACCESS: '1', TAXLAB_PUBLIC_SESSION_SECRET: randomBytes(32).toString('hex') } });
+const built = createApp({ law,
+  ...(live ? { sources: new SourceVerifier(() => new KoreanLawClient(koreanLawOptionsFromEnv(process.env))) } : {}),
+  env: { TAXLAB_PUBLIC_ACCESS: '1', TAXLAB_PUBLIC_SESSION_SECRET: randomBytes(32).toString('hex') } });
 const server = createServer((req, res) => {
   const started = Date.now(), inputs = [], outputs = []; req.on('data', x => inputs.push(x));
   const write = res.write.bind(res), end = res.end.bind(res);

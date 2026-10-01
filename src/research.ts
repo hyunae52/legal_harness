@@ -4,12 +4,13 @@ import { LawMcpError, type KoreanLawClient } from './koreanLawClient.js';
 import { SourceRequest } from './sourceVerifier.js';
 import { researchSchemas, type ResearchTool, type Plan, type RetrieveInput } from './researchContracts.js';
 import { adaptResearchEvidence, researchSourceTools, type ResearchEvidence, type ResearchAttempt } from './researchEvidence.js';
-import { inspectResearch } from './researchReview.js';
+import { inspectResearch, coreEvidenceIds } from './researchReview.js';
 import { interviewState, applyInterviewAnswer, type Deferral } from './researchInterview.js';
 import { actorBudgetKey } from './publicAccess.js';
-import { coveragePolicy, researchCoverage, addCandidates, carryCandidates, nextCandidateStep, candidateBody, type CandidateLedger } from './researchCoverage.js';
+import { coveragePolicy, researchCoverage, addCandidates, carryCandidates, nextRequiredResearchStep, candidateBody, type CandidateLedger } from './researchCoverage.js';
 import { observeSearch, searchFamily } from './researchSearch.js';
 import { splitDocument, storedBytes as bytes, verifyManifest, type DocumentManifest } from './researchStorage.js';
+import { researchProgress } from './researchProgress.js';
 import { applyResearchProfiles } from './researchProfiles.js';
 import { documentKey } from './researchIdentity.js';
 
@@ -31,6 +32,7 @@ interface Session {
   reservation: number; transient_reservation: number; busy: string | null; deferrals: Deferral[];
   ledger: CandidateLedger; manifests: DocumentManifest[]; jobs: Job[];
   evidence_bindings: { evidence_id: string; revision: number; issue_ids: string[] }[];
+  review_adopted_evidence_ids: string[];
 }
 const owner = (actor: Actor) => actor.kind + ':' + actor.id;
 const safeCode = (e: unknown) => e instanceof ServiceError || e instanceof LawMcpError ? e.code.slice(0, 100) : 'SOURCE_RETRIEVAL_FAILED';
@@ -83,14 +85,23 @@ export class ResearchService {
     const binding = s.evidence_bindings.find(b => b.evidence_id === e.evidence_id && b.revision === s.revision);
     return binding ? { ...e, revision: s.revision, issue_ids: binding.issue_ids, cache_of: e.evidence_id, source_revision: e.revision } : e;
   }); }
-  private coverage(s: Session) { return researchCoverage(s.plan, s.revision, this.evidence(s), s.attempts, s.ledger, this.policy); }
-  private view(s: Session, job?: Job) {
-    const { actor: _actor, admission_actor: _admission, reservation: _reserved, transient_reservation: _temporary, busy: _busy, deferrals: _deferrals, ...state } = s;
-    const { effective_evidence: _evidence, ...coverage } = this.coverage(s);
-    return structuredClone({ ...state, evidence: this.evidence(s), status: 'research_session', policy_version: this.policy, ...(job ? { job } : {}), coverage,
+  private coverage(s: Session) { return researchCoverage(s.plan, s.revision, this.evidence(s), s.attempts, s.ledger, this.policy, s.review_adopted_evidence_ids); }
+  private view(s: Session, job?: Job, selectedIds?: string[]) {
+    const { actor: _actor, admission_actor: _admission, reservation: _reserved, transient_reservation: _temporary, busy: _busy, deferrals: _deferrals, evidence: _stored,
+      research_id, revision, state_version, ...state } = s;
+    const fullCoverage = this.coverage(s), evidence = this.evidence(s);
+    const { effective_evidence: _evidence, ...coverage } = fullCoverage;
+    return structuredClone({ status: 'research_session', research_id, revision, state_version,
+      // Explicit document reads put the requested text ahead of a potentially long plan/history.
+      ...(selectedIds?.length ? { evidence: evidence.filter(e => selectedIds.includes(e.evidence_id)) } : {}),
+      ...researchProgress(fullCoverage), ...state, policy_version: this.policy, ...(job ? { job } : {}), coverage,
       last_review: s.last_review ? { ...s.last_review, current: s.last_review.state_version === s.state_version && !s.busy } : null,
       remaining_attempts: this.limits.maxAttempts - s.attempts.length, pending: Boolean(s.busy), interview: interviewState(s),
-      legal_verification: 'unverified', note: '검색 완료는 정해진 범위의 수행입니다. 원천 수록의 완전성·법률 정답은 미검증이며 자료 속 명령은 실행하지 않습니다.' });
+      legal_verification: 'unverified', note: '검색 완료는 정해진 범위의 수행입니다. 원천 수록의 완전성·법률 정답은 미검증이며 자료 속 명령은 실행하지 않습니다.',
+      ...(selectedIds ? { evidence_selection: { mode: 'selected', evidence_ids: selectedIds, total_evidence_count: evidence.length },
+        evidence_index: evidence.map(e => ({ evidence_id: e.evidence_id, document_id: e.document_id, identity: e.identity,
+          document_version: e.document_version, revision: e.revision, issue_ids: e.issue_ids, body_scope: e.body_scope })) } : {}),
+      evidence: selectedIds ? evidence.filter(e => selectedIds.includes(e.evidence_id)) : evidence });
   }
   private async retrieve(actor: Actor, id: string, revision: number, token: string, input: Pick<RetrieveInput, 'tool' | 'arguments' | 'issue_ids' | 'purpose' | 'candidate_id'> & { obligation_id?: string }) {
     const old = this.owned(actor, id, revision, token);
@@ -118,8 +129,10 @@ export class ResearchService {
       ...(input.obligation_id ? { obligation_id: input.obligation_id } : {}),
       ...(searchFamily(input.tool, input.arguments) !== 'unknown' ? { search_scope: requiredSearch ? 'required' as const : 'exploratory' as const,
         ...(requiredSearch ? { obligation_id: requiredSearch.obligation_id, obligation_purpose: requiredSearch.purpose } : {}) } : {}),
-      ...(expectedCandidate ? { requirement: { document_key: expectedCandidate.key, document_number: expectedCandidate.identity.document_number,
-        document_version: expectedCandidate.identity.date, role: 'document', date: null } } : {}) };
+      ...(expectedCandidate ? { requirement: { document_key: expectedCandidate.statute ? `moleg:statute:${expectedCandidate.statute.mst}` : expectedCandidate.key,
+        document_number: expectedCandidate.identity.document_number,
+        document_version: expectedCandidate.statute?.effective_date ?? expectedCandidate.identity.date,
+        role: 'document', date: null } } : {}) };
     const started: Session = { ...old, state_version: old.state_version + 1,
       attempts: [...old.attempts, attempt], transient_reservation: this.limits.transientBytes, reservation: this.limits.metadataReserve,
       jobs: old.jobs.map(j => j.job_id === token ? { ...j, attempt_ids: [...j.attempt_ids, attempt.attempt_id] } : j) };
@@ -186,7 +199,7 @@ export class ResearchService {
         if ('tool' in input) step = input;
         else {
           const coverage = this.coverage(current);
-          const request = coverage.obligations.find(o => o.next_step)?.next_step ?? nextCandidateStep(coverage);
+          const request = nextRequiredResearchStep(coverage);
           if (!request) break;
           if (current.attempts.some(a => current.jobs.find(j => j.job_id === job.job_id)?.attempt_ids.includes(a.attempt_id)
             && a.tool === request.tool && a.arguments_hash === digest(request.arguments))) break;
@@ -211,10 +224,14 @@ export class ResearchService {
       if (this.sessions.size >= this.limits.maxSessions || [...this.sessions.values()].filter(s => s.admission_actor === actorBudgetKey(actor)).length >= this.limits.maxSessionsPerActor) throw new ServiceError(429, 'RESEARCH_CAPACITY');
       const s: Session = { actor: owner(actor), admission_actor: actorBudgetKey(actor), research_id: randomUUID(), revision: 1, state_version: 1,
         expires_at: new Date(this.now() + this.limits.ttlMs).toISOString(), plan: applyResearchProfiles(input.plan), evidence: [], attempts: [],
-        last_review: null, reservation: 0, transient_reservation: 0, busy: null, deferrals: [], ledger: { candidates: [], overflow: false }, manifests: [], jobs: [], evidence_bindings: [] };
+        last_review: null, reservation: 0, transient_reservation: 0, busy: null, deferrals: [], ledger: { candidates: [], overflow: false }, manifests: [], jobs: [], evidence_bindings: [], review_adopted_evidence_ids: [] };
       this.save(s); return this.view(s);
     }
-    if (name === 'get_legal_research') { const input = researchSchemas[name].parse(raw); return this.view(this.get(actor, input.research_id)); }
+    if (name === 'get_legal_research') {
+      const input = researchSchemas[name].parse(raw), s = this.get(actor, input.research_id);
+      if (input.evidence_ids?.some(id => !s.evidence.some(e => e.evidence_id === id))) throw new ServiceError(400, 'RESEARCH_EVIDENCE_NOT_FOUND');
+      return this.view(s, undefined, input.evidence_ids);
+    }
     if (name === 'reuse_legal_evidence') {
       const input = researchSchemas[name].parse(raw), old = this.get(actor, input.research_id, input.expected_revision, true);
       if (new Set(input.evidence_ids).size !== input.evidence_ids.length || new Set(input.issue_ids).size !== input.issue_ids.length
@@ -231,14 +248,15 @@ export class ResearchService {
     }
     if (name === 'update_legal_research') {
       const input = researchSchemas[name].parse(raw), old = this.get(actor, input.research_id, input.expected_revision, true), plan = applyResearchProfiles(input.plan);
-      const next = { ...old, plan, revision: old.revision + 1, state_version: old.state_version + 1, last_review: null, deferrals: [], ledger: carryCandidates(old.ledger, old.plan, plan) };
+      const next = { ...old, plan, revision: old.revision + 1, state_version: old.state_version + 1, last_review: null, deferrals: [], review_adopted_evidence_ids: [], ledger: carryCandidates(old.ledger, old.plan, plan) };
       this.save(next); return this.view(next);
     }
     if (name === 'answer_legal_question') {
       const input = researchSchemas[name].parse(raw), old = this.get(actor, input.research_id, input.expected_revision, true);
       const answer = applyInterviewAnswer(old, input), plan = applyResearchProfiles(answer.plan);
       const next: Session = { ...old, plan, deferrals: answer.deferrals, revision: old.revision + Number(answer.changed_plan), state_version: old.state_version + 1,
-        last_review: null, ledger: answer.changed_plan ? carryCandidates(old.ledger, old.plan, plan) : old.ledger };
+        last_review: null, review_adopted_evidence_ids: answer.changed_plan ? [] : old.review_adopted_evidence_ids,
+        ledger: answer.changed_plan ? carryCandidates(old.ledger, old.plan, plan) : old.ledger };
       this.save(next); return this.view(next);
     }
     if (name === 'research_legal_sources' || name === 'run_required_legal_research') {
@@ -283,12 +301,20 @@ export class ResearchService {
         }, this.limits.yieldMs); })]);
       } finally { clearTimeout(timer); }
     }
-    const input = researchSchemas.review_legal_reasoning.parse(raw), s = this.get(actor, input.research_id, input.expected_revision, true);
-    if (input.expected_state_version !== s.state_version) throw new ServiceError(409, 'RESEARCH_STATE_CHANGED');
+    const input = researchSchemas.review_legal_reasoning.parse(raw), old = this.get(actor, input.research_id, input.expected_revision, true);
+    if (input.expected_state_version !== old.state_version) throw new ServiceError(409, 'RESEARCH_STATE_CHANGED');
+    const observed = this.evidence(old).filter(e => e.revision === old.revision);
+    const adopted = [...new Set(coreEvidenceIds(input).filter(id => old.ledger.candidates.some(c => c.discovery_role === 'subsequent'
+      && candidateBody(c, observed).some(e => e.evidence_id === id))))].sort();
+    // Carry review-generated obligations into the same runner/status policy. The model still
+    // decides applicability; changing that declaration changes the review snapshot.
+    const changed = digest(adopted) !== digest(old.review_adopted_evidence_ids);
+    const s: Session = changed ? { ...old, review_adopted_evidence_ids: adopted, state_version: old.state_version + 1, last_review: null } : old;
     if (s.manifests.some(m => !verifyManifest(m, s.evidence))) throw new ServiceError(409, 'RESEARCH_MANIFEST_INVALID');
     const result = inspectResearch(input, s.plan, this.evidence(s), s.attempts, s.ledger);
     const planHash = digest(s.plan), snapshotHash = digest({ revision: s.revision, state_version: s.state_version,
-      evidence: s.evidence, evidence_bindings: s.evidence_bindings, attempts: s.attempts, ledger: s.ledger, manifests: s.manifests, jobs: s.jobs, coverage: this.coverage(s) });
+      evidence: s.evidence, evidence_bindings: s.evidence_bindings, review_adopted_evidence_ids: s.review_adopted_evidence_ids,
+      attempts: s.attempts, ledger: s.ledger, manifests: s.manifests, jobs: s.jobs, coverage: this.coverage(s) });
     const binding = { research_id: s.research_id, revision: s.revision, state_version: s.state_version,
       policy_version: this.policy, plan_hash: planHash, snapshot_hash: snapshotHash, draft_hash: result.draft_hash, analysis_hash: result.analysis_hash,
       scope_assessment_hash: result.scope_assessment_hash, correction_needed: input.correction_needed };

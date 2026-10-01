@@ -90,6 +90,17 @@ export function nextCandidateStep(coverage: Coverage): ResearchStep | null {
   return null;
 }
 
+/** One observed query may cover several issues only when their predeclared source scope is identical. */
+export function nextRequiredResearchStep(coverage: Coverage): ResearchStep | null {
+  const first = coverage.obligations.find(o => o.next_step);
+  if (!first?.next_step) return nextCandidateStep(coverage);
+  const step = first.next_step;
+  const same = coverage.obligations.filter(o => o.next_step && o.anchor_key === first.anchor_key && o.family === first.family
+    && o.purpose === first.purpose && o.channel === first.channel && o.next_step.tool === step.tool
+    && o.next_step.purpose === step.purpose && digest(o.next_step.arguments) === digest(step.arguments));
+  return { ...step, issue_ids: [...new Set(same.flatMap(o => o.next_step!.issue_ids))] };
+}
+
 /** One current-revision calculation shared by reasoning, applicability and scope completion. */
 export function researchCoverage(plan: Plan, revision: number, evidence: ResearchEvidence[], attempts: ResearchAttempt[],
   storedLedger?: CandidateLedger, policy = coveragePolicy, coreEvidenceIds: string[] = []): Coverage {
@@ -125,7 +136,13 @@ export function researchCoverage(plan: Plan, revision: number, evidence: Researc
     if (!anchors.length) out.preparation_gaps.push({ issue_id: issue.id, code: 'ANCHOR_PENDING' });
     for (const anchor of anchors) {
       const anchorKey = digest({ name: anchor.name, articles: anchor.articles }), tax = isTaxLaw(anchor.name), local = anchor.name.startsWith('지방세');
-      const article = anchor.articles.join(' '), topic = temporaryHomes(plan, issue) ? '일시적 2주택' : '';
+      // A legal-version subissue about the exact same observed statute/article does not
+      // become an unrelated whole-article investigation just because its issue label differs.
+      // Separate statutes (e.g. an independent VAT issue) never inherit this context.
+      const sharedTopic = currentEvidence.some(e => e.statute_anchor && e.body_scope === 'body_returned'
+        && digest({ name: e.statute_anchor.name, articles: e.statute_anchor.articles }) === anchorKey
+        && plan.issues.some(other => e.issue_ids.includes(other.id) && temporaryHomes(plan, other)));
+      const article = anchor.articles.join(' '), topic = temporaryHomes(plan, issue) || sharedTopic ? '일시적 2주택' : '';
       const families: SearchFamily[] = tax ? ['court', 'administrative', 'adjudication'] : ['court'];
       const recipe = (family: SearchFamily, purpose: Obligation['purpose'], target?: ResearchEvidence, channel?: string) => {
         const key = target?.identity ? documentKey(target.identity) ?? target.evidence_id : undefined;

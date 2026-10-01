@@ -28,19 +28,33 @@ if (destination.parent / 'CANCELLED').exists():
 destination.mkdir(parents=True, exist_ok=False)
 workspace = destination / 'empty-workspace'
 workspace.mkdir()
+
+# Freeze the actual JS modules and public rules/catalog beside each trial. Later development
+# must not change what a running model is exercising. No .env, Git config or credentials copied.
+runtime = destination / 'runtime'
+snapshot_files = (list((root / 'src').glob('*.ts')) + list((root / 'dist').glob('*.js'))
+                  + list((root / 'rules').glob('*.json')) + list((root / 'upstreams').glob('*.json'))
+                  + [root / 'scripts/authority-pilot-server.mjs', Path(__file__).resolve()])
+for file in snapshot_files:
+    target = runtime / file.relative_to(root)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(file, target)
+runtime_hash = hashlib.sha256(b''.join(str(f.relative_to(runtime)).encode() + b'\0' + f.read_bytes()
+                                      for f in sorted(runtime.rglob('*')) if f.is_file())).hexdigest()
 environment = os.environ.copy()
 environment['TAXLAW_MCP_RELEASE_FILE'] = str(Path(args.taxlaw_release).resolve())
-source_files = sorted((root / 'src').glob('*.ts'))
-source_hash = hashlib.sha256(b''.join(str(f.relative_to(root)).encode() + b'\0' + f.read_bytes() for f in source_files)).hexdigest()
+source_files = sorted((runtime / 'src').glob('*.ts'))
+source_hash = hashlib.sha256(b''.join(str(f.relative_to(runtime)).encode() + b'\0' + f.read_bytes() for f in source_files)).hexdigest()
 metadata = dict(scenario=args.scenario, repetition=args.repetition, source_mode=scenario['source_mode'],
                 source_identity_kind='source_tree_sha256', source_sha=source_hash,
                 frozen_protocol_hash=hashlib.sha256(protocol_bytes).hexdigest(), model_id=protocol['model_id'],
                 reasoning_effort=protocol['reasoning_effort'], started_at=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                runtime_snapshot_sha=runtime_hash,
                 client_version=subprocess.check_output([args.codex, '--version'], text=True).strip())
 prompt = protocol['common_prompt'] + '\n\n' + scenario['prompt']
 (destination / 'input.txt').write_text(prompt, encoding='utf-8')
 with (destination / 'server.log').open('wb') as log:
-    server = subprocess.Popen(['node', str(root / 'scripts/authority-pilot-server.mjs'), args.scenario, str(destination)],
+    server = subprocess.Popen(['node', str(runtime / 'scripts/authority-pilot-server.mjs'), args.scenario, str(destination)],
                               cwd=root, env=environment, stdin=subprocess.PIPE, stdout=log, stderr=log)
     try:
         until = time.monotonic() + 45
@@ -58,6 +72,10 @@ with (destination / 'server.log').open('wb') as log:
         # Grant only those tools for this local evaluation process, not PR publication or general MCP writes.
         permitted = ['start_legal_research', 'update_legal_research', 'get_legal_research', 'answer_legal_question',
                      'research_legal_sources', 'run_required_legal_research', 'reuse_legal_evidence', 'review_legal_reasoning']
+        # These pinned tools only retrieve published source material. Missing upstream annotations
+        # otherwise make the client refuse raw lookup before it reaches the server under test.
+        permitted += [t['name'] for t in json.loads((root / 'upstreams/korean-taxlaw-mcp.tools.json').read_text(encoding='utf-8'))]
+        permitted += ['search_law', 'get_law_text', 'search_decisions', 'get_decision_text', 'legal_research', 'check_legal_sources']
         overrides = [value for tool in permitted for value in ['-c', f'mcp_servers.taxlab.tools.{tool}.approval_mode="approve"']]
         command[2:2] = overrides
         metadata['authorized_evaluation_tools'] = permitted

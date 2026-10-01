@@ -17,9 +17,10 @@ export function applyResearchProfiles(input: Plan): Plan {
       if (!issue.required_fact_ids.includes(id)) issue.required_fact_ids.push(id);
     }
     const before = plan.facts.find(f => f.id === 'homes_before_new_acquisition');
-    const knownSingle = before?.status === 'provided' && /^(?:1|1주택|1채)$/.test(before.value?.trim() ?? '');
+    const knownSingle = before?.status === 'provided' && /^(?:정확히\s*)?(?:1|1주택|1채)$/.test(before.value?.trim() ?? '');
     // There is no disposal date to invent for the ordinary one-home -> two-home control.
-    const applicableDates = !knownSingle && /다주택|(?:[3-9]|다른|중간)\s*주택|마지막\s*2주택/.test(plan.query + ' ' + issue.question)
+    // "다른 주택 없이" is a negation, not an observed disposal. Never infer that event from "other" alone.
+    const applicableDates = !knownSingle && /다주택|[3-9]\s*주택|마지막\s*2주택/.test(plan.query + ' ' + issue.question)
       ? [...dates, 'other_homes_disposed'] : dates;
     for (const role of applicableDates) {
       if (!plan.event_dates.some(d => d.role === role)) plan.event_dates.push({ role, value: null, precision: 'unknown', basis: 'unknown', source: '' });
