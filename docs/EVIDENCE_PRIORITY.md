@@ -1,6 +1,6 @@
 # 사건 적용 근거와 해석 충돌 기준
 
-2026-09-28 사용자 합의. 정책: `research-v4-legal-applicability-20260928`.
+2026-09-28 사용자 합의에 2026-10-01 검색·출처 관측 계약을 보완했다. 구현 정책: `research-v5-authority-coverage-20261001`. 배포 여부는 별도 릴리스 증거로 확인한다.
 
 **사건에 적용되는 법령을 기준으로 판례·해석례를 교차 검토한다. 검색 순서는 자유롭고, 근거의 채택에는 적용 이유가 필요하다.**
 
@@ -31,7 +31,7 @@
 | `statutes` | 실제 법령 `citation`, 해당 passage가 속한 unit의 `document_version`을 그대로 쓴 `version`, `date_roles`, 적용 이유 `reason`. 조회 도구 종류, 원문 인용, 관측 버전·식별자, 날짜 역할을 검사한다. |
 | `temporal_application` | 부칙·개정의 적용 관계, `addressed/unresolved`, 이유, 원문 `citations`. 시점 공백과 인용 누락·위조를 검사한다. |
 | `authorities` | 주장·시점·반론 해결·후속 처리에 인용하거나 반론으로 제출한 자료의 `evidence_id`, 종류 `kind`, `applied/analogy/distinguished/unresolved`, 적용 법령 ID 목록, 관련 규정의 동일성, 이유, 후속 처리 검토. 누락·중복·잘못된 참조와 제출 내용 사이의 모순을 검사한다. |
-| `authorities[].subsequent_review` | 심급·확정·파기·판례변경·후속 해석에 관해 확인한 범위, 상태, 이유, 원문 인용. 미확인 상태는 공백이다. |
+| `authorities[].subsequent_review` | 심급·확정·파기·판례변경·후속 해석의 상태·이유와 실제 `search_attempt_ids`, 발견한 후속 원문 인용. 검증된 검색 0건에는 가짜 후속 문서를 요구하지 않는다. 자기 인용만으로 검색 수행을 대신할 수 없다. |
 | `counter_evidence[].resolution_citations` | 반론을 `resolved`로 선언할 때의 원문 근거. 이유만 적고 근거 없이 해결했다고 하면 공백이다. |
 
 `law_version_relation`: `same_rule`(같은 규정), `unchanged_relevant_rule`(개정됐지만 쟁점 규정 유지), `different_rule`(다른 규정), `unverified`(미확인). 다른 규정을 적용 근거로 채택하거나 구별/유추로 분류한 자료를 직접 근거로 쓰는 제출상의 모순은 차단한다.
@@ -42,9 +42,13 @@
 
 ## 검사 범위
 
-자료 종류, 관련 규정 동일성, 채택 이유, 후속 처리의 의미는 **모델의 제출 내용**이다. 서버가 법적 효력을 판정하거나 모든 후속 판례를 찾아냈다고 보증하지 않는다. `structurally_complete`는 제출된 연결의 구조 검사이며 `legal_verification=unverified`, `semantic_support=unverified`를 유지한다. 이 도구를 호출하지 않은 LLM 답변도 감시하지 않는다.
+기관·법원·문서 종류는 서버가 제공자 필드와 원문 머리말에서 관측하고 모델의 `kind`와 대조한다. 관측 필드의 충돌이나 미상은 공백이다. 관련 규정 동일성, 채택 이유, 후속 처리의 법률적 의미는 **모델의 제출 내용**이다. 서버가 법적 효력을 판정하거나 모든 후속 판례를 찾아냈다고 보증하지 않는다. `structurally_complete`는 제출된 연결의 구조 검사이며 `legal_verification=unverified`, `semantic_support=unverified`를 유지한다. 이 도구를 호출하지 않은 LLM 답변도 감시하지 않는다.
 
 부칙 인용이 있다는 것과 그 부칙을 올바르게 적용했다는 것은 별개다. 원문과 버전이 맞더라도 잘못된 법리 적용 가능성은 남는다. 의미 판단을 독립 검수한 것으로 표시하지 않는다.
+
+실제 법령 조문을 연구에 확보한 뒤 `run_required_legal_research`가 정해진 중립·반대 판례, 세법 해석·심판·심사, 후속·개정 조회를 한 번에 최대 4단계 진행한다. 남은 페이지·오류·필수 후보 원문 누락은 완료가 아니다. 새 요청에는 새 `request_id`, 유실한 같은 요청 확인에는 같은 ID를 쓴다. `pending=true`이면 기존 작업이 진행 중이므로 새 작업을 중복 시작하지 않는다.
+
+계획·사실 변경은 이전 검수의 효력을 무효화한다. `reuse_legal_evidence`로 완전한 manifest의 원문을 현재 revision에 재연결할 수 있지만 최초 조회 시각은 유지되며 현재 검색·적용 검토가 새로 필요하다. 자세한 실행·예산·검증 계약은 [개선 계획](AUTHORITY_COVERAGE_REMEDIATION_PLAN.md)을 따른다.
 
 ## 근거와 구현
 

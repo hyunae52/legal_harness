@@ -23,7 +23,7 @@ const assessment = (trackId, issueId, evidenceId, status = 'supported') => ({
   track_id: trackId, status, reason: '고정 근거로 처리', fact_ids: [`fact_${issueId}`], evidence_ids: [evidenceId],
 });
 const run = (plan, scopeAssessments, evidence = [], attempts = [], findings = []) => inspectScopeCompletion(
-  { analysis: plan.issues.map(item => analysis(item.id)), scope_assessments: scopeAssessments }, plan, evidence, attempts, findings);
+  { expected_revision: 1, analysis: plan.issues.map(item => analysis(item.id)), scope_assessments: scopeAssessments }, plan, evidence, attempts, findings);
 
 test('scope state variants keep question completion separate from declared-scope completion', () => {
   const reqEvidence = receipt(1, 'req');

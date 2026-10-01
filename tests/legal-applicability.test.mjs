@@ -4,17 +4,21 @@ import { adaptResearchEvidence } from '../dist/researchEvidence.js';
 import { inspectResearch } from '../dist/researchReview.js';
 import { researchSchemas, researchTools } from '../dist/researchContracts.js';
 
+import { genericSearchAttempts } from './fixtures/generic-searches.mjs';
+
 const lid = '00000000-0000-4000-8000-000000000001';
 const aid = '00000000-0000-4000-8000-000000000002';
 const cid = '00000000-0000-4000-8000-000000000003';
 const lawText = '합성법의 공동취득 요건. 부칙: 이 규정은 2020년 이후 양도분부터 적용한다.';
 const caseText = '합성 판결은 2020년 규정과 공동취득 사실에 관하여 판단한다.';
 const citation = (evidence_id, quote) => ({ evidence_id, passage_id: 'p1', quote, relation: 'direct', reason: '합성 원문과 적용 이유' });
-const receipt = (evidence_id, tool, body, purpose, args = {}) => ({
+const receipt = (evidence_id, tool, body, purpose, args = {}) => {
+  if (body.structuredContent?.document) Object.assign(body.structuredContent.document, { documentType: '질의회신', issuingAgency: '국세청', documentNumber: body.structuredContent.document.ntstDcmId });
+  return ({
   ...adaptResearchEvidence(tool, args, { server: { name: 'fixture', version: '1' }, result: body }),
   evidence_id, revision: 1, issue_ids: ['cost'], purpose, tool, arguments_hash: 'fixture',
   observed_at: '2026-09-28T00:00:00Z', expires_at: '2026-09-28T00:30:00Z',
-});
+}); };
 function scenario() {
   const evidence = [
     receipt(lid, 'get_law_text', { content: [{ type: 'text', text: '법령명: 합성법\n시행일: 20200101\n제1조(공동취득)\n' + lawText }] }, 'timing', { mst: '100' }),
@@ -38,16 +42,26 @@ function scenario() {
         authorities: [authority(aid, 'applied'), authority(cid, 'distinguished')],
       },
     }] };
-  return { input, plan, evidence, run() { return inspectResearch(this.input, this.plan, this.evidence, []); } };
+  return { input, plan, evidence, searches: true, run() {
+    const attempts = this.attempts ??= this.searches ? genericSearchAttempts(['case-1', 'case-2', 'case-3']) : [];
+    for (const a of this.input.analysis[0].legal_basis?.authorities ?? []) {
+      if (a.subsequent_review.search_attempt_ids !== undefined) continue;
+      const number = this.evidence.find(e => e.evidence_id === a.evidence_id)?.identity?.document_number;
+      a.subsequent_review.search_attempt_ids = attempts.filter(t => t.search.query === number || t.search.query === number + ' 변경').map(t => t.attempt_id);
+    }
+    this.attempts ??= attempts;
+    return inspectResearch(this.input, this.plan, this.evidence, this.searches ? this.attempts : []);
+  } };
 }
 const codes = r => r.findings.map(f => f.code);
 function incomplete(s) {
   Object.assign(s.input.analysis[0], { conclusion_mode: 'conditional', unknowns: ['합성 적용관계 미확인'], next_queries: ['추가 원문과 적용 관계 확인'] });
 }
 
-test('AP-01: a later interpretation of the applicable old law is allowed, never legally certified', () => {
-  const s = scenario(), r = s.run();
-  assert.equal(r.status, 'structurally_complete');
+test('AP-01: statutes and administrative interpretations alone cannot establish search coverage', () => {
+  const s = scenario(); s.searches = false; const r = s.run();
+  assert.equal(r.status, 'blocked');
+  assert.ok(codes(r).includes('REQUIRED_SEARCH_INCOMPLETE'));
   assert.equal(r.legal_verification, 'unverified');
   assert.equal(researchSchemas.review_legal_reasoning.safeParse(s.input).success, true);
 });
@@ -71,7 +85,7 @@ for (const [name, mutate, code] of [
   ['different rule as direct support', a => { a.legal_basis.authorities[0].law_version_relation = 'different_rule'; }, 'AUTHORITY_LAW_CONTRADICTION'],
   ['dismissed source as direct support', a => { a.legal_basis.authorities[0].disposition = 'distinguished'; }, 'AUTHORITY_DISPOSITION_CONTRADICTION'],
   ['unresolved subsequent ruling', a => { a.legal_basis.authorities[0].subsequent_review.status = 'unresolved'; }, 'SUBSEQUENT_TREATMENT_UNRESOLVED'],
-  ['missing subsequent source', a => { a.legal_basis.authorities[0].subsequent_review.citations = []; }, 'SUBSEQUENT_SOURCE_REQUIRED'],
+  ['missing subsequent search', a => { a.legal_basis.authorities[0].subsequent_review.search_attempt_ids = []; }, 'SUBSEQUENT_SEARCH_REQUIRED'],
   ['duplicate authority', a => { a.legal_basis.authorities.push(structuredClone(a.legal_basis.authorities[0])); }, 'DUPLICATE_AUTHORITY'],
   ['unknown law reference', a => { a.legal_basis.authorities[0].statute_evidence_ids = [cid]; }, 'AUTHORITY_STATUTE_REFERENCE'],
   ['resolved counter without evidence', a => { a.counter_evidence[0].disposition = 'resolved'; }, 'COUNTER_RESOLUTION_SOURCE_REQUIRED'],

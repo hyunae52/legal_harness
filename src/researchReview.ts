@@ -3,8 +3,13 @@ import type { ReviewInput, Plan, CitationInput } from './researchContracts.js';
 import type { ResearchAttempt, ResearchEvidence } from './researchEvidence.js';
 import { inspectScopeCompletion } from './scopeCompletion.js';
 import { inspectLegalApplicability } from './legalApplicability.js';
+import { researchCoverage, candidateGaps, isCoverageComplete, type CandidateLedger } from './researchCoverage.js';
 
-export function inspectResearch(input: ReviewInput, plan: Plan, evidence: ResearchEvidence[], attempts: ResearchAttempt[]) {
+export function inspectResearch(input: ReviewInput, plan: Plan, evidence: ResearchEvidence[], attempts: ResearchAttempt[], ledger?: CandidateLedger) {
+  const core = input.analysis.flatMap(a => [...a.claims.flatMap(c => c.citations.filter(c => c.relation !== 'background').map(c => c.evidence_id)),
+    ...(a.legal_basis?.authorities.filter(a => a.disposition === 'applied' || a.disposition === 'analogy').map(a => a.evidence_id) ?? [])]);
+  const coverage = researchCoverage(plan, input.expected_revision, evidence, attempts, ledger, undefined, core);
+  evidence = evidence.filter(e => e.revision === input.expected_revision);
   const findings: { code: string; severity: 'blocked' | 'needs_info'; issue_id?: string; detail: string }[] = [];
   const citationChecks: Record<string, unknown>[] = [];
   const add = (code: string, severity: 'blocked' | 'needs_info', detail: string, issue_id?: string) => findings.push({ code, severity, detail, ...(issue_id ? { issue_id } : {}) });
@@ -19,13 +24,17 @@ export function inspectResearch(input: ReviewInput, plan: Plan, evidence: Resear
     const beginning = findings.length;
     const block = (code: string, detail: string) => add(code, 'blocked', detail, issue.id);
     const gap = (code: string, detail: string) => add(code, 'needs_info', detail, issue.id);
+    for (const item of coverage.preparation_gaps.filter(g => g.issue_id === issue.id)) gap(item.code, '실제 법령 조문 앵커 또는 지원하는 조회 경로를 확보하세요.');
+    const obligations = coverage.obligations.filter(o => o.issue_id === issue.id);
+    if (!obligations.length || obligations.some(o => !isCoverageComplete(o))) gap('REQUIRED_SEARCH_INCOMPLETE', '필수 자료군·후속/개정 조회 범위가 미완료입니다. coverage를 확인하세요.');
+    for (const item of candidateGaps(coverage, analysis)) gap(item.code, item.detail);
     for (const factId of issue.required_fact_ids) {
       const fact = plan.facts.find(f => f.id === factId)!;
       if (fact.status !== 'provided') gap('REQUIRED_FACT_UNCONFIRMED', `${factId}: ${fact.description} (${fact.status})`);
     }
     // A successful current unit cannot erase failed roles in the same lookup,
     // including receipts that the model does not cite in its claims.
-    for (const receipt of evidence.filter(e => e.issue_ids.includes(issue.id))) {
+    for (const receipt of coverage.effective_evidence.filter(e => e.issue_ids.includes(issue.id))) {
       for (const unit of receipt.units) {
         const detail = `${receipt.evidence_id}: ${unit.role} (${unit.date ?? 'unknown'})`;
         if (unit.source_access === 'unavailable') gap('UNAVAILABLE_SOURCE_ROLE', detail);
@@ -84,13 +93,14 @@ export function inspectResearch(input: ReviewInput, plan: Plan, evidence: Resear
       if (counter.disposition === 'resolved' && !counter.resolution_citations?.length) gap('COUNTER_RESOLUTION_SOURCE_REQUIRED', counter.evidence_id);
       for (const citation of counter.resolution_citations ?? []) checkCitation(citation, 'counter_resolution');
     }
-    const counters = evidence.filter(e => e.purpose === 'counter' && e.issue_ids.includes(issue.id));
-    if (!counters.length) gap('COUNTER_RESEARCH_REQUIRED', '반대 자료를 확인하세요. 0건이나 실패는 반례 부재의 증명이 아닙니다.');
+    const counters = coverage.effective_evidence.filter(e => e.purpose === 'counter' && e.issue_ids.includes(issue.id) && e.body_scope !== 'discovery_only');
+    const counterSearch = obligations.filter(o => o.purpose === 'counter');
+    if (!counterSearch.length || counterSearch.some(o => !isCoverageComplete(o))) gap('COUNTER_RESEARCH_REQUIRED', '반대 검색 수행 범위를 확인하세요. 정상 0건은 반례 부재의 증명이 아닙니다.');
     for (const counter of counters) if (!counterIds.includes(counter.evidence_id)) gap('COUNTER_NOT_ADDRESSED', counter.evidence_id);
-    for (const attempt of attempts.filter(a => a.revision === input.expected_revision && a.issue_ids.includes(issue.id) && ['failed', 'empty', 'pending'].includes(a.status))) {
+    for (const attempt of coverage.incomplete_attempts.filter(a => a.issue_ids.includes(issue.id))) {
       gap('SEARCH_INCOMPLETE', `${attempt.attempt_id}: ${attempt.status}; ${attempt.error_code ?? '추가 확인 필요'}`);
     }
-    inspectLegalApplicability(analysis, issue, plan, evidence, checkCitation, block, gap);
+    inspectLegalApplicability(analysis, issue, plan, evidence, checkCitation, block, gap, coverage);
     const usedDateRoles = new Set([...issue.required_date_roles, ...analysis.timing.date_roles,
       ...(analysis.legal_basis?.statutes.flatMap(s => s.date_roles) ?? [])]);
     for (const role of usedDateRoles) {
@@ -106,7 +116,7 @@ export function inspectResearch(input: ReviewInput, plan: Plan, evidence: Resear
     if (hasGaps && analysis.conclusion_mode === 'definitive') block('DEFINITIVE_WITH_GAPS', '필요한 사실·근거·시점·반론의 공백이 남아 확정 결론과 모순됩니다.');
     if (hasGaps && analysis.conclusion_mode !== 'definitive' && (!analysis.unknowns.length || !analysis.next_queries.length)) block('GAPS_NOT_EXPLAINED', '조건부/유보 답변에 미확인점과 다음 질문·검색을 적으세요.');
   }
-  const scopeCompletion = inspectScopeCompletion(input, plan, evidence, attempts, findings);
+  const scopeCompletion = inspectScopeCompletion(input, plan, evidence, attempts, findings, coverage);
   const { findings: scopeFindings, ...scopeStatus } = scopeCompletion;
   findings.push(...scopeFindings);
   return { status: findings.some(f => f.severity === 'blocked') ? 'blocked' : findings.length ? 'needs_info' : 'structurally_complete',
@@ -114,6 +124,7 @@ export function inspectResearch(input: ReviewInput, plan: Plan, evidence: Resear
     question_scope_complete: scopeCompletion.question_scope_complete,
     declared_scope_review_complete: scopeCompletion.declared_scope_review_complete,
     scope_completion: scopeStatus,
+    coverage: { ...coverage, effective_evidence: undefined },
     draft_hash: digest(input.draft_answer), analysis_hash: digest(input.analysis),
     scope_assessment_hash: digest(input.scope_assessments ?? null),
     legal_verification: 'unverified', semantic_support: 'unverified', independent_review: 'not_performed',

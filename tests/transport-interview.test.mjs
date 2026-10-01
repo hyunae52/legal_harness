@@ -152,7 +152,7 @@ test('TI-05/06/07: one question, reuse known facts, revision bound answers and c
   assert.equal(updated.body.interview.next_question.target.id, 'amount');
 });
 
-test('TI-06/07: answers reject busy/stale state and do not replenish attempts or preserve old receipts', async t => {
+test('TI-06/07: answers reject busy/stale state and retain observation history without replenishing attempts', async t => {
   const pending = Promise.withResolvers(); let entered = false;
   t.after(() => pending.resolve());
   const f = await fixture(t, { operation: async () => { entered = true; await pending.promise; } });
@@ -165,9 +165,10 @@ test('TI-06/07: answers reject busy/stale state and do not replenish attempts or
   assert.equal((await ask(f, 'answer', oldAnswer)).body.code, 'RESEARCH_BUSY');
   pending.resolve(); state = (await read).body;
   assert.equal((await ask(f, 'answer', oldAnswer)).body.code, 'RESEARCH_STATE_CHANGED');
-  assert.ok(state.evidence.length);
+  assert.equal(state.attempts.length, 1);
+  assert.equal(state.attempts[0].search.status, 'partial');
   const next = (await ask(f, 'answer', answer(state, oldAnswer.answer))).body;
-  assert.deepEqual(next.evidence, []); assert.equal(next.last_review, null);
+  assert.deepEqual(next.attempts, state.attempts); assert.equal(next.last_review, null);
   assert.equal(next.remaining_attempts, state.remaining_attempts);
   assert.equal(next.expires_at, state.expires_at);
 });
@@ -332,7 +333,7 @@ test('TI-06: concurrent different answers apply once; ignored response recovers 
   assert.deepEqual((await ask(f, 'status', { research_id: state.research_id })).body, snapshot);
 });
 
-test('TI-04: every source entry shares one lookup debit; rejected research creates no attempt', async t => {
+test('TI-04: every source step shares one lookup debit; rejected step is recorded without upstream work', async t => {
   let now = 0, checked = 0;
   const f = await fixture(t, { resourceOptions: { now: () => now, limits: { lookupRpm: 1, actorLookupRpm: 1 } },
     sources: { check: async () => { checked++; return {}; }, close: async () => {} } });
@@ -340,11 +341,15 @@ test('TI-04: every source entry shares one lookup debit; rejected research creat
   const read = { research_id: state.research_id, expected_revision: state.revision,
     issue_ids: ['cost'], purpose: 'support', tool: 'search_law', arguments: { query: '합성' } };
   assert.equal((await ask(f, 'retrieve', read)).status, 200); assert.equal(f.calls(), 1, 'one allowed call must not be double charged');
-  assert.equal((await ask(f, 'retrieve', read)).status, 429);
+  const rejected = await ask(f, 'retrieve', read);
+  assert.equal(rejected.status, 200);
+  assert.equal(rejected.body.job.status, 'failed');
+  assert.equal(rejected.body.attempts.at(-1).error_code, 'LOOKUP_RATE_LIMIT');
+  assert.equal(rejected.body.pending, false);
   assert.equal((await f.request('/api/sources/check', {})).status, 429);
   const denied = await f.request('/mcp', rpc('check_legal_sources'));
   assert.match(denied.body.result.content[0].text, /LOOKUP_RATE_LIMIT/);
-  assert.equal((await ask(f, 'status', { research_id: state.research_id })).body.attempts.length, 1);
+  assert.equal((await ask(f, 'status', { research_id: state.research_id })).body.attempts.length, 2);
   assert.equal(f.calls(), 1); assert.equal(checked, 0);
   now = 60_001;
   assert.equal((await f.request('/api/sources/check', {})).status, 200); assert.equal(checked, 1);

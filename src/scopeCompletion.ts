@@ -1,5 +1,6 @@
 import type { Plan, ReviewInput, ScopeAssessmentInput } from './researchContracts.js';
 import type { ResearchAttempt, ResearchEvidence } from './researchEvidence.js';
+import { researchCoverage, type Coverage } from './researchCoverage.js';
 
 type Finding = { code: string; severity: 'blocked' | 'needs_info'; issue_id?: string; detail: string };
 type Track = NonNullable<Plan['scope_review']>['tracks'][number];
@@ -8,7 +9,7 @@ const closedStatuses = new Set<ScopeAssessmentInput['status']>(['supported', 'ex
 const unique = (values: string[]) => new Set(values).size === values.length;
 
 export function inspectScopeCompletion(input: ReviewInput, plan: Plan, evidence: ResearchEvidence[],
-  attempts: ResearchAttempt[], existingFindings: Finding[]) {
+  attempts: ResearchAttempt[], existingFindings: Finding[], coverage = researchCoverage(plan, input.expected_revision, evidence, attempts)) {
   const scope = plan.scope_review;
   if (!scope) return {
     status: 'not_configured' as const, question_scope_complete: false,
@@ -70,8 +71,7 @@ export function inspectScopeCompletion(input: ReviewInput, plan: Plan, evidence:
       if (!analysis || analysis.conclusion_mode !== 'definitive') invalidate('closed_status_requires_definitive_issue_analysis');
       if (existingFindings.some(finding => !finding.issue_id)) invalidate('review_has_global_findings');
       if (issueId && existingFindings.some(finding => finding.issue_id === issueId)) invalidate('issue_has_unresolved_review_findings');
-      if (issueId && attempts.some(attempt => attempt.issue_ids.includes(issueId)
-        && ['failed', 'empty', 'pending'].includes(attempt.status))) invalidate('issue_has_incomplete_retrieval');
+      if (issueId && coverage.incomplete_attempts.some(attempt => attempt.issue_ids.includes(issueId))) invalidate('issue_has_incomplete_retrieval');
       closed = reasons.length === 0;
     }
     if (!closed && !closedStatuses.has(assessment.status)) {

@@ -44,7 +44,10 @@ export function createApp(options: Options) {
   const maxTransportsPerActor = positiveLimit(env.TAXLAB_MAX_TRANSPORTS_PER_ACTOR, 5);
   const auth = options.authenticate ?? createAuthenticator(env, fetch, publicAccess);
   const gates = options.gates ?? new GateEngine();
-  const research = new ResearchService(options.law, options.sources ? input => options.sources!.check(input) : undefined, options.researchOptions);
+  const research = new ResearchService(options.law, options.sources ? input => options.sources!.check(input) : undefined, {
+    ...options.researchOptions, limits: { ...options.researchOptions?.limits, yieldMs: Math.max(1, Math.min(40_000, budgets.limits.responseMs - 1000)) },
+    beforeSourceCall: actor => { budgets.consume(actor, 'lookup'); options.researchOptions?.beforeSourceCall?.(actor); },
+  });
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json({ limit: '256kb' }));
@@ -114,7 +117,6 @@ export function createApp(options: Options) {
     return options.failures.submit(actor, input);
   };
   const runResearch = async (name: ResearchTool, actor: Actor, input: unknown) => {
-    if (name === 'research_legal_sources') budgets.consume(actor, 'lookup');
     const scoped = publicAccess.scope(actor, input, name === 'start_legal_research');
     assertNoPublicSession(scoped.input);
     return publicAccess.result(await research.run(name, scoped.actor, scoped.input), scoped.token);
