@@ -1,0 +1,86 @@
+{
+  "status": "fidelity_recovery_local_preflight_pass_not_release_approval",
+  "date_kst": "2026-10-02",
+  "parent_commit": "3517c432d6efb8f0b5ca50b5356fde8f03e09830",
+  "source_tree_sha256": "5f03e225e80a3571ca4f027cb57d151b27eb23b34d21ff3b3b1a427104b8fcc2",
+  "source_digest_method": "sorted src/*.ts, Windows relative path UTF-8 + NUL + raw file bytes",
+  "policy": "research-v8-adopted-documents-20261002",
+  "response_contract": "research-response-v3-fidelity-20261002",
+  "tests_added": 8,
+  "baseline_red": {
+    "commit": "3517c432d6efb8f0b5ca50b5356fde8f03e09830",
+    "total": 8,
+    "failed_for_missing_contract": 7,
+    "existing_positive_control": 1
+  },
+  "focused_green": {
+    "total": 8,
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0
+  },
+  "full_review": {
+    "total": 342,
+    "passed": 342,
+    "failed": 0,
+    "skipped": 0
+  },
+  "package_install": {
+    "status": "pass",
+    "checks": 9,
+    "artifact_sha256": "9dd4fda4b40ae352245c17ab44b81f320a9f22ec76bb215d05a4a984fc0db1ae",
+    "is_ci_or_deploy_artifact": false
+  },
+  "red_evidence_limits": [
+    "Initial low response-byte fixture blocked SDK initialization before cleanup registration. Corrected fixture registers cleanup first and sends the size-boundary call directly over real stateless HTTP. The incomplete diagnostic runs are retained, not used as final RED evidence.",
+    "A definitive synthetic review with incomplete mandatory search is blocked, not needs_info (DEFINITIVE_WITH_GAPS). Corrected that fixture expectation and reran the final unchanged tests on isolated baseline 3517c43 and the implementation.",
+    "The upstream thrown-error redaction case already passed on baseline; it is a preserved positive control, not a newly fixed defect."
+  ],
+  "visibility_probe": {
+    "client": "codex-cli 0.159.0",
+    "model": "gpt-5.6-sol",
+    "reasoning": "xhigh",
+    "exit_code": 0,
+    "source_calls": 1,
+    "source_content_has_values": false,
+    "structured_source_matches": true,
+    "answer_contains_exact_fields": true,
+    "logs": {
+      "answer.txt": "ec9d187597bc4ab7fa02ac60ea20279f83ae510600f463ea211cfb01af7b8d62",
+      "expected.json": "da668a039416c8eb19aa17149eae0593fa24d67d07adb170c73933809d183570",
+      "input.txt": "64b57ab10feaa2a8b84061defb1a63dbdbf601daf7bd1a3405131f9d5666469c",
+      "mcp.jsonl": "0922ae1453f1b74f3e1e9be21f02394fc3f0b26ed0b7fe8342eb19869b79c43b",
+      "model-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "model-trace.jsonl": "4819e914f79dc6d25a43f66185b5b3c3fcf4a849171fbd58b0cc41e6148e6125",
+      "ready.json": "fcc4f36f9b014343c91f46871981deb49ee9c1986ef2bdd1b5520cb6d5671ae5",
+      "server.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "scope": "structured-only raw document visibility in this client; not legal accuracy or all-client certification",
+    "passed": true
+  },
+  "logs": [
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/fidelity-baseline-red-2.log",
+      "sha256": "df986818d243a255f9c17fa89b687d919d25eb1077c7a2baa2ecbfe8434d37c8"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/fidelity-focused-green-2.log",
+      "sha256": "2a580209267908b272ba609d304cd20558dc08fa2dcf15ced95fe2a607b32a5b"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/fidelity-full-review-1.log",
+      "sha256": "fc8cd664b2f2e73798cbff2c81ca764bdecad9263504e1a5b5231124b769510b"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/fidelity-package-1.log",
+      "sha256": "7c9a6eb920db53ffd3ff512becb6d2ef660950e21243a7d6071ca97a82b8058e"
+    }
+  ],
+  "sss_plan_review": "docs/reviews/AUTHORITY_FIDELITY_RECOVERY_SSS_PLAN_2026-10-02.txt",
+  "sss_code_review": "pending",
+  "model_evaluation": "not_started",
+  "next_batch": "pilot-o",
+  "protocol_sha256": "e2ae3e76f410d850b274116776c8fa8c37f4186b2274e79275360a05682429dd",
+  "prior_batch": "pilot-n: 21/24; all original failures retained",
+  "production_deployment": "not_started"
+}

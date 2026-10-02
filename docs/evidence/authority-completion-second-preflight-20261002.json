@@ -1,0 +1,327 @@
+{
+  "status": "second_preflight_pass_not_release_approval",
+  "date_kst": "2026-10-02",
+  "fixed_after_frozen_batch": "pilot-j",
+  "trigger_commit": "3eab92ce8460670517cbd845b4ab7fd1d35e0d5a",
+  "changes": [
+    "Only actual necessity/scope changes duplicate requirement snapshots; every revision event and full-array hashes remain.",
+    "Observed decision date labels the judicial document version, never a statute effective date; missing date remains unknown."
+  ],
+  "full_review": {
+    "total": 306,
+    "passed": 306,
+    "failed": 0,
+    "skipped": 0
+  },
+  "package_install": {
+    "checks": 9,
+    "status": "pass",
+    "artifact_sha256": "6de35ff890cbbe64c0c1729be297b7f611eb7f9960777b2c8fb0cfff37c3fdd7"
+  },
+  "history_red_replay": [
+    {
+      "tool": "start_legal_research",
+      "revision": 1,
+      "facts": 9,
+      "dates": 5,
+      "issues": 3,
+      "requirements": 29,
+      "history_events": 0,
+      "history_bytes": 2
+    },
+    {
+      "tool": "answer_legal_question",
+      "revision": 2,
+      "facts": 9,
+      "dates": 5,
+      "issues": 3,
+      "requirements": 29,
+      "history_events": 1,
+      "history_bytes": 36196,
+      "last_history_changes": 29,
+      "semantic_changes_ignoring_revision": 0
+    },
+    {
+      "tool": "answer_legal_question",
+      "revision": 3,
+      "facts": 9,
+      "dates": 5,
+      "issues": 3,
+      "requirements": 29,
+      "history_events": 2,
+      "history_bytes": 72391,
+      "last_history_changes": 29,
+      "semantic_changes_ignoring_revision": 0
+    },
+    {
+      "tool": "answer_legal_question",
+      "revision": 4,
+      "facts": 9,
+      "dates": 5,
+      "issues": 3,
+      "requirements": 29,
+      "history_events": 3,
+      "history_bytes": 108586,
+      "last_history_changes": 29,
+      "semantic_changes_ignoring_revision": 0
+    },
+    {
+      "tool": "answer_legal_question",
+      "revision": 5,
+      "facts": 9,
+      "dates": 5,
+      "issues": 3,
+      "requirements": 29,
+      "history_events": 4,
+      "history_bytes": 144781,
+      "last_history_changes": 29,
+      "semantic_changes_ignoring_revision": 0
+    },
+    {
+      "tool": "answer_legal_question",
+      "revision": 6,
+      "facts": 9,
+      "dates": 5,
+      "issues": 3,
+      "requirements": 29,
+      "history_events": 5,
+      "history_bytes": 180976,
+      "last_history_changes": 29,
+      "semantic_changes_ignoring_revision": 0
+    },
+    {
+      "tool": "answer_legal_question",
+      "revision": 7,
+      "facts": 9,
+      "dates": 5,
+      "issues": 3,
+      "requirements": 29,
+      "history_events": 6,
+      "history_bytes": 217171,
+      "last_history_changes": 29,
+      "semantic_changes_ignoring_revision": 0
+    },
+    {
+      "tool": "answer_legal_question",
+      "error_code": "RESEARCH_CAPACITY",
+      "capacity_reason": "ledger_bytes"
+    }
+  ],
+  "history_green_replay": [
+    {
+      "tool": "start_legal_research",
+      "revision": 1,
+      "facts": 9,
+      "dates": 5,
+      "issues": 3,
+      "requirements": 29,
+      "history_events": 0,
+      "history_bytes": 2
+    },
+    {
+      "tool": "answer_legal_question",
+      "revision": 2,
+      "facts": 9,
+      "dates": 5,
+      "issues": 3,
+      "requirements": 29,
+      "history_events": 1,
+      "history_bytes": 302,
+      "last_history_changes": 0,
+      "semantic_changes_ignoring_revision": 0
+    },
+    {
+      "tool": "answer_legal_question",
+      "revision": 3,
+      "facts": 9,
+      "dates": 5,
+      "issues": 3,
+      "requirements": 29,
+      "history_events": 2,
+      "history_bytes": 603,
+      "last_history_changes": 0,
+      "semantic_changes_ignoring_revision": 0
+    },
+    {
+      "tool": "answer_legal_question",
+      "revision": 4,
+      "facts": 9,
+      "dates": 5,
+      "issues": 3,
+      "requirements": 29,
+      "history_events": 3,
+      "history_bytes": 904,
+      "last_history_changes": 0,
+      "semantic_changes_ignoring_revision": 0
+    },
+    {
+      "tool": "answer_legal_question",
+      "revision": 5,
+      "facts": 9,
+      "dates": 5,
+      "issues": 3,
+      "requirements": 29,
+      "history_events": 4,
+      "history_bytes": 1205,
+      "last_history_changes": 0,
+      "semantic_changes_ignoring_revision": 0
+    },
+    {
+      "tool": "answer_legal_question",
+      "revision": 6,
+      "facts": 9,
+      "dates": 5,
+      "issues": 3,
+      "requirements": 29,
+      "history_events": 5,
+      "history_bytes": 1506,
+      "last_history_changes": 0,
+      "semantic_changes_ignoring_revision": 0
+    },
+    {
+      "tool": "answer_legal_question",
+      "revision": 7,
+      "facts": 9,
+      "dates": 5,
+      "issues": 3,
+      "requirements": 29,
+      "history_events": 6,
+      "history_bytes": 1807,
+      "last_history_changes": 0,
+      "semantic_changes_ignoring_revision": 0
+    },
+    {
+      "tool": "answer_legal_question",
+      "revision": 8,
+      "facts": 9,
+      "dates": 5,
+      "issues": 3,
+      "requirements": 29,
+      "history_events": 7,
+      "history_bytes": 2108,
+      "last_history_changes": 0,
+      "semantic_changes_ignoring_revision": 0
+    }
+  ],
+  "bounded_old_failure_replay": {
+    "status": "pass",
+    "kind": "bounded_service_replay_not_model_evaluation",
+    "recorded_at": "2026-10-01T16:25:17.651Z",
+    "source_capture": "Old MCP stored passages are exact; provider headings/envelope are reconstructed and their hashes are not claimed as original responses.",
+    "limitation": "Replays only the observed binding and necessity-state paths. Does not prove whole-run completion, semantic correctness, or model behavior.",
+    "runs": [
+      {
+        "run": "remaining_two_homes-1",
+        "source_log_sha256": "051dfa6d94a3383307f8b7244e46ffd0a1fc8e832171a8e595670f1cb1e3de30",
+        "saved_passage_sha256": [
+          "45d5b72083876961db7a506f8597bcf951fa08e6414a2b0d015baab670edde53"
+        ],
+        "issue_ids": [
+          "I1",
+          "I2",
+          "I3"
+        ],
+        "original_context_preserved": true,
+        "provider_calls": 1,
+        "summary_bytes": 7435,
+        "ledger_bytes": 13111,
+        "metadata_limit_unchanged": 262144,
+        "passage_text_exact": true,
+        "observation_time_preserved": true
+      },
+      {
+        "run": "subsequent_change-3",
+        "source_log_sha256": "4a567251cdfc972c5c7e872b9bf09366e8c65741b0af465a50a6ebf337f394ab",
+        "saved_passage_sha256": [
+          "ed8a41ee7389a3ca87eb76ede004036eaf4828218c23ad8d780ad5f5a3f5052c",
+          "f1cc11dd2ef0bc57755d851555ba3caa1f76bf9d18c6b44faf043fa01ea92af0"
+        ],
+        "passage_text_exact": true,
+        "initial_necessity": "unresolved",
+        "unknown_fact_preserved": true,
+        "provider_calls": 1,
+        "revision_preserved": true,
+        "observations_preserved": true,
+        "unsupported_question_not_issued": true,
+        "assessed_necessity": "not_required_for_question"
+      }
+    ]
+  },
+  "logs": [
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/completion-history-red.log",
+      "sha256": "e81a3e01d761360d854842c07672f0ef0c3547e2a42e52e3ec55d727d33bd0a3"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/completion-history-green.log",
+      "sha256": "ae4b412d41e1e990e595150647190dc677976eaf09f09dfc37301de39383a6f9"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/completion-history-red-replay.json",
+      "sha256": "70a1073b406afcb7a8a0b1d62f25d246f340a11c45c0514cfa9d64f46085831c"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/completion-history-green-replay.json",
+      "sha256": "f2a85dee12b7220a47de12f54f541618ba710dacab15a985f746ba36299b37ae"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/completion-decision-version-red.log",
+      "sha256": "32cf69dc1bc399639776c3c350d65998b3f37a23fe886dac079a5350251a585d"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/completion-decision-version-green.log",
+      "sha256": "cebf950d82664e52567f5c062308c1ff0d0d3aabd1c474347b98c64e6aa92be6"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/completion-full-review-4.log",
+      "sha256": "2bda54afaeaedae8aad42b56e5888f63ef2ae740588c0daa332c7d7caab5ca71"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/completion-package-2.log",
+      "sha256": "db67b6eba2a6b73018988f74e5d9e515ca7449c293293161314054ffb4dff826"
+    }
+  ],
+  "cancelled_batch": {
+    "batch": "pilot-j",
+    "release_evidence": false,
+    "finished_runs_preserved": [
+      {
+        "scenario": "amended_rule",
+        "repetition": 1,
+        "exit_code": 0,
+        "source_sha": "9827a4ed669683c704f76596d9c989caa49b3d61d4e088f2b4d3397a98714507",
+        "runtime_snapshot_sha": "8679504deec0b4861fb917dcdfd726944fd4908f8f3c42c23bd46efad20aabc5",
+        "answer.txt_sha256": "0a03ee2bcd8fd54ea44c29b3b518cafde613ac6bf064204f59a33aa4d86df36f"
+      },
+      {
+        "scenario": "ordinary_two_homes",
+        "repetition": 1,
+        "exit_code": 0,
+        "source_sha": "9827a4ed669683c704f76596d9c989caa49b3d61d4e088f2b4d3397a98714507",
+        "runtime_snapshot_sha": "8679504deec0b4861fb917dcdfd726944fd4908f8f3c42c23bd46efad20aabc5",
+        "answer.txt_sha256": "9e273e1a3625a27caaa545c8beb2bb6803cc4a3337b32c99aa683f0adc9a0e6e"
+      },
+      {
+        "scenario": "remaining_two_homes",
+        "repetition": 1,
+        "exit_code": 0,
+        "source_sha": "9827a4ed669683c704f76596d9c989caa49b3d61d4e088f2b4d3397a98714507",
+        "runtime_snapshot_sha": "8679504deec0b4861fb917dcdfd726944fd4908f8f3c42c23bd46efad20aabc5",
+        "answer.txt_sha256": "b7150a02aacc5b11fce3727129eb3376ea7169b8b5dc6fce9c1e7510b271f211"
+      },
+      {
+        "scenario": "subsequent_change",
+        "repetition": 1,
+        "exit_code": 0,
+        "source_sha": "9827a4ed669683c704f76596d9c989caa49b3d61d4e088f2b4d3397a98714507",
+        "runtime_snapshot_sha": "8679504deec0b4861fb917dcdfd726944fd4908f8f3c42c23bd46efad20aabc5",
+        "answer.txt_sha256": "72b6d7b19a55c73aee267d7e6f54bb33ccddb40fac5b0e320fad43a6a9f7909e"
+      }
+    ],
+    "scheduler_note": "CANCELLED sentinel recorded before source fixes. Started trials used immutable snapshots until exit; queued trials did not start. Original coordinator also exited 1 on its frozen-root guard."
+  },
+  "next_batch": "pilot-k",
+  "protocol_sha256": "e2ae3e76f410d850b274116776c8fa8c37f4186b2274e79275360a05682429dd",
+  "implementation_pro_review": "pending",
+  "production_deployment": "not_started"
+}

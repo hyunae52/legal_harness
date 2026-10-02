@@ -1,0 +1,89 @@
+{
+  "status": "adopted_document_preflight_pass_not_release_approval",
+  "date_kst": "2026-10-02",
+  "parent_commit": "5d9be5b4529e8d93d5c006c1cd64a94ce27a6c0b",
+  "source_tree_sha256": "a86559ab59f21863e4e25a58fb746f4cb0f79941f5900d9463e58c5f00fa4d6a",
+  "source_digest_method": "sorted src/*.ts, Windows relative path UTF-8 + NUL + raw file bytes",
+  "policy": "research-v8-adopted-documents-20261002",
+  "changes": [
+    "Deduplicate document follow-up only after current revision/issue evidence passes adoption or support eligibility.",
+    "Share optional-discovery adoption predicate across coverage, persisted review adoption and legal applicability.",
+    "Preserve actual adopted exploratory authority through review/status/runner while unadopted background remains finite."
+  ],
+  "tests_added": 11,
+  "product_red_regressions": 8,
+  "targeted_review": {
+    "total": 100,
+    "passed": 100,
+    "failed": 0,
+    "skipped": 0
+  },
+  "full_review": {
+    "total": 334,
+    "passed": 334,
+    "failed": 0,
+    "skipped": 0
+  },
+  "package_install": {
+    "status": "pass",
+    "checks": 9,
+    "artifact_sha256": "4d399e982f89a5730e22539df1e789868abb9149efb7359973122553f53e2089",
+    "is_ci_or_deploy_artifact": false
+  },
+  "logs": [
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/sss-chunks-red.log",
+      "sha256": "a663eccedff62d7afa63d5ddfa64d725566c8e8fc76e28d8b6276263476deada"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/sss-chunks-red-2.log",
+      "sha256": "495a69e55d01a9933c7a0335ded912d25afe6346e3150bebdab58d55b1edfbe5"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/sss-chunks-green-1.log",
+      "sha256": "1786c536688b14580c668796b88d9e0382b3a4e797c8b63a37d46c12d3077dd0"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/sss-exploratory-red.log",
+      "sha256": "45c8a8f27b33758e41a2a91bb46a0f8e30ca1a11b9c3a9c31515f6dd2377a815"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/sss-exploratory-background-red.log",
+      "sha256": "94586908c603534e8722e90d4e00ee23dbf305eec2b428a23ff529e67d1ed465"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/sss-adoption-green-1.log",
+      "sha256": "edab9580fbdef668d30eaf479aed3b736735d46d39090642bda21e3bc7b20803"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/sss-adoption-targeted-1.log",
+      "sha256": "dbb27086189c0c7ed3ad227d147f61b3151c618e8089604dc51966a80cf43cb3"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/sss-adoption-full-review-1.log",
+      "sha256": "5b9e99b0ea09e1334e355e62f5dddcc033ac440075a762053080a29ead618664"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/sss-adoption-package-1.log",
+      "sha256": "11eec1e9198b81bf4a3fd6726713d2824bff36549a103cb4dbf5d169f987c47d"
+    }
+  ],
+  "red_evidence_limits": [
+    "Corrected split-body quotes to the public 3000-character limit; sss-chunks-red-2.log reproduces all five missing-obligation defects on unchanged 5d9be5b product source before applying the fix again.",
+    "Two exploratory adoption tests fail specifically at review-to-status obligation persistence; one background test fails on a mandatory-search finding with no runnable obligation.",
+    "Finite-history control, later support receipt and populated promotion state tests are retained positive regressions, not claimed as additional RED tests.",
+    "Isolated worktree desktop bundle build cannot traverse shared dependency junctions; only its TypeScript compile and focused tests are reused. Full review and installed package are run in the primary checkout."
+  ],
+  "previous_review": {
+    "reviewer": "SSS Dot",
+    "commit": "5d9be5b4529e8d93d5c006c1cd64a94ce27a6c0b",
+    "code": "REVISE",
+    "release": "HOLD"
+  },
+  "exact_fix_review": "pending SSS; not Pro implementation approval",
+  "cancelled_batch": "pilot-m: four started executions retained, twenty never started; not a completed release evaluation",
+  "next_batch": "pilot-n",
+  "protocol_sha256": "e2ae3e76f410d850b274116776c8fa8c37f4186b2274e79275360a05682429dd",
+  "model_evaluation": "not_started",
+  "production_deployment": "not_started"
+}

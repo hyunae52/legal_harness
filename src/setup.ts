@@ -82,6 +82,11 @@ export const actionsSchema = {
             content: { type: 'array', items: { type: 'object', properties: { type: { type: 'string' }, text: { type: 'string' } }, additionalProperties: true } },
             structuredContent: { type: 'object', additionalProperties: true }, isError: { type: 'boolean' },
           }, additionalProperties: true }, evidence: { type: 'object', properties: { applicability: { type: 'string' }, observed_at: { type: 'string' }, note: { type: 'string' } }, additionalProperties: true },
+          source_reading_guide: { type: 'object', description: 'Harness-authored reading guidance, separate from provider data; not a legal or completeness verdict. JSON pointers address this REST response.', properties: {
+            origin: { type: 'string', const: 'legal-harness' }, purpose: { type: 'string' },
+            source_references: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } },
+            references_truncated: { type: 'boolean' }, instructions: { type: 'array', items: { type: 'string' } },
+          }, additionalProperties: true },
         }, additionalProperties: true } },
       }), default: errorResponse },
     } },
@@ -189,7 +194,9 @@ VS Code 예시: {"servers":{"taxlab-law":{"type":"http","url":"https://law.taxla
 
 ## 연구·인터뷰·PR
 
-단순 조회에는 인터뷰를 강요하지 않습니다. 사건 판단은 start_legal_research → research_legal_sources → review_legal_reasoning을 사용합니다.
+단순 조회에는 인터뷰를 강요하지 않습니다. 사건 판단은 start_legal_research → research_legal_sources로 법령 조문 확인 → run_required_legal_research로 판례·해석·후속 조회 → review_legal_reasoning을 사용합니다.
+필수 조회는 한 번에 최대 4단계씩 진행합니다. AI는 반환된 coverage의 미완료 범위와 후보 원문을 확인하고 이어서 조사합니다. pending이면 같은 request_id로 상태만 확인하며 중복 조회하지 않습니다.
+정상 검색 0건은 검색을 하지 않았거나 실패한 상태와 다릅니다. 없는 반례를 만들 필요는 없지만, 정해진 검색 범위에서 찾지 못했다는 한계를 표시해야 합니다. 출처를 대법원으로 다시 적거나 원문을 자기 인용하는 것으로 판례·후속 검색을 대신할 수 없습니다.
 연구 및 PR 준비 응답에 포함된 client_session은 AI가 후속 상태 도구 인수로 전달합니다. 사용자가 입력하거나 발급받는 접속키가 아니며, 대화 간에 공유하거나 답변·검색어·PR 본문에 공개하지 마세요.
 등록한 사실이 부족하면 interview.next_question 한 개씩 확인하고 모르면 미확인으로 남기세요. 연구 기록은 30분 또는 서버 재시작 시 사라집니다.
 정정이 필요하면 prepare_correction_pr로 미리보기를 만들고, 사용자 동의 후에만 create_correction_pr를 호출합니다. GitHub 계정 없이 제안할 수 있으며 자동 머지는 없습니다.

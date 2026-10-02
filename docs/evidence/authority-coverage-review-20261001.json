@@ -1,0 +1,83 @@
+{
+    "record_type":  "pre_implementation_review_evidence",
+    "recorded_at":  "2026-10-01T05:01:57.8408387Z",
+    "head":  "cdb64f9ed44f7267668d9574cb255975172709f9",
+    "scope":  "Current source structural acceptance; synthetic evidence; no legal correctness certification",
+    "build":  {
+                  "command":  "npm run build",
+                  "status":  "pass",
+                  "log":  ".runtime/authority-coverage-review-20261001/build.log"
+              },
+    "focused_tests":  {
+                          "command":  "node --test --test-concurrency=1 tests/legal-applicability.test.mjs tests/research-harness.test.mjs",
+                          "passed":  56,
+                          "failed":  0,
+                          "skipped":  0,
+                          "log":  ".runtime/authority-coverage-review-20261001/focused-tests.log",
+                          "execution":  "Reused completed same-source run from diagnosis; not rerun for planning document"
+                      },
+    "probe":  {
+                  "observed_at":  "2026-10-01T04:49:20.931Z",
+                  "head":  "cdb64f9ed44f7267668d9574cb255975172709f9",
+                  "purpose":  "Document current structural acceptance, not certify a legal answer",
+                  "cases":  [
+                                {
+                                    "scenario":  "no_judicial_search_or_judgment_body",
+                                    "tools":  [
+                                                  "get_law_text",
+                                                  "get_tax_document",
+                                                  "get_tax_document"
+                                              ],
+                                    "attempt_count":  0,
+                                    "authority_kinds":  [
+                                                            "administrative_interpretation",
+                                                            "administrative_interpretation"
+                                                        ],
+                                    "result":  "structurally_complete",
+                                    "findings":  [
+
+                                                 ],
+                                    "legal_verification":  "unverified"
+                                },
+                                {
+                                    "scenario":  "administrative_document_relabelled_as_supreme_court",
+                                    "source_tool":  "get_tax_document",
+                                    "provider_document_type":  "질의회신",
+                                    "provider_authority_level":  "nts_ruling",
+                                    "declared_kind":  "supreme_court",
+                                    "result":  "structurally_complete",
+                                    "findings":  [
+
+                                                 ]
+                                },
+                                {
+                                    "scenario":  "self_citation_claimed_as_subsequent_review",
+                                    "same_source":  true,
+                                    "result":  "structurally_complete",
+                                    "findings":  [
+
+                                                 ]
+                                }
+                            ],
+                  "source_hashes":  {
+                                        "src/legalApplicability.ts":  "05483f4d6d47f6c93adf0a96fe649368e0ff730a84eebc6bdc99d1b2c637381a",
+                                        "src/researchReview.ts":  "81af42e4b9128fb8659c0ea7d60f84b6085537dbfa39391abf5ffde876abe390",
+                                        "src/researchContracts.ts":  "b5c75f668d565412dd24df2b8b4d017527940a5afb9f248e98f0b11b8a8b6f09",
+                                        "src/researchEvidence.ts":  "39c5e79cd58fc0ff8a63bc0775a4fb1cda7cd0329e1c4f8c83e4b042079afcd6",
+                                        "src/app.ts":  "6a080f497f1488a6eb06cad34f9c682cbd4ca72356676a5a72e47bb62b979804",
+                                        "tests/legal-applicability.test.mjs":  "a48d4ddc6f3195db04fd02020ca56c8aa81ab7a9d7749ae1aaecdc440dc2c656"
+                                    }
+              },
+    "reproducibility":  {
+                            "base_fixture":  "tests/legal-applicability.test.mjs:scenario at the recorded HEAD",
+                            "case_1":  "Unmodified fixture: get_law_text and two get_tax_document receipts, no search attempts",
+                            "case_2":  "Replace support document with documentType=질의회신, issuingAgency=국세청, authorityLevel=nts_ruling and administrative answer text; align quotes; declare kind=supreme_court",
+                            "case_3":  "Reuse the same authority citation in subsequent_review; explicitly state no subsequent search was performed; keep status=addressed",
+                            "result":  "All three current inspectResearch calls returned structurally_complete with no findings"
+                        },
+    "limitations":  [
+                        "Does not establish the reported model call trace or model identity",
+                        "Does not establish legal correctness or current production state",
+                        "Remediation is planned, not implemented or Pro approved"
+                    ]
+}

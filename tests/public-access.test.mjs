@@ -16,6 +16,18 @@ import { safeToolDiagnostic } from '../dist/errorDiagnostics.js';
 const secret = 'synthetic-public-session-secret-0123456789abcdef';
 const plan = { query:'Synthetic public research', issues:[{id:'rule',question:'Which facts are missing?',required_fact_ids:['fact'],required_date_roles:[]}],
   facts:[{id:'fact',description:'Synthetic fact',status:'unknown',value:null,source:''}],event_dates:[] };
+
+test('CF-06/12: anonymous summary preserves the authoritative handle within its byte bound and isolates pages', async t => {
+  const f=await fixture(t), c=await f.mcp();
+  const a=(await c.callTool({name:'start_legal_research',arguments:{plan:{...plan,query:'합성 긴 질문 '.repeat(1500)}}})).structuredContent;
+  const b=(await c.callTool({name:'start_legal_research',arguments:{plan}})).structuredContent;
+  assert.equal(a.response_mode,'summary');assert.ok(Buffer.byteLength(JSON.stringify(a),'utf8')<=32768);
+  assert.equal(Object.keys(a)[0],'client_session');assert.ok(a.client_session);assert.equal(a.plan,undefined);
+  const read=(await c.callTool({name:'get_legal_research',arguments:{research_id:a.research_id,client_session:a.client_session,view:'requirements',limit:1}})).structuredContent;
+  assert.equal(read.page.total,1);assert.equal(read.items[0].status,'unresolved');
+  const denied=await c.callTool({name:'get_legal_research',arguments:{research_id:a.research_id,client_session:b.client_session,view:'requirements',limit:1}});
+  assert.equal(denied.isError,true);assert.match(denied.content[0].text,/RESEARCH_NOT_FOUND/);
+});
 const proposal = { request_id:'d4b0f635-8f10-4d30-8a5e-156f15c3e470',title:'Synthetic correction',previous_claim:'A synthetic prior claim',
   correction:'Check the missing fact first',why:'The synthetic case omitted a condition',sources:[{url:'https://law.go.kr/법령/소득세법',title:'Synthetic test source',supporting_excerpt:'Synthetic excerpt for transport tests'}],
   keywords:['synthetic'],next_checks:['Check the synthetic condition'],public_safe:true };
@@ -62,6 +74,47 @@ test('PA-02: research ownership travels across actual HTTP MCP, SSE and REST cli
   assert.equal((await f.request('/api/research/status',{research_id:a.research_id,client_session:a.client_session})).status,200);
   assert.equal((await http.listTools()).tools.some(t=>t.name==='submit_failure'),false);
   assert.equal((await f.request('/api/failures',{})).body.code,'USE_CORRECTION_PR');
+});
+
+test('PA-02 recovery: bounded research responses keep the private continuation token before large state',async t=>{
+  const f=await fixture(t), c=await f.mcp();
+  const started=await c.callTool({name:'start_legal_research',arguments:{plan}});
+  const state=started.structuredContent;
+  assert.ok(started.content[0].text.length>1024);
+  const prefix=started.content[0].text.slice(0,512);
+  assert.ok(prefix.includes(state.client_session),'continuation token must survive a bounded response prefix');
+  const read=await c.callTool({name:'get_legal_research',arguments:{research_id:state.research_id,client_session:state.client_session,evidence_ids:[]}});
+  assert.notEqual(read.isError,true);
+  assert.ok(read.content[0].text.slice(0,512).includes(state.client_session));
+  const rest=await f.request('/api/research/status',{research_id:state.research_id,client_session:state.client_session,evidence_ids:[]});
+  assert.ok(JSON.stringify(rest.body).slice(0,512).includes(state.client_session));
+  const access=new PublicAccess({TAXLAB_PUBLIC_ACCESS:'1',TAXLAB_PUBLIC_SESSION_SECRET:secret});
+  const value={large:'x'.repeat(8192),client_session:'untrusted-value'};
+  const result=access.result(value,state.client_session);
+  assert.equal(result.client_session,state.client_session,'server-issued token remains authoritative');
+  assert.ok(JSON.stringify(result).slice(0,512).includes(state.client_session));
+  assert.equal(value.client_session,'untrusted-value','formatting must not mutate the input');
+  assert.equal(access.result(value),value,'authenticated responses are unchanged');
+});
+
+test('CF-05/12 session recovery: a missing handle explains how to resume without disclosing or recreating state',async t=>{
+  const f=await fixture(t), c=await f.mcp();
+  const started=(await c.callTool({name:'start_legal_research',arguments:{plan}})).structuredContent;
+  const missing=await c.callTool({name:'get_legal_research',arguments:{research_id:started.research_id}});
+  assert.equal(missing.isError,true);
+  const error=JSON.parse(missing.content[0].text);
+  assert.equal(error.code,'PUBLIC_SESSION_REQUIRED');
+  assert.ok(error.recovery,'the missing-handle response must explain continuation recovery');
+  assert.deepEqual(error.recovery.available_actions,['reuse_original_client_session','report_unrecoverable_session']);
+  assert.equal(error.recovery.create_new_research,false);
+  assert.equal(JSON.stringify(error).includes(started.client_session),false);
+  const rest=await f.request('/api/research/status',{research_id:started.research_id});
+  assert.equal(rest.status,401);
+  assert.deepEqual(rest.body,error);
+  const resumed=(await c.callTool({name:'get_legal_research',arguments:{research_id:started.research_id,client_session:started.client_session}})).structuredContent;
+  assert.equal(resumed.research_id,started.research_id);
+  assert.equal(resumed.revision,started.revision);
+  assert.equal(f.calls.length,0);
 });
 
 test('PA-03: capabilities accidentally included in sources or proposals never leave the server',async t=>{

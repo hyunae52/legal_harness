@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-02T05:00:10.928571+00:00",
+  "tested_product_commit": "78c9089b1d31aab78332aaa71b30af8846e4fd46",
+  "source_tree_sha256": "5f03e225e80a3571ca4f027cb57d151b27eb23b34d21ff3b3b1a427104b8fcc2",
+  "model": "gpt-5.6-sol",
+  "reasoning": "xhigh",
+  "client_version": "codex-cli 0.159.0",
+  "trials": 1,
+  "fixtures": 4,
+  "mcp_calls": 4,
+  "protocol_sha256": "7df6d097b2631bdf6e601c4715ae1758ccf2abc5a80741651e1ace49deb71f0c",
+  "protocol": {
+    "version": "fidelity-condition-placement-v1",
+    "type": "supplementary controlled synthetic raw-lookup trial",
+    "model": "gpt-5.6-sol",
+    "reasoning": "xhigh",
+    "client": "codex-cli 0.159.0",
+    "timeout_seconds": 240,
+    "trials": 1,
+    "documents": 4,
+    "written_before_execution": true,
+    "grading": {
+      "SYNTHETIC-QUESTION": "Preserve the blue-zone and acquisition-on-or-after-2099-01-01 premises from the question with the two-year disposal rule.",
+      "SYNTHETIC-SUMMARY": "Preserve both contract-before-2099-02-01 and confirmed deposit-payment premises from the summary with the three-year disposal rule.",
+      "SYNTHETIC-PARENTHESIS": "Preserve the green-zone and acquisition-on-or-after-2099-01-01 main rule and its pre-designation-acquisition exception giving three rather than two years.",
+      "SYNTHETIC-ANNEX": "Preserve acquisition-time orange-zone status AND existing ownership of the old asset for two years, and the four-year alternative outside those annex conditions.",
+      "universal": "Read all four actual MCP documents, clearly keep the fictional setting, do not invent legal conditions or claim legal review, and do not start research or an interview. Grade the final prose against actual source fields rather than keyword presence. Preserve any failed attempt."
+    },
+    "limitation": "One supplemental observation; does not change or replace any original frozen 24-trial result or establish reliability for every MCP client or LLM."
+  },
+  "actual_documents_equal_expected": true,
+  "semantic_review": {
+    "verdict": "pass",
+    "evaluator": "Codex independently compared complete final prose with all four actual MCP source documents",
+    "fixture_results": [
+      {
+        "document": "SYNTHETIC-QUESTION",
+        "verdict": "pass",
+        "reason": "Preserves blue zone, acquisition on/after 2099-01-01, building and disposal within two years."
+      },
+      {
+        "document": "SYNTHETIC-SUMMARY",
+        "verdict": "pass",
+        "reason": "Preserves both pre-2099-02-01 contract and verified deposit payment for the three-year rule."
+      },
+      {
+        "document": "SYNTHETIC-PARENTHESIS",
+        "verdict": "pass",
+        "reason": "Preserves green zone and post-2099 acquisition main rule plus the pre-designation-acquisition exception changing two to three years."
+      },
+      {
+        "document": "SYNTHETIC-ANNEX",
+        "verdict": "pass",
+        "reason": "Preserves acquisition-time orange-zone status AND old asset ownership for two years, with four years otherwise."
+      }
+    ],
+    "universal": "Explicitly fictional, exactly four raw lookups, no research/interview, no invented condition or completed-legal-review claim."
+  },
+  "final_answer": "TaxLab MCP 조회 결과입니다. 모두 가상 자료입니다.\n\n- `SYNTHETIC-QUESTION`: 청색구역에서 2099-01-01 이후 취득한 건물은 2년 내 처분하면 합성 공제를 적용합니다.\n- `SYNTHETIC-SUMMARY`: 2099-02-01 전에 계약하고 계약금 지급 사실이 확인되는 경우, 3년 내 처분하면 합성 공제를 적용합니다.\n- `SYNTHETIC-PARENTHESIS`: 녹색구역 자산을 2099-01-01 이후 취득하면 2년 요건이 적용됩니다. 다만 구역 공고 전에 취득한 자산은 제외되어 3년 요건이 적용됩니다.\n- `SYNTHETIC-ANNEX`: 취득 당시 주황구역이면서 종전 자산을 보유한 경우에만 2년 요건이 적용되고, 그 밖에는 4년 요건이 적용됩니다.",
+  "private_evidence_directory": ".runtime\\authority-coverage-implementation-20261001\\fidelity-conditions-1",
+  "artifact_sha256": {
+    "answer.txt": "faa8dba1baace8938426e1e79879bce4eb36561e792d530b4835222e7a7d0c20",
+    "expected-sources.json": "284cea7e2ce3116b6d4b75bd840958328d9bc1ee11cd809d3715c6fd77eb68d3",
+    "input.txt": "d9562618e04b16867678f5d4d08b448d90308ec453ab39df2779564c48227659",
+    "mcp.jsonl": "bfe9dee4abb8b4e89065ef4ec5abd553e9bab0ecfc9264e373e5eac041964399",
+    "model-trace.jsonl": "431ad24c94f89a38e681646e7af69b1e8a691709a8a25a6c90e855c6905558a7",
+    "protocol.json": "7df6d097b2631bdf6e601c4715ae1758ccf2abc5a80741651e1ace49deb71f0c"
+  },
+  "run_record_sha256": "c48d00ac546164e7e975a4bd362c9e78bbf8bf20694bf824f2c244b925beace4",
+  "semantic_review_sha256": "da37890d73bba95cfe2ef4c7db3d8fffad35b1a6522eb27867f8f43fbf56cec0",
+  "limitations": [
+    "One supplemental trial containing four fictional documents, not four independent model trials.",
+    "Does not replace, retry or change any of the original 24 frozen pilot-o trials.",
+    "The oracle was written before execution; final prose was graded manually rather than by keyword matching.",
+    "Raw model traces are retained privately and hashed without reading or publishing their text.",
+    "Not a reliability estimate for all clients/models or a legal-truth certificate."
+  ]
+}

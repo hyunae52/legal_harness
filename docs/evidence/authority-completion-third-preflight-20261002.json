@@ -1,0 +1,52 @@
+{
+  "status": "third_preflight_pass_not_release_approval",
+  "date_kst": "2026-10-02",
+  "previous_evaluated_commit": "33ce577c5b735ab5eeb32cfa7ad50579fbd86ca7",
+  "previous_batch": "pilot-k",
+  "previous_batch_result": "20 semantic pass / 4 fail; timeout leaves unavailable final-answer checks unverified",
+  "changes": [
+    "Separate official navigation for successful MST statute lookup; unchanged source body and no extra network request.",
+    "Raw-only routing and faithful quotation/summary guidance.",
+    "Missing continuation capability remains denied; explain reuse of the original handle without issuing a replacement.",
+    "Explain existing authority/citation contradiction repair without changing the guard or enums."
+  ],
+  "source_tree_sha256": "56c913294c9fd043c27e6af2dde18618847ed605a8cbd7f0f74c1591adfa3319",
+  "full_review": {
+    "total": 309,
+    "passed": 309,
+    "failed": 0,
+    "skipped": 0
+  },
+  "package_install": {
+    "status": "pass",
+    "checks": 9,
+    "artifact_sha256": "7337957d5ed6fb93202dea177a12517d84380f49b548a701d7df2832de4c125a",
+    "is_ci_or_deploy_artifact": false
+  },
+  "logs": [
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/completion-raw-recovery-red-2.log",
+      "sha256": "50b61dd31acfaaab7921dd39a43bef6847c9652f20b725691547b429b2882403"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/completion-raw-isolated-green-2.log",
+      "sha256": "ef26f7044f49b04be828968eed8d44a94ab4c5801c4a088b61b18219fb91ad75"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/completion-citation-guidance-green.log",
+      "sha256": "c6d7b1d6284fcd2bdd50b4f9cdb1fe207dc8210ae17f6c827ea97120516326ce"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/completion-full-review-5.log",
+      "sha256": "84c676f25851c1e081e5c66a1443695ced4437dd4707597b820ad2f54792bf9f"
+    },
+    {
+      "path": ".runtime/authority-coverage-implementation-20261001/completion-package-3.log",
+      "sha256": "08ade4de36ffc4b1cc736056f6855d54712d9ac75bbe6d52c43e36c985eef0dd"
+    }
+  ],
+  "next_batch": "pilot-l",
+  "protocol_sha256": "e2ae3e76f410d850b274116776c8fa8c37f4186b2274e79275360a05682429dd",
+  "implementation_pro_review": "pending; last observed Pro usage cap, no Medium fallback",
+  "production_deployment": "not_started"
+}

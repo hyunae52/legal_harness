@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createServer } from 'node:http';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
@@ -12,15 +12,17 @@ import { ServiceError } from '../dist/contracts.js';
 import { KoreanLawClient } from '../dist/koreanLawClient.js';
 import { TaxLawClient } from '../dist/taxLawClient.js';
 
+import { emptyCourtResult, emptyLawResult } from './fixtures/generic-searches.mjs';
+
 const sourceText = '합성 규정 본문입니다. 공동 취득분은 기록된 원가에 따라 구분합니다.';
 const plan = () => ({ query: '합성 원가 구분 연구',
   issues: [{ id: 'cost', question: '합성 원가의 구분 조건', required_fact_ids: ['joint'], required_date_roles: [] }],
   facts: [{ id: 'joint', description: '공동 취득 사실', status: 'provided', value: '공동 취득', source: '합성 시험 입력' }],
   event_dates: [] });
 const routes = { start_legal_research: 'start', update_legal_research: 'update', get_legal_research: 'status',
-  research_legal_sources: 'retrieve', review_legal_reasoning: 'review' };
+  research_legal_sources: 'retrieve', run_required_legal_research: 'run', reuse_legal_evidence: 'reuse', answer_legal_question: 'answer', review_legal_reasoning: 'review' };
 const exampleDocument = () => ({ document: { ntstDcmId: '010000000000575140', documentNumber: 'SYNTHETIC-1',
-  answer: sourceText, sourceUrl: 'https://taxlaw.nts.go.kr/qt/USEQTA002P.do?ntstDcmId=010000000000575140' } });
+  documentType: '질의회신', issuingAgency: '국세청', answer: sourceText, sourceUrl: 'https://taxlaw.nts.go.kr/qt/USEQTA002P.do?ntstDcmId=010000000000575140' } });
 
 async function fixture(t, opts = {}) {
   const calls = [];
@@ -33,6 +35,8 @@ async function fixture(t, opts = {}) {
     calls.push({ name, args });
     if (name === 'get_law_text' && args.lawId === 'SYNTHETIC-STATUTE') return { server: { name: 'korean-law-mcp', version: 'fixture' },
       result: { content: [{ type: 'text', text: '법령명: 합성법\n시행일: 20200101\n제1조(원가)\n합성 법령 및 부칙의 적용 근거.' }] } };
+    if (name === 'search_decisions') return emptyCourtResult();
+    if (name === 'search_law') return emptyLawResult();
     if (opts.operation) return opts.operation(name, args);
     const data = exampleDocument();
     return { server: { name: 'korean-taxlaw', version: '2.0.0' }, result: {
@@ -57,12 +61,247 @@ async function fixture(t, opts = {}) {
       body: JSON.stringify(body), signal: AbortSignal.timeout(5000) });
     const text = await response.text();
     let data; try { data = JSON.parse(text); } catch { data = { non_json_response: text.slice(0, 200) }; }
+    // Legacy behavior assertions inspect explicit full state. CF-06 below separately
+    // exercises the default production MCP response without this reader convenience.
+    if (response.ok && data.response_mode === 'summary') {
+      const full = await request('status', { research_id: data.research_id, view: 'full' }, actor);
+      assert.equal(full.status, 200);
+      data = { ...full.body, ...(data.job ? { job: data.job } : {}), ...(data.replayed ? { replayed: true } : {}) };
+    }
     return { status: response.status, body: data };
   };
   return { request, calls, base, runtime, writes: () => writes };
 }
 
-test('RH-01: all five research routes authenticate before source work; start returns a server session', async t => {
+test('Model recovery: invalid values return allowed enums and bounds without echoing submitted data', async t => {
+  const f = await fixture(t), s = (await f.request('start', { plan: plan() })).body;
+  const bad = await f.request('review', { research_id: s.research_id, expected_revision: 1, expected_state_version: s.state_version,
+    draft_answer: '합성 입력', correction_needed: false, analysis: [{ issue_id: 'cost', conclusion_mode: 'SECRET_INVALID_VALUE',
+      withholding_reason: '', claims: [], counter_evidence: [], unknowns: [], next_queries: [],
+      timing: { status: 'SECRET_INVALID_VALUE', reason: '합성', date_roles: [] }, exceptions: { status: 'addressed', reason: '합성' } }] });
+  assert.equal(bad.status, 400);
+  assert.deepEqual(bad.body.issues.find(i => i.path === 'analysis.0.timing.status').allowed_values, ['addressed', 'unresolved', 'not_required']);
+  assert.ok(!JSON.stringify(bad.body).includes('SECRET_INVALID_VALUE'));
+  const oversize = await f.request('run', { research_id: s.research_id, expected_revision: 1, request_id: randomUUID(), max_steps: 10 });
+  assert.equal(oversize.status, 400); assert.equal(oversize.body.issues[0].maximum, 4); assert.equal(f.calls.length, 0);
+});
+
+test('Model recovery: selected evidence reads preserve exact text, current review state, and actor isolation', async t => {
+  const f = await fixture(t), longPlan = plan(); longPlan.query += ' 확인된 배경 사실'.repeat(900);
+  let s = (await f.request('start', { plan: longPlan })).body;
+  for (const document_number of ['SYNTHETIC-1', 'SYNTHETIC-2']) s = (await f.request('retrieve', {
+    research_id: s.research_id, expected_revision: 1, issue_ids: ['cost'], purpose: 'support',
+    tool: 'lookup_tax_document', arguments: { document_number } })).body;
+  const calls = f.calls.length, e = s.evidence[0];
+  const summary = (await f.request('status', { research_id: s.research_id, evidence_ids: [] })).body;
+  assert.deepEqual(summary.evidence, []); assert.equal(summary.evidence_selection.total_evidence_count, 2);
+  assert.equal(summary.evidence_index.length, 2); assert.equal(summary.state_version, s.state_version);
+  const selected = (await f.request('status', { research_id: s.research_id, evidence_ids: [e.evidence_id] })).body;
+  assert.deepEqual(selected.evidence, [e]);
+  assert.ok(JSON.stringify(selected).slice(0, 3000).includes(sourceText), 'targeted source text must precede a long plan/history in clients that bound tool output');
+  const full = (await f.request('status', { research_id: s.research_id })).body;
+  assert.deepEqual(full.evidence, s.evidence); assert.equal(f.calls.length, calls);
+  assert.equal((await f.request('status', { research_id: s.research_id, evidence_ids: [randomUUID()] })).status, 400);
+  assert.equal((await f.request('status', { research_id: s.research_id, evidence_ids: [e.evidence_id] }, 'bob')).status, 404);
+});
+
+test('AC-16/23: new reuse operation works across REST and actual HTTP MCP without a new upstream lookup', async t => {
+  const f = await fixture(t);
+  let s = (await f.request('start', { plan: plan() })).body;
+  s = (await f.request('retrieve', { research_id: s.research_id, expected_revision: s.revision, issue_ids: ['cost'], purpose: 'timing',
+    tool: 'get_law_text', arguments: { lawId: 'SYNTHETIC-STATUTE', jo: '제1조' } })).body;
+  const e = s.evidence[0], calls = f.calls.length;
+  s = (await f.request('update', { research_id: s.research_id, expected_revision: s.revision, plan: plan() })).body;
+  const response = await fetch(f.base + '/mcp', { method: 'POST', headers: { authorization: 'Bearer alice', 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 101, method: 'tools/call', params: { name: 'reuse_legal_evidence',
+      arguments: { research_id: s.research_id, expected_revision: s.revision, issue_ids: ['cost'], evidence_ids: [e.evidence_id] } } }) });
+  const payload = await response.json(); assert.equal(payload.result.isError, undefined);
+  const summary = payload.result.structuredContent; assert.deepEqual(JSON.parse(payload.result.content[0].text), summary);
+  const result = (await f.request('status', { research_id: summary.research_id, evidence_ids: [e.evidence_id] })).body;
+  assert.equal(result.evidence[0].observed_at, e.observed_at); assert.equal(result.evidence[0].cache_of, e.evidence_id);
+  assert.equal(result.evidence[0].revision, s.revision); assert.equal(f.calls.length, calls);
+  const denied = await f.request('reuse', { research_id: s.research_id, expected_revision: s.revision, issue_ids: ['cost'], evidence_ids: [e.evidence_id] }, 'bob');
+  assert.equal(denied.status, 404); assert.equal(f.calls.length, calls);
+});
+
+async function completionReuseFixture(t) {
+  const f = await fixture(t, { operation: async (_name, args) => ({ result: { content: [{ type: 'text',
+    text: args.lawId === 'OTHER' ? '법령명: 부가가치세법\n시행일: 20260101\n제1조(과세)\n독립된 합성 쟁점입니다.'
+      : '법령명: 소득세법 시행령\n시행일: 20260101\n제155조(특례)\n합성 주택 취득 순서의 검토 대상입니다.' }] } }) });
+  const p = { query: '일시적 2주택과 적용 시기 및 독립된 부가가치세 검토', facts: [], event_dates: [],
+    issues: [
+      { id: 'I1', question: '일시적 2주택 취득 순서', profile: 'temporary_two_homes', required_fact_ids: [], required_date_roles: [] },
+      ...['I2', 'I3', 'I4'].map(id => ({ id, question: id === 'I4' ? '부가가치세 별도 적용' : '관측된 동일 조문의 적용 시기', required_fact_ids: [], required_date_roles: [] })),
+    ] };
+  let s = (await f.request('start', { plan: p })).body;
+  s = (await f.request('retrieve', { research_id: s.research_id, expected_revision: 1, issue_ids: ['I1', 'I2'],
+    purpose: 'timing', tool: 'get_law_text', arguments: { lawId: 'HOMES', jo: '제155조' } })).body;
+  return { f, s, reuse: (state, issue_ids) => f.request('reuse', { research_id: state.research_id,
+    expected_revision: state.revision, issue_ids, evidence_ids: [state.evidence[0].evidence_id] }) };
+}
+
+test('CF-01: same-revision reuse adds issue bindings and preserves immutable source and original obligations', async t => {
+  const { f, s, reuse } = await completionReuseFixture(t), original = s.evidence[0], calls = f.calls.length;
+  const result = await reuse(s, ['I3']); assert.equal(result.status, 200);
+  const next = result.body, e = next.evidence[0];
+  assert.deepEqual([...e.issue_ids].sort(), ['I1', 'I2', 'I3']);
+  for (const key of ['passages', 'observed_at', 'expires_at', 'response_hash', 'manifest_id']) assert.deepEqual(e[key], original[key], key);
+  assert.deepEqual(next.manifests, s.manifests); assert.deepEqual(next.attempts, s.attempts);
+  assert.equal(next.revision, 1); assert.equal(next.state_version, s.state_version + 1);
+  assert.equal(next.evidence.length, 1); assert.equal(f.calls.length, calls);
+  for (const id of ['I1', 'I2', 'I3']) assert.ok(next.coverage.obligations.some(o => o.issue_id === id));
+  const duplicate = (await reuse(next, ['I2', 'I3', 'I1'])).body;
+  assert.equal(duplicate.state_version, next.state_version, 'same effective binding is a no-op');
+  assert.deepEqual(duplicate.evidence, next.evidence); assert.equal(f.calls.length, calls);
+});
+
+test('CF-02: additional issue reuse keeps narrow acquisition recipes and never transfers them to a different statute', async t => {
+  const { f, s, reuse } = await completionReuseFixture(t);
+  let next = (await reuse(s, ['I3'])).body;
+  const queries = next.coverage.obligations.filter(o => o.issue_id === 'I3').map(o => o.next_step?.arguments.query).filter(Boolean);
+  assert.ok(queries.some(q => q.includes('취득 선후')), 'reuse must not turn a contextual obligation into broad 요건 discovery');
+  assert.ok(!queries.includes('소득세법 시행령 제155조 요건'));
+  next = (await f.request('retrieve', { research_id: s.research_id, expected_revision: 1, issue_ids: ['I4'], purpose: 'timing',
+    tool: 'get_law_text', arguments: { lawId: 'OTHER', jo: '제1조' } })).body;
+  const unrelated = next.coverage.obligations.filter(o => o.issue_id === 'I4');
+  assert.ok(unrelated.length); assert.ok(unrelated.every(o => !JSON.stringify(o.next_step).includes('2주택')));
+});
+
+test('CF-03: old-revision reuse starts with only explicitly requested issues then adds current bindings', async t => {
+  const { f, s, reuse } = await completionReuseFixture(t), calls = f.calls.length;
+  let next = (await f.request('update', { research_id: s.research_id, expected_revision: 1, plan: s.plan })).body;
+  next = (await reuse(next, ['I3'])).body;
+  assert.deepEqual(next.evidence[0].issue_ids, ['I3']); assert.equal(next.evidence[0].revision, 2);
+  assert.equal(next.evidence[0].source_revision, 1); assert.equal(next.evidence[0].observed_at, s.evidence[0].observed_at);
+  next = (await reuse(next, ['I2'])).body;
+  assert.deepEqual([...next.evidence[0].issue_ids].sort(), ['I2', 'I3']);
+  assert.ok(!next.evidence[0].issue_ids.includes('I1')); assert.equal(f.calls.length, calls);
+  assert.ok(next.coverage.obligations.every(o => o.status === 'not_attempted'), 'reused bodies are not fresh searches');
+});
+
+test('CF-03: unchanged reuse retains a current review; adding a binding invalidates it', async t => {
+  const f = await fixture(t), p = plan();
+  p.issues.push({ id: 'newscope', question: '별도의 쟁점 연결', required_fact_ids: [], required_date_roles: [] });
+  let s = await seed(f, p);
+  const input = reviewInput(s);
+  input.analysis.push({ ...structuredClone(input.analysis[0]), issue_id: 'newscope', conclusion_mode: 'withheld', withholding_reason: '자료 조사 전', claims: [] });
+  const reviewed = await f.request('review', input); assert.equal(reviewed.status, 200);
+  s = (await f.request('status', { research_id: s.research_id })).body;
+  const before = s.last_review, calls = f.calls.length;
+  assert.equal(before.current, true);
+  const request = { research_id: s.research_id, expected_revision: s.revision, issue_ids: ['cost'], evidence_ids: [s.evidence[0].evidence_id] };
+  let next = (await f.request('reuse', request)).body;
+  assert.equal(next.state_version, s.state_version); assert.deepEqual(next.last_review, before);
+  next = (await f.request('reuse', { ...request, issue_ids: ['newscope'] })).body;
+  assert.equal(next.last_review, null); assert.equal(next.state_version, s.state_version + 1); assert.equal(f.calls.length, calls);
+});
+
+test('CF-04: ledger admission exhaustion reports the actual limit before any provider call and keeps the session readable', async t => {
+  const f = await fixture(t, { researchOptions: { limits: { ledgerBytes: 8192 } } });
+  const s = (await f.request('start', { plan: plan() })).body;
+  const refused = await f.request('retrieve', retrieveInput(s));
+  assert.equal(refused.status, 429); assert.equal(refused.body.code, 'RESEARCH_CAPACITY');
+  assert.equal(refused.body.capacity_reason, 'ledger_bytes');
+  assert.equal(refused.body.recovery.research_id, s.research_id);
+  assert.equal(refused.body.recovery.remaining_attempts, 40);
+  assert.equal(refused.body.recovery.pending, false); assert.equal(refused.body.recovery.retryable, false);
+  assert.ok(refused.body.recovery.available_actions.includes('read_stored_evidence'));
+  assert.ok(!refused.body.recovery.available_actions.includes('retrieve'));
+  assert.equal(f.calls.length, 0);
+  const unchanged = (await f.request('status', { research_id: s.research_id })).body;
+  assert.equal(unchanged.state_version, s.state_version); assert.equal(unchanged.pending, false);
+  assert.deepEqual(unchanged.jobs, []);
+  const denied = await f.request('retrieve', retrieveInput(s), 'bob');
+  assert.equal(denied.status, 404); assert.equal(denied.body.recovery, undefined);
+});
+
+test('CF-05: exhausted attempts retain exact bodies and idempotent job results without recommending a new research', async t => {
+  const f = await fixture(t, { researchOptions: { limits: { maxAttempts: 1 } } });
+  let s = (await f.request('start', { plan: plan() })).body;
+  const request = { ...retrieveInput(s), request_id: randomUUID() };
+  s = (await f.request('retrieve', request)).body;
+  const e = s.evidence[0], calls = f.calls.length;
+  const refused = await f.request('retrieve', { ...request, request_id: randomUUID() });
+  assert.equal(refused.status, 429); assert.equal(refused.body.capacity_reason, 'attempts');
+  assert.equal(refused.body.recovery.remaining_attempts, 0);
+  assert.equal(refused.body.recovery.retryable, false);
+  assert.ok(refused.body.recovery.available_actions.includes('review'));
+  assert.ok(!refused.body.recovery.available_actions.includes('start_new_research'));
+  const replay = (await f.request('retrieve', request)).body;
+  assert.equal(replay.replayed, true); assert.deepEqual(replay.job, s.job);
+  assert.equal(replay.state_version, s.state_version);
+  const read = (await f.request('status', { research_id: s.research_id, evidence_ids: [e.evidence_id] })).body;
+  assert.deepEqual(read.evidence, [e]); assert.equal(f.calls.length, calls);
+});
+
+test('CF-07: wrong fact references provide separate current fact IDs and date roles for a no-query repair', async t => {
+  const f = await fixture(t), s = await seed(f), input = reviewInput(s), calls = f.calls.length;
+  input.analysis[0].claims[0].fact_ids = ['old_home_acquired'];
+  let review = (await f.request('review', input)).body;
+  assert.ok(review.findings.some(item => item.code === 'FACT_NOT_FOUND'));
+  assert.ok(review.reference_guide, 'review must provide a safe guide to current reference namespaces');
+  assert.deepEqual(review.reference_guide.fact_ids, ['joint']); assert.deepEqual(review.reference_guide.date_roles, []);
+  input.analysis[0].claims[0].fact_ids = ['joint'];
+  review = (await f.request('review', input)).body;
+  assert.ok(!review.findings.some(item => item.code === 'FACT_NOT_FOUND')); assert.equal(f.calls.length, calls);
+});
+
+test('CF-08: an ungrounded missing-fact hypothesis asks for requirement research without inventing or deleting its value', async t => {
+  const f = await fixture(t), p = plan();
+  p.facts.push({ id: 'arbitrary_condition', description: '확인 전 가설 조건', status: 'unknown', value: null, source: '' });
+  p.issues[0].required_fact_ids.push('arbitrary_condition');
+  const s = (await f.request('start', { plan: p })).body;
+  assert.equal(s.interview.next_action, 'assess_requirements'); assert.equal(s.interview.next_question, null);
+  assert.deepEqual(s.plan.facts.find(fact => fact.id === 'arbitrary_condition'), p.facts[1]);
+  assert.equal(s.requirements.find(r => r.target.id === 'arbitrary_condition').status, 'unresolved');
+  assert.equal(f.calls.length, 0);
+});
+
+test('CF-06/12: actual MCP summaries stay bounded, explicit paged metadata is complete and source reads are exact', async t => {
+  const body = '합성 원문을 변경하지 않습니다. '.repeat(1600);
+  const f = await fixture(t, { operation: async (_name, args) => ({ result: { structuredContent: { document: {
+    ...exampleDocument().document, ntstDcmId: args.ntst_dcm_id, answer: body } } } }) });
+  const rpc = async (name, args, actor = 'alice') => {
+    const response = await fetch(f.base + '/mcp', { method: 'POST', headers: { authorization: 'Bearer ' + actor,
+      'content-type': 'application/json', accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0',
+        id: randomUUID(), method: 'tools/call', params: { name, arguments: args } }) });
+    const payload = await response.json(); assert.equal(payload.error, undefined);
+    return payload.result;
+  };
+  const p = plan(); p.query = '합성 긴 질문 '.repeat(1500);
+  let result = await rpc('start_legal_research', { plan: p }), s = result.structuredContent;
+  const bounded = state => {
+    assert.equal(state.response_mode, 'summary');
+    assert.ok(Buffer.byteLength(JSON.stringify(state), 'utf8') <= 32768);
+    assert.equal(state.plan, undefined, 'large full plans are read explicitly');
+    assert.equal(state.evidence, undefined, 'summary is not a silently truncated body read');
+  };
+  bounded(s);
+  for (let n = 0; n < 3; n++) {
+    result = await rpc('research_legal_sources', { research_id: s.research_id, expected_revision: s.revision,
+      issue_ids: ['cost'], purpose: 'support', tool: 'get_tax_document', arguments: { ntst_dcm_id: 'synthetic-' + n } });
+    s = result.structuredContent; bounded(s); assert.deepEqual(JSON.parse(result.content[0].text), s);
+  }
+  let page = (await rpc('get_legal_research', { research_id: s.research_id, view: 'evidence_index', limit: 2 })).structuredContent;
+  assert.equal(page.response_mode, 'page'); assert.equal(page.page.total, 3); assert.equal(page.items.length, 2);
+  assert.equal(page.page.has_more, true); assert.ok(page.page.next_cursor);
+  const savedCursor = page.page.next_cursor, ids = page.items.map(e => e.evidence_id);
+  page = (await rpc('get_legal_research', { research_id: s.research_id, view: 'evidence_index', limit: 2,
+    cursor: savedCursor })).structuredContent;
+  assert.equal(page.page.has_more, false); ids.push(...page.items.map(e => e.evidence_id));
+  assert.equal(new Set(ids).size, 3);
+  const calls = f.calls.length;
+  const selected = (await rpc('get_legal_research', { research_id: s.research_id, evidence_ids: [ids[0]] })).structuredContent;
+  assert.equal(selected.response_mode, 'selected_evidence'); assert.equal(selected.evidence.length, 1);
+  assert.ok(selected.evidence[0].passages.some(passage => passage.text === body));
+  assert.ok(selected.manifests.some(m => m.evidence_ids.includes(ids[0]) && m.complete)); assert.equal(f.calls.length, calls);
+  assert.equal((await rpc('get_legal_research', { research_id: s.research_id, view: 'evidence_index', cursor: savedCursor }, 'bob')).isError, true);
+  await rpc('update_legal_research', { research_id: s.research_id, expected_revision: s.revision, plan: p });
+  const stale = await rpc('get_legal_research', { research_id: s.research_id, view: 'evidence_index', cursor: savedCursor });
+  assert.equal(stale.isError, true); assert.match(stale.content[0].text, /RESEARCH_STATE_CHANGED/);
+});
+
+test('RH-01: all research routes authenticate before source work; start returns a server session', async t => {
   const f = await fixture(t);
   for (const route of Object.values(routes)) assert.equal((await f.request(route, {}, null)).status, 401, route);
   assert.equal(f.calls.length, 0);
@@ -74,7 +313,7 @@ test('RH-01: all five research routes authenticate before source work; start ret
   assert.equal(f.writes(), 0);
 });
 
-test('RH-01/11: real authenticated SSE advertises the five tools and returns the same JSON as text', async t => {
+test('RH-01/11: real authenticated SSE advertises all research tools and returns the same JSON as text', async t => {
   const f = await fixture(t);
   const client = new Client({ name: 'research-contract', version: '1' });
   t.after(() => client.close());
@@ -99,6 +338,10 @@ async function seed(f, p = plan()) {
   assert.equal(r.status, 200, JSON.stringify(r.body));
   r = await f.request('retrieve', { ...retrieveInput(r.body), purpose: 'timing', tool: 'get_law_text', arguments: { lawId: 'SYNTHETIC-STATUTE' } });
   assert.equal(r.status, 200, JSON.stringify(r.body));
+  for (let n = 0; n < 4 && r.body.coverage.obligations.some(o => !o.status.startsWith('completed')); n++) {
+    r = await f.request('run', { research_id: r.body.research_id, expected_revision: r.body.revision, request_id: randomUUID(), max_steps: 4 });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+  }
   return r.body;
 }
 function reviewInput(state) {
@@ -122,7 +365,8 @@ function reviewInput(state) {
         temporal_application: { status: 'addressed', reason: '합성 시점 적용 검토', citations: [cite(statute)] },
         authorities: [support, counter].filter(e => e.passages.length).map(e => ({ evidence_id: e.evidence_id, kind: 'administrative_interpretation',
           disposition: e === support ? 'applied' : 'distinguished', statute_evidence_ids: [statute.evidence_id], law_version_relation: 'same_rule',
-          reason: '합성 법령과 사실의 대응', subsequent_review: { status: 'addressed', reason: '합성 후속 처리 확인', citations: [cite(e)] } })),
+          reason: '합성 법령과 사실의 대응', subsequent_review: { status: 'addressed', reason: '합성 후속 처리 확인', citations: [cite(e)],
+            search_attempt_ids: state.coverage.obligations.filter(o => o.purpose === 'subsequent').flatMap(o => o.attempt_ids) } })),
       } } : {}),
     }] };
 }
@@ -276,7 +520,7 @@ test('RH-08/09: delayed retrieval rejects conflicting operations and immediately
     if (block) { entered.resolve(); await release.promise; }
     return { server: { name: 'korean-taxlaw', version: '2.0.0' }, result: { structuredContent: exampleDocument(), content: [] } };
   } });
-  const state = await seed(f), input = reviewInput(state);
+  const state = await seed(f), input = reviewInput(state), beforeCalls = f.calls.length;
   await f.request('review', input);
   block = true;
   const pending = f.request('retrieve', { ...retrieveInput(state), purpose: 'counter' });
@@ -291,7 +535,7 @@ test('RH-08/09: delayed retrieval rejects conflicting operations and immediately
   } finally { release.resolve(); }
   const completed = await pending; assert.equal(completed.status, 200);
   const stale = await f.request('review', input); assert.equal(stale.status, 409); assert.equal(stale.body.code, 'RESEARCH_STATE_CHANGED');
-  assert.equal(f.calls.length, 4);
+  assert.equal(f.calls.length, beforeCalls + 1);
 });
 
 test('RH-08: lifetime attempt and receipt limits reserve before upstream; update does not replenish attempts', async t => {
@@ -300,7 +544,7 @@ test('RH-08: lifetime attempt and receipt limits reserve before upstream; update
   state = (await f.request('retrieve', retrieveInput(state))).body;
   assert.equal((await f.request('retrieve', retrieveInput(state))).status, 429);
   state = (await f.request('update', { research_id: state.research_id, expected_revision: 1, plan: plan() })).body;
-  assert.equal(state.evidence.length, 0); assert.equal(state.attempts.length, 1);
+  assert.equal(state.evidence.length, 1); assert.equal(state.evidence[0].revision, 1); assert.equal(state.attempts.length, 1);
   assert.equal((await f.request('retrieve', retrieveInput(state))).status, 429); assert.equal(f.calls.length, 1);
 });
 
@@ -325,7 +569,7 @@ test('RH-10: a reported correction and instructions inside source text never pub
   assert.equal(f.writes(), 0);
   const rejected = await f.request('retrieve', { ...retrieveInput(state), tool: 'execute_tool', arguments: { tool_name: 'create_correction_pr' } });
   assert.equal(rejected.status, 400); assert.equal(rejected.body.code, 'RESEARCH_TOOL_NOT_ALLOWED');
-  assert.equal(f.calls.length, 3);
+  assert.equal(f.calls.filter(c => !c.name.startsWith('search_')).length, 3);
 });
 
 test('RH-03/04: partial text can match a quote without becoming complete evidence; discovery and unknown cannot', async t => {
@@ -440,7 +684,7 @@ test('RH-07: explicitly unresolved timing cannot pass when no required date role
 });
 
 test('RH-08: byte and session capacity reject before source calls, including cross-session reservations', async t => {
-  const small = await fixture(t, { researchOptions: { limits: { maxSessionBytes: 10_000 } } });
+  const small = await fixture(t, { researchOptions: { limits: { maxSessionBytes: 9_000 } } });
   const state = (await small.request('start', { plan: plan() })).body;
   assert.equal((await small.request('retrieve', retrieveInput(state))).status, 429); assert.equal(small.calls.length, 0);
   const one = await fixture(t, { researchOptions: { limits: { maxSessionsPerActor: 1, maxSessions: 2 } } });
@@ -448,7 +692,7 @@ test('RH-08: byte and session capacity reject before source calls, including cro
   assert.equal((await one.request('start', { plan: plan() })).status, 429);
   assert.equal((await one.request('start', { plan: plan() }, 'bob')).status, 200);
   const entered = Promise.withResolvers(), release = Promise.withResolvers();
-  const f = await fixture(t, { researchOptions: { limits: { maxTotalBytes: 200_000 } }, operation: async () => {
+  const f = await fixture(t, { researchOptions: { limits: { maxTotalBytes: 200_000, transientBytes: 131072 } }, operation: async () => {
     entered.resolve(); await release.promise; return { result: { content: [], structuredContent: exampleDocument() } };
   } });
   const first = (await f.request('start', { plan: plan() })).body;
@@ -490,9 +734,12 @@ test('RH-05/08: duplicate claim, absent fact, unacknowledged gaps and receipt tr
   const large = await fixture(t, { operation: async () => ({ result: { content: [], structuredContent: { document: { answer: '공개 합성 문자열 '.repeat(30000) } } } }) });
   const created = (await large.request('start', { plan: plan() })).body;
   const response = await large.request('retrieve', retrieveInput(created));
-  assert.equal(response.status, 200); const receipt = response.body.evidence[0];
-  assert.equal(receipt.body_scope, 'partial'); assert.ok(Buffer.byteLength(JSON.stringify(receipt)) <= 131072);
-  assert.ok(receipt.passages.every(p => p.body_scope === 'partial'));
+  assert.equal(response.status, 200);
+  assert.equal(response.body.job.status, 'failed');
+  assert.equal(response.body.attempts.at(-1).error_code, 'RESEARCH_CAPACITY');
+  assert.equal(response.body.evidence.length, 0);
+  assert.equal(response.body.manifests.length, 0);
+  assert.equal(response.body.pending, false);
 });
 
 test('RH-07: legacy analyze rejects impossible calendar days before touching upstream', async t => {

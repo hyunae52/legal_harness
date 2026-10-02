@@ -1,0 +1,98 @@
+    - article:
+      - paragraph: LEGAL-HARNESS-SSS-FIX-20261002-5d9be5b
+      - paragraph:
+        - text: "CODE: REVISE"
+        - text: "출시: HOLD"
+      - paragraph: 좁은 scope_promotions 수정은 이번 검수 범위에서 수용 가능해. 다만 인용 채택 → 후속 검색 → runner 연결에 P1 1건과 P2 1건이 남아 있어. 둘 다 잘못된 완료 승인을 확인한 문제가 아니라, 정상적인 근거 채택 뒤 필요한 검색을 runner가 수행하지 못하는 차단 결함이야
+      - list:
+        - listitem: P1 — 분할 원문의 두 번째 조각을 채택하면 후속 검색이 생성되지 않음
+      - paragraph:
+        - text: "위치: src/researchCoverage.ts:207–213, researchCoverage()"
+        - link "해당 코드":
+          - /url: https://github.com/hyunae52/legal_harness/blob/5d9be5b4529e8d93d5c006c1cd64a94ce27a6c0b/src/researchCoverage.ts#L207-L213
+          - generic: 해당 코드
+      - paragraph: "실패 경로:"
+      - list:
+        - listitem: 후속 후보를 context로 조회하고, 완전한 원문이 2개 이상의 저장 조각으로 분할됨
+        - listitem: temporal_application 또는 counter resolution에서 두 번째 조각만 direct로 인용하고 applied로 평가함
+        - listitem: 첫 조각은 채택되지 않았으므로 건너뛰지만, 그 전에 209행에서 문서 키를 seen에 넣음
+        - listitem: 실제 채택된 두 번째 조각도 이미 본 문서로 판단해 건너뜀
+        - listitem: legalApplicability.ts:82–92는 SUBSEQUENT_SEARCH_REQUIRED를 남기지만, coverage에는 해당 검색 의무가 생성되지 않음
+        - listitem: research.ts:253–255의 runner는 실행할 next_step을 찾지 못함
+      - paragraph: 이는 지원되는 저장 경로야. researchStorage.ts:11–38은 같은 문서 신원·purpose를 유지한 채 조각별 evidence_id를 만들고, research.ts:222–230은 순서대로 저장해
+      - paragraph: "최소 수정:"
+      - list:
+        - listitem: 채택/검색 대상 여부를 통과한 뒤에만 seen에 문서 키를 넣기
+        - listitem: 또는 현재 revision·issue에 속한 동일 문서의 조각들에서 채택 여부를 먼저 합산한 뒤 문서당 한 번 검색 생성하기
+        - listitem: 모든 후속 후보를 무조건 재귀 검색하는 변경은 필요 없음
+      - paragraph: "통과 회귀 계약:"
+      - list:
+        - listitem: 두 번째 이후 조각을 claims·시점·반론 해결에서 direct/analogy로 채택하거나 authority를 applied/analogy로 선언하면 review와 status 모두 문서당 검색 의무가 생기고 runner가 실제 조회함
+        - listitem: 같은 문서의 앞선 context 원문 뒤에 support/채택 원문이 있는 경우도 동일하게 동작함
+        - listitem: 조각 순서를 바꿔도 결과가 같고 중복 검색은 없음
+        - listitem: background+distinguished 및 subsequent_review 경과 설명만 있으면 추가 검색 세대는 생기지 않음
+      - list:
+        - listitem: P2 — 보조 검색에서 발견한 근거의 채택이 review와 runner 사이에서 사라짐
+      - paragraph:
+        - text: "위치: src/research.ts:399–407, review_legal_reasoning 분기"
+        - link "해당 코드":
+          - /url: https://github.com/hyunae52/legal_harness/blob/5d9be5b4529e8d93d5c006c1cd64a94ce27a6c0b/src/research.ts#L399-L407
+          - generic: 해당 코드
+      - paragraph: "실패 경로:"
+      - list:
+        - listitem: 필수 recipe 외 보조 검색으로 exploratory 후보를 발견함
+        - listitem: 그 원문을 context로 명시적으로 조회함. 이 재현은 한 조각이면 충분함
+        - listitem: 시점·반론 해결의 direct/analogy 근거로 채택함
+        - listitem: inspectResearch는 coreEvidenceIds를 coverage에 전달하므로 그 자료의 후속 검색 의무를 생성함
+        - listitem: 하지만 402행은 discovery_role=subsequent인 후보만 review_adopted_evidence_ids에 보존함
+        - listitem: 이후 get_legal_research와 runner에서는 exploratory 자료의 채택 정보가 빠져 검색 의무가 사라짐
+      - paragraph: "최소 수정:"
+      - list:
+        - listitem: coverage가 선택적 자료를 실제 근거로 승격할 때 사용하는 조건과, 세션에 채택 정보를 보존하는 조건을 일치시키기
+        - listitem: 현재 revision의 관측 원문에 연결된 exploratory 채택도 포함하되, 채택하지 않은 보조 후보 전체를 필수화하지 않기
+      - paragraph: "통과 회귀 계약:"
+      - list:
+        - listitem: 한 조각 exploratory 원문을 채택한 뒤 review → get → runner에서 같은 후속 검색 의무가 유지되고 실제 조회가 발생함
+        - listitem: 채택하지 않은 exploratory 자료는 계속 선택 사항으로 남음
+        - listitem: background/경과 설명만의 후속 후보는 기존 유한 종료를 유지함
+      - paragraph: 두 결함의 문제 행은 기준 1fa386e에도 있었어. 이번 변경이 새로 만들었다고 판정하지는 않아. 다만 이번 요청의 핵심인 ‘인용 위치와 관계없이 실제 runner 작업까지 연결’이 아직 완성되지 않았다는 남은 결함이야. 위 경로는 정적 코드 추적으로 확인했으며 테스트를 실행해 재현했다고 주장하지 않아
+      - list:
+        - listitem: 좁은 승격 경로에서 확인한 사항
+      - paragraph:
+        - link "research.ts:314–344":
+          - /url: https://github.com/hyunae52/legal_harness/blob/5d9be5b4529e8d93d5c006c1cd64a94ce27a6c0b/src/research.ts#L314-L344
+          - generic: research.ts:314–344
+      - list:
+        - listitem: get()이 소유자·만료·revision·busy를 검사하고, 승격 분기가 state CAS를 검사함
+        - listitem: 기존 deferred·issue_id=null·independent_notice만 기존 issue에 연결할 수 있음. 중복·없는 트랙·없는 issue·다른 lifecycle/relation은 거절함
+        - listitem: 복제 plan의 issue_id/lifecycle만 바꾸고 state_version 증가, last_review 무효화를 수행함
+        - listitem: 검색·원문·manifest·연결·원장·요건 평가·채택 자료·TTL·소진 예산을 초기화하지 않음
+        - listitem: save()의 용량 검사가 Map 교체보다 먼저라 저장 실패나 다중 승격의 중간 오류가 원본을 부분 변경하지 않음
+        - listitem: 실제 full-plan 변경은 revision을 증가시킴. coverage의 현재 revision 필터도 유지돼 이미 revision이 바뀐 pilot-l의 옛 검색을 되살리지 않음
+        - listitem: ResearchPlan을 다시 parse하지 않는 점 자체는 현재 변경 필드와 선행 검사 아래에서 위반 반례를 찾지 못했음
+      - paragraph: 스키마도 researchContracts.ts:96–105의 strict 입력·상호 배제와 151–167의 공개 oneOf가 일치해. Actions는 같은 tool.inputSchema를 쓰고, MCP·REST는 공통 runResearch 경로를 사용해
+      - paragraph: 단, ‘기존 issue 중 의미상 올바른 것을 연결했는지’까지 검증하지는 않아. 전혀 다른 쟁점에 연결하면서 그럴듯한 사실·근거를 제출하는 의미 오류는 독립 의미 검수 대상이라는 기존 한계가 그대로야
+      - list:
+        - listitem: 인용 경계와 기존 테스트 평가
+      - paragraph: researchCitations.ts:6–9와 researchReview.ts:10–14는 claims·시점·반론 해결의 non-background 인용을 공통 채택 대상으로 다뤄. legalApplicability.ts:79–94도 direct 인용과 distinguished의 모순, 후속 검색 면제를 같은 범위로 검사해. 이 수정 방향은 맞아
+      - paragraph: subsequent_review.citations만의 경과 설명은 별도 검색 세대를 자동 생성하지 않으면서 원문·권위·법령 연결 검사를 유지해. 기존 tests/authority-coverage.test.mjs:365–393의 유한 종료 계약도 유지 가능해. 실제 법적 근거를 background/경과 설명으로 거짓 분류하는 문제까지 구조 검사가 인증하지는 않아
+      - paragraph: 새 tests/authority-followup.test.mjs:123–156은 한 조각 subsequent 후보를 사용해서 위 두 실패를 잡지 못해. 여기에 분할 원문과 exploratory 채택 회귀를 추가하는 게 최소 보완이야
+      - paragraph: "승격 테스트의 비차단 보강점도 있어:"
+      - list:
+        - listitem: scope-promotion.test.mjs:94–103의 저장 실패 전에 기존 last_review를 만들어, 실패 후 해당 검수 해시까지 보존되는지 확인
+        - listitem: 비어 있지 않은 재연결·요건 이력과 jobs를 가진 상태에서 보존 확인
+        - listitem: 완료 검색 → 실제 full-plan revision 변경 → 남아 있는 deferred 고지 승격 순서에서도 옛 검색 ID가 완료 근거로 돌아오지 않는지 확인
+      - list:
+        - listitem: 확인 범위와 판정 조건
+      - paragraph: GitHub에서 실제 읽은 대상은 5d9be5b4529e8d93d5c006c1cd64a94ce27a6c0b이며, 1fa386eff5083456fcbbb40aef6b711a437257ec과의 변경도 확인했어
+      - list:
+        - listitem: 요청한 계획·구현 보고서·preflight 3개 문서
+        - listitem: research.ts, researchContracts.ts, researchCitations.ts, researchReview.ts, legalApplicability.ts, researchCoverage.ts, scopeCompletion.ts
+        - listitem: scope-promotion·authority-followup·transport-interview 테스트와 관련 기존 authority-coverage/legal-applicability 회귀
+        - listitem: 직접 관련 researchStorage.ts, app.ts, setup.ts와 테스트 fixture
+      - paragraph: 요청 목록의 src/researchRunner.ts는 이 커밋에 존재하지 않아. 실제 실행 경로인 ResearchService.work()와 nextRequiredResearchStep()을 확인했어
+      - paragraph: 323/323·패키지 9/9는 제공된 preflight의 기록으로 확인했으며 내가 실행한 결과가 아니야. src 파일 42개는 확인했지만 집계 SHA와 로컬 로그·패키지 바이트를 독립 재계산하지는 않았어
+      - paragraph: CODE 통과 조건은 위 P1/P2의 최소 수정, 구별되는 양성·음성 회귀, 수정된 정확한 소스의 관련·전체 검증이야. 출시 HOLD는 별도이며 pilot-m 최종 결과와 정상 대조 3/3 완료가 아직 없어. 기존 pilot-l 23/24·정상 대조 2/3·출시 FAIL은 그대로 보존해야 해
+      - generic "메시지 액션":
+        - button "반응 선택":
+        - button "답장":

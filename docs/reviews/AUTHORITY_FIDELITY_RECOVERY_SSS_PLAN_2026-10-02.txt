@@ -1,0 +1,32 @@
+    - article:
+      - paragraph: LEGAL-HARNESS-SSS-RECOVERY-PLAN-20261002
+      - paragraph: 두 후보 모두 최소 보완 방향으로 타당해. last valid review 저장·patch API를 첫 구현에서 제외하는 판단에도 동의해. 다만 구현 전에 아래 다섯 계약은 고정해야 해
+      - list:
+        - text: 사건 안내는 응답 표현 계층에만 추가
+        - text: researchPresentation.ts:20–26의 review·selected_evidence 분기가 적절해. 원문·passage·manifest·검수 상태·해시는 그대로 두고 별도 안내 필드만 붙이면 세션 저장공간을 늘릴 필요가 없어
+      - paragraph: 참조는 실제 반환한 evidence/passages만 가리켜야 해. 완전한 manifest가 있어도 이번 응답에 모든 조각이 들어왔다는 뜻은 아니야. 선택한 일부 본문만으로 같은 문서의 예외까지 모두 확인했다고 표현하면 안 돼
+      - paragraph: 또 “불필요한 별도 규칙을 덧붙이지 않기”가 사용자가 요청한 개정·충돌 검토까지 생략하라는 안내가 되지 않게 해야 해
+      - list:
+        - text: 오류에 붙일 스키마의 출처를 명확히 결합
+        - text: 현재 app.ts:80–85의 errorBody는 inputDiagnostics에 도구명 없이 오류만 넘겨. 실제 실패한 작업의 공개 스키마를 해당 요청 문맥에서 전달해야 해. 전역 ‘마지막 도구명’ 같은 상태는 쓰면 안 돼
+      - paragraph: researchContracts.ts:151–162에서 생성 후 보강한 실제 공개 inputSchema를 기준으로 하고, REST 바깥 요청 형식 오류나 provider 내부 오류에 review 스키마를 잘못 붙이지 않아야 해
+      - list:
+        - text: 작은 스키마 조각도 정확성과 한도를 보존
+        - text: 배열 인덱스는 items로, 누락 필드는 부모 object로 연결하고 required·허용키·additionalProperties·해당 items/enum/minItems를 함께 제시하는 안이 좋아
+      - paragraph: 다만 Zod의 refine/superRefine까지 공개 JSON Schema 조각이 모두 표현하지는 못해. 조각을 ‘이대로면 검수 통과’로 안내하지 말고 기존 서버 검증을 최종 기준으로 유지해야 해
+      - paragraph: 부모 스키마는 중복 제거하고 전체 오류 응답 크기를 제한해야 해. 현재 inputDiagnostics.ts:5의 fields는 무제한이고 issues만 24개로 제한돼 있어. 조각을 추가하면서 fields까지 포함한 상한을 정하되, 스키마를 중간에서 잘라 제약이 사라진 것처럼 보여주면 안 돼. 제공하지 못한 조각은 명시적으로 표시하고 제출값·알 수 없는 키·사용자 오류문구는 반사하지 않는 계약이 필요해
+      - list:
+        - text: ‘유효 필드 보존’과 ‘미완료 종료’를 정확히 구분
+        - text: 형식상 유효했던 필드도 법적으로 옳거나 현재 참조라는 보장은 없어. 불필요한 전체 재작성은 막되, stale revision/state·잘못된 인용·실제 근거 공백은 별도로 수정하도록 안내해야 해
+      - paragraph: INVALID_INPUT이면 이번 초안은 검수되지 않은 것이고, blocked/needs_info면 해당 결과를 그대로 공개해야 해. 이전 검수나 중간 초안을 최종 답변의 PASS로 빌려 쓰면 안 돼
+      - paragraph: 실제 review 반환에는 현재 recovery가 없으므로, 오류 응답뿐 아니라 review 결과에도 정직한 제한답변으로 종료할 수 있다는 안내를 넣는 후보가 적절해. 이것은 종료 안내이지 상태를 완료로 바꾸는 처리가 아니야
+      - list:
+        - text: 합격 증거는 세 단계면 충분
+        - list:
+          - listitem: "N2 재현: 관측된 requirements 누락/빈 배열, citation.reason 누락, counter_evidence 오형식에서 정확한 부모 스키마가 나오고, 지적 경로만 수리한 입력이 기존 Zod 검증을 통과하는지 확인"
+          - listitem: "계약 회귀: MCP·REST 전달, 원문/해시/상태 불변, 실제 참조 해석, 악의적 입력 비반사, 크기 경계, 추가 조회·세션 저장 없음. 형식 수리 후에도 기존 의미·근거 공백은 계속 blocked여야 함"
+          - listitem: "모델 평가: 별도 고정본에서 원래 24회·모델·1,500초·예산·oracle 유지. schema 수리 성공과 최종 답변 도달, 조건·예외 충실성을 각각 관측하고 실패 원본 보존"
+      - paragraph: 3517c432의 요청 문서와 inputDiagnostics.ts, researchPresentation.ts, app.ts, researchContracts.ts를 읽었고, c8edd6e와의 diff가 문서 변경뿐인 것도 확인했어. 기록된 pilot-n 21/24·정상 대조 3/3을 전제로 한 보완안 검토이며, 아직 구현 효과나 새 CODE/출시 PASS를 판단한 것은 아니야
+      - generic "메시지 액션":
+        - button "반응 선택":
+        - button "답장":

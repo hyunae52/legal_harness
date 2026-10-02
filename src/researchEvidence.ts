@@ -1,4 +1,5 @@
 import { digest } from './contracts.js';
+import { observeIdentity, type SourceIdentity, contents, object } from './researchIdentity.js';
 
 export type BodyScope = 'body_returned' | 'discovery_only' | 'partial' | 'unknown';
 export interface Passage {
@@ -10,23 +11,33 @@ export interface EvidenceUnit {
   body_scope: BodyScope; document_id: string; document_version: string; error_code?: string;
 }
 export interface AdaptedEvidence {
+  identity?: SourceIdentity;
+  statute_anchor?: { law_id: string; name: string; articles: string[]; version: string };
   upstream_name: string; upstream_version: string; upstream_commit: string | null; response_hash: string; body_scope: BodyScope;
   document_id: string; document_version: string; source_url: string | null;
   source_kind: 'provider_formatted_text'; completeness: 'unverified'; units: EvidenceUnit[]; passages: Passage[];
   outcome: 'completed' | 'empty' | 'failed'; error_code?: string;
 }
 export interface ResearchEvidence extends AdaptedEvidence {
+  manifest_id?: string; chunk_index?: number; cache_of?: string; source_revision?: number;
   evidence_id: string; revision: number; issue_ids: string[]; purpose: 'support' | 'counter' | 'context' | 'timing';
   tool: string; arguments_hash: string; observed_at: string; expires_at: string;
 }
 export interface ResearchAttempt {
+  capacity_reason?: import('./researchRecovery.js').CapacityReason;
+  obligation_id?: string;
+  search_scope?: 'required' | 'exploratory'; obligation_purpose?: 'neutral' | 'counter' | 'subsequent' | 'amendment';
+  requirement?: { document_key: string; document_number: string | null; document_version: string | null; role: string; date: string | null };
+  search?: import('./researchSearch.js').SearchObservation;
+  observed_at?: string; response_hash?: string; resolved_by_attempt_id?: string;
+  evidence_ids?: string[]; request_key?: string;
   attempt_id: string; revision: number; issue_ids: string[]; purpose: ResearchEvidence['purpose']; tool: string;
   arguments_hash: string; status: 'pending' | 'completed' | 'failed' | 'empty'; error_code?: string; evidence_id?: string;
 }
 type RecordValue = Record<string, unknown>;
 const record = (v: unknown): RecordValue => v !== null && typeof v === 'object' && !Array.isArray(v) ? v as RecordValue : {};
 const label = (v: unknown) => typeof v === 'string' && v.length > 0 && v.length <= 1024 ? v : 'unknown';
-const bodyFields = ['facts', 'question', 'answer', 'reasoning', 'conclusion', 'claimantView', 'agencyView', 'relatedLawsText'];
+const bodyFields = ['facts', 'question', 'answer', 'reasoning', 'conclusion', 'claimantView', 'agencyView', 'relatedLawsText', 'fullText'];
 const bodyTools = new Set(['lookup_tax_document', 'get_tax_document', 'lookup_local_tax_document']);
 const discoveryTools = new Set(['search_law', 'search_decisions', 'legal_research', 'search_tax_interpretations', 'search_tax_decisions',
   'search_tax_guidance', 'get_tax_guidance', 'search_tax_forms', 'search_taxlaw', 'tax_research', 'search_local_tax_interpretations', 'search_local_tax_decisions']);
@@ -39,6 +50,7 @@ const textBlocks = (result: RecordValue): string[] => Array.isArray(result.conte
 export function adaptResearchEvidence(tool: string, args: RecordValue, response: unknown): AdaptedEvidence {
   const wrapper = record(response), server = record(wrapper.server), result = record(wrapper.result);
   const adapted: AdaptedEvidence = { upstream_name: label(server.name), upstream_version: label(server.version),
+    identity: observeIdentity(tool, args, result),
     upstream_commit: typeof record(record(result._meta)['legal-harness/taxlaw']).commit === 'string'
       && /^[a-f0-9]{40}$/.test(String(record(record(result._meta)['legal-harness/taxlaw']).commit))
       ? String(record(record(result._meta)['legal-harness/taxlaw']).commit) : null,
@@ -111,7 +123,11 @@ export function adaptResearchEvidence(tool: string, args: RecordValue, response:
       }
     } else if (tool === 'get_law_text') law(result, 'document', null, args);
     else if (tool === 'get_decision_text') {
-      const texts = textBlocks(result), u = unit('document', null, label(args.id), 'unknown', 'unknown');
+      // Decision documents use their observed decision date as the version label,
+      // like NTS documents above. The response/passages still have exact hashes.
+      // This is not a statute effective date or a claim of current applicability.
+      const version = adapted.identity?.status === 'observed' ? label(adapted.identity.date) : 'unknown';
+      const texts = textBlocks(result), u = unit('document', null, label(args.id), version, 'unknown');
       texts.forEach((text, i) => {
         const sections = [...text.matchAll(/^(?:【([^】]+)】|\[([^\]]+)\]|(?:■|▶)\s*([^\r\n]+)|((?:판시사항|판결요지|판결내용|판결전문|참조조문|참조판례|전문|이유|주문|결정요지|회신|질의|사실관계)):)\s*\r?\n/gm)];
         for (let n = 0; n < sections.length; n++) {
@@ -130,6 +146,13 @@ export function adaptResearchEvidence(tool: string, args: RecordValue, response:
   }
   adapted.document_id = adapted.units[0]?.document_id ?? 'unknown';
   adapted.document_version = adapted.units[0]?.document_version ?? 'unknown';
+  if (tool === 'get_law_text') {
+    const text = contents(result), name = /^법령명:\s*([^\r\n]+)/m.exec(text)?.[1]?.trim();
+    const articles = [...new Set([...text.matchAll(/^(제\d+조(?:의\d+)?)/gm)].map(m => m[1]))];
+    if (name && name.length <= 200 && articles.length && articles.length <= 32 && adapted.document_id !== 'unknown' && adapted.document_version !== 'unknown') {
+      adapted.statute_anchor = { law_id: adapted.document_id, name, articles, version: adapted.document_version };
+    }
+  }
   const scopes = adapted.units.map(u => u.body_scope);
   adapted.body_scope = scopes.includes('partial') ? 'partial' : scopes.includes('body_returned') ? 'body_returned'
     : scopes.length && scopes.every(s => s === 'discovery_only') ? 'discovery_only' : 'unknown';

@@ -1,5 +1,6 @@
 import type { Plan, ReviewInput, ScopeAssessmentInput } from './researchContracts.js';
 import type { ResearchAttempt, ResearchEvidence } from './researchEvidence.js';
+import { researchCoverage, type Coverage } from './researchCoverage.js';
 
 type Finding = { code: string; severity: 'blocked' | 'needs_info'; issue_id?: string; detail: string };
 type Track = NonNullable<Plan['scope_review']>['tracks'][number];
@@ -8,7 +9,7 @@ const closedStatuses = new Set<ScopeAssessmentInput['status']>(['supported', 'ex
 const unique = (values: string[]) => new Set(values).size === values.length;
 
 export function inspectScopeCompletion(input: ReviewInput, plan: Plan, evidence: ResearchEvidence[],
-  attempts: ResearchAttempt[], existingFindings: Finding[]) {
+  attempts: ResearchAttempt[], existingFindings: Finding[], coverage = researchCoverage(plan, input.expected_revision, evidence, attempts)) {
   const scope = plan.scope_review;
   if (!scope) return {
     status: 'not_configured' as const, question_scope_complete: false,
@@ -64,14 +65,15 @@ export function inspectScopeCompletion(input: ReviewInput, plan: Plan, evidence:
     let closed = closedStatuses.has(assessment.status) && reasons.length === 0;
     if (closed) {
       const issueId = track.issue_id;
-      if (track.lifecycle !== 'active' || !issueId) invalidate('required_track_not_promoted', 'SCOPE_TRACK_NOT_PROMOTED');
+      if (track.lifecycle !== 'active' || !issueId) invalidate('required_track_not_promoted'
+        + (track.relation === 'independent_notice' && track.lifecycle === 'deferred' && !issueId
+          ? '; 기존 관련 issue_id에만 연결하려면 update_legal_research의 scope_promotions와 현재 revision/state를 사용하세요. 질문·사실·쟁점은 변경하지 않고 설명은 scope_assessments.reason에 작성한 뒤 다시 검수하세요.' : ''), 'SCOPE_TRACK_NOT_PROMOTED');
       if (!assessment.fact_ids.length || !assessment.evidence_ids.length) invalidate('closed_status_requires_fact_and_evidence');
       const analysis = issueId ? byAnalysis.get(issueId) : undefined;
       if (!analysis || analysis.conclusion_mode !== 'definitive') invalidate('closed_status_requires_definitive_issue_analysis');
       if (existingFindings.some(finding => !finding.issue_id)) invalidate('review_has_global_findings');
       if (issueId && existingFindings.some(finding => finding.issue_id === issueId)) invalidate('issue_has_unresolved_review_findings');
-      if (issueId && attempts.some(attempt => attempt.issue_ids.includes(issueId)
-        && ['failed', 'empty', 'pending'].includes(attempt.status))) invalidate('issue_has_incomplete_retrieval');
+      if (issueId && coverage.incomplete_attempts.some(attempt => attempt.issue_ids.includes(issueId))) invalidate('issue_has_incomplete_retrieval');
       closed = reasons.length === 0;
     }
     if (!closed && !closedStatuses.has(assessment.status)) {

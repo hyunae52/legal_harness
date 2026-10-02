@@ -6,9 +6,11 @@ import { CallToolRequestSchema, ListToolsRequestSchema, type Tool } from '@model
 import { z } from 'zod';
 import { LawMcpError, type KoreanLawClient } from './koreanLawClient.js';
 import { type Actor, AnalyzeSchema, DraftSchema, type FailureService, ServiceError } from './contracts.js';
+import { ResearchCapacityError } from './researchRecovery.js';
+import { presentResearch } from './researchPresentation.js';
 import { GateEngine } from './gates.js';
 import { createAuthenticator } from './auth.js';
-import { retrievalEnvelope } from './evidence.js';
+import { retrievalEnvelope, rawStatuteNavigation, sourceReadingGuide } from './evidence.js';
 import { type SourceVerifier } from './sourceVerifier.js';
 import { safeToolDiagnostic } from './errorDiagnostics.js';
 import { landingHeaders, landingHtml } from './landing.js';
@@ -16,10 +18,11 @@ import { actionsSchema, antigravityConfig, desktopConfig, geminiConfig, gptInstr
 import { type CorrectionService } from './corrections.js';
 import { correctionInputs, correctionInstructions } from './correctionMeta.js';
 import { ResearchService, researchPolicyVersion, type ResearchOptions } from './research.js';
-import { researchTools, researchRoutes, researchSchemas, researchInstructions, type ResearchTool } from './researchContracts.js';
+import { researchTools, researchRoutes, researchSchemas, researchInstructions, requirementInstructions, type ResearchTool } from './researchContracts.js';
 import { ResourceBudgets, positiveLimit, type ResourceOptions } from './resourceBudgets.js';
 import { serveStateless, type RequestGuard } from './statelessHttp.js';
 import { PublicAccess, actorBudgetKey, assertNoPublicSession } from './publicAccess.js';
+import { inputDiagnostics, ToolInputError } from './inputDiagnostics.js';
 
 interface Options {
   law: Pick<KoreanLawClient, 'listTools' | 'callTool' | 'close' | 'releaseVersion'> & { taxlawRelease?: { version?: string; commit: string } | null };
@@ -44,7 +47,10 @@ export function createApp(options: Options) {
   const maxTransportsPerActor = positiveLimit(env.TAXLAB_MAX_TRANSPORTS_PER_ACTOR, 5);
   const auth = options.authenticate ?? createAuthenticator(env, fetch, publicAccess);
   const gates = options.gates ?? new GateEngine();
-  const research = new ResearchService(options.law, options.sources ? input => options.sources!.check(input) : undefined, options.researchOptions);
+  const research = new ResearchService(options.law, options.sources ? input => options.sources!.check(input) : undefined, {
+    ...options.researchOptions, limits: { ...options.researchOptions?.limits, yieldMs: Math.max(1, Math.min(40_000, budgets.limits.responseMs - 1000)) },
+    beforeSourceCall: actor => { budgets.consume(actor, 'lookup'); options.researchOptions?.beforeSourceCall?.(actor); },
+  });
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json({ limit: '256kb' }));
@@ -72,7 +78,12 @@ export function createApp(options: Options) {
     try { return await operation(); } finally { active--; }
   };
   const errorBody = (error: unknown) => {
-    if (error instanceof z.ZodError) return { status: 400, body: { code: 'INVALID_INPUT', fields: error.issues.map(i => i.path.join('.')) } };
+    if (error instanceof ResearchCapacityError) return { status: error.status, body: error.publicBody() };
+    if (error instanceof ServiceError && error.code === 'PUBLIC_SESSION_REQUIRED') return { status: error.status, body: {
+      code: error.code, recovery: { available_actions: ['reuse_original_client_session', 'report_unrecoverable_session'], create_new_research: false,
+        note: '같은 대화의 최초 연구/PR 준비 응답에 있는 client_session을 후속 도구 인수에 그대로 넣으세요. 빠진 인수만 수정해 기존 작업을 이어가세요. 핸들을 복구할 수 없으면 결과 불명을 알리고 작업을 자동 재생성하지 마세요. 사용자에게 키를 발급받으라고 하지 마세요.' } } };
+    if (error instanceof ToolInputError) return { status: 400, body: error.body };
+    if (error instanceof z.ZodError) return { status: 400, body: inputDiagnostics(error) };
     if (error instanceof LawMcpError && error.code==='MCP_TOOL_ERROR' && error.result) return {status:error.status,body:{code:error.code,result:safeToolDiagnostic(error.result,env)}};
     if (error instanceof ServiceError || error instanceof LawMcpError) return { status: error.status, body: { code: error.code } };
     return { status: 500, body: { code: 'INTERNAL_ERROR' } };
@@ -80,7 +91,7 @@ export function createApp(options: Options) {
   const fail = (res: Response, error: unknown) => {
     if (res.headersSent) { res.end(); return; }
     const r = errorBody(error);
-    if (r.status === 429) res.set('Retry-After', '5');
+    if (r.status === 429 && (!(error instanceof ResearchCapacityError) || error.recovery.retryable)) res.set('Retry-After', '5');
     res.status(r.status).json(r.body);
   };
   const protectedRoute = (handler: (req: Request, res: Response, actor: Actor) => Promise<unknown>) => (req: Request, res: Response) => {
@@ -106,7 +117,11 @@ export function createApp(options: Options) {
     const result = await options.law.callTool(name, args);
     const evidence = { ...retrievalEnvelope(name, args, result.result, result.server?.version ?? version, dates),
       upstream_name: result.server?.name ?? 'unidentified' };
-    return { ...result, evidence, corrections: options.corrections?.search(correctionQuery) ?? { status: 'unavailable', items: [] } };
+    const reference = rawStatuteNavigation(name, args, result.result);
+    const readingGuide = sourceReadingGuide(name, result.result, '/data/result');
+    return { ...result, evidence, ...(reference ? { retrieval_reference: reference } : {}),
+      ...(readingGuide ? { source_reading_guide: readingGuide } : {}),
+      corrections: options.corrections?.search(correctionQuery) ?? { status: 'unavailable', items: [] } };
   };
   const submit = (actor: Actor, input: unknown) => {
     if (actor.kind === 'anonymous') throw new ServiceError(410, 'USE_CORRECTION_PR');
@@ -114,10 +129,14 @@ export function createApp(options: Options) {
     return options.failures.submit(actor, input);
   };
   const runResearch = async (name: ResearchTool, actor: Actor, input: unknown) => {
-    if (name === 'research_legal_sources') budgets.consume(actor, 'lookup');
     const scoped = publicAccess.scope(actor, input, name === 'start_legal_research');
     assertNoPublicSession(scoped.input);
-    return publicAccess.result(await research.run(name, scoped.actor, scoped.input), scoped.token);
+    // Bind request errors to this tool's public contract, before any provider or service execution.
+    if (name === 'review_legal_reasoning') {
+      const parsed = researchSchemas[name].safeParse(scoped.input);
+      if (!parsed.success) throw new ToolInputError(inputDiagnostics(parsed.error, researchTools.find(t => t.name === name)!.inputSchema));
+    }
+    return publicAccess.result(presentResearch(name, scoped.input, await research.run(name, scoped.actor, scoped.input)), scoped.token);
   };
   const checkSources = (actor: Actor, input: unknown) => {
     assertNoPublicSession(input);
@@ -220,7 +239,7 @@ export function createApp(options: Options) {
   function mcpServer(actor: Actor, guard: RequestGuard = operation => operation()) {
     const mcpWork = <T>(operation: () => Promise<T>) => guard(() => work(operation));
     const server = new Server({ name: 'taxlab-legal-harness', version: '2.4.0' }, { capabilities: { tools: {} },
-      instructions: researchInstructions + ' 법령 도구 결과는 조회 자료입니다. 사건 기준일·연혁·부칙·후속 해석을 확인하세요. 국세청 해석례는 search_tax_interpretations → get_tax_document로 사실관계·질의·회신을 읽고, 문서번호를 알면 lookup_tax_document를 쓰세요(도구가 제공되는 경우). 법제처 일련번호와 국세청 ntstDcmId를 혼용하지 마세요. 기존 validate_legal_draft는 별도의 제한된 초안 검사입니다. ' + correctionInstructions });
+      instructions: researchInstructions + requirementInstructions + ' 법령 도구 결과는 조회 자료입니다. 사건 기준일·연혁·부칙·후속 해석을 확인하세요. 국세청 해석례는 search_tax_interpretations → get_tax_document로 사실관계·질의·회신을 읽고, 문서번호를 알면 lookup_tax_document를 쓰세요(도구가 제공되는 경우). 법제처 일련번호와 국세청 ntstDcmId를 혼용하지 마세요. 기존 validate_legal_draft는 별도의 제한된 초안 검사입니다. ' + correctionInstructions });
     const visible = actor.kind === 'anonymous' ? custom.filter(tool => tool.name !== 'submit_failure') : custom;
     server.setRequestHandler(ListToolsRequestSchema, () => mcpWork(async () => ({ tools: [...(await options.law.listTools()).tools.filter(t => !custom.some(c => c.name === t.name)).map(t => ({...t, description: (t.description ?? '') + '\n반박·새 근거로 기존 답변을 정정하면 prepare_correction_pr로 제안 내용을 준비하고 사용자에게 PR 생성을 물어보세요.'})), ...visible] })));
     server.setRequestHandler(CallToolRequestSchema, async request => {
@@ -249,7 +268,10 @@ export function createApp(options: Options) {
             return { content: [{ type: 'text' as const, text: JSON.stringify(data) }], structuredContent: data };
           }
           const data = await retrieve(actor, name, args);
-          return { ...data.result, content: [...data.result.content, ...(data.corrections.items.length ? [{ type: 'text' as const, text: JSON.stringify({ merged_correction_notes: data.corrections }) }] : [])],
+          const readingGuide = sourceReadingGuide(name, data.result, '', (data.retrieval_reference ? 1 : 0) + 1);
+          return { ...data.result, content: [...(data.retrieval_reference ? [{ type: 'text' as const, text: JSON.stringify({ retrieval_reference: data.retrieval_reference }) }] : []),
+            ...(readingGuide ? [{ type: 'text' as const, text: JSON.stringify({ source_reading_guide: readingGuide }) }] : []),
+            ...data.result.content, ...(data.corrections.items.length ? [{ type: 'text' as const, text: JSON.stringify({ merged_correction_notes: data.corrections }) }] : [])],
             _meta: { ...data.result._meta, 'legal-harness/evidence': data.evidence, 'legal-harness/corrections': data.corrections } };
         });
       } catch (error) {

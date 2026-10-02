@@ -1,14 +1,19 @@
 import { digest, ServiceError } from './contracts.js';
 import { ResearchPlan, type Plan, type InterviewAnswer } from './researchContracts.js';
+import { makeRequirements, requirementMissing, type Requirement } from './researchRequirements.js';
 
 export type Deferral = { kind: 'fact' | 'date'; id: string; reason: string };
-interface InterviewState { research_id: string; revision: number; state_version: number; plan: Plan; deferrals: Deferral[] }
+interface InterviewState { research_id: string; revision: number; state_version: number; plan: Plan; deferrals: Deferral[]; requirements?: Requirement[] }
 export function interviewState(session: InterviewState) {
+  const requirements = session.requirements ?? makeRequirements(session.plan, session.revision);
+  const hypotheses = requirements.filter(r => r.status === 'unresolved' && requirementMissing(r, session.plan));
   const pending = new Map<string, { target: { kind: 'fact' | 'date'; id: string }; question: string; issue_ids: string[];
     deferred: boolean; reason: string | null }>();
   for (const issue of session.plan.issues) {
     for (const [kind, ids] of [['fact', issue.required_fact_ids], ['date', issue.required_date_roles]] as const) {
       for (const id of ids) {
+        if (!requirements.some(r => r.issue_id === issue.id && r.target.kind === kind && r.target.id === id
+          && r.scope_status === 'current' && r.status === 'required')) continue;
         const fact = session.plan.facts.find(f => f.id === id);
         const date = session.plan.event_dates.find(d => d.role === id);
         if (kind === 'fact' ? fact!.status === 'provided' : date!.precision === 'day' && date!.basis === 'provided') continue;
@@ -23,11 +28,13 @@ export function interviewState(session: InterviewState) {
     }
   }
   const unresolved = [...pending.values()], next = unresolved.find(item => !item.deferred);
-  return { next_action: next ? 'ask_user' : unresolved.length ? 'conditional_or_withheld' : 'research_sources_and_review',
+  return { next_action: hypotheses.length ? 'assess_requirements' : next ? 'ask_user' : unresolved.length ? 'conditional_or_withheld' : 'research_sources_and_review',
     next_question: next ? { question_id: digest({ research_id: session.research_id, revision: session.revision,
       state_version: session.state_version, target: next.target }), target: next.target, question: next.question,
       issue_ids: next.issue_ids, reason: '등록된 쟁점의 필수 사실 또는 날짜가 아직 확인되지 않았습니다.' } : null,
-    unresolved_count: unresolved.length, unresolved, coverage: 'registered_requirements_only',
+    unresolved_count: unresolved.length, unresolved, assessment_pending_count: hypotheses.length,
+    assessment_pending: hypotheses.map(r => ({ requirement_id: r.requirement_id, issue_id: r.issue_id, target: r.target, scope_status: r.scope_status })),
+    coverage: 'provenance_assessed_registered_requirements',
     fact_verification: 'client_asserted', legal_verification: 'unverified' };
 }
 

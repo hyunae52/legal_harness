@@ -1,0 +1,196 @@
+  - heading "ChatGPT 답변:" [level=4]
+  - 'heading "Verdict: PLAN PASS — adequate to begin implementation" [level=2]':
+    - text: "Verdict:"
+    - strong: PLAN PASS — adequate to begin implementation
+  - paragraph:
+    - text: I found
+    - strong: no concrete plan-level blocker requiring another revision
+    - text: . A, B, and C address the observed failure paths without relaxing mandatory research, evidence integrity, or the original pilot acceptance criteria. This approval applies to the new completion-fix plan—not to the current implementation or release.
+  - paragraph:
+    - strong: "Reviewed plan SHA-256:"
+  - generic: 일반 텍스트
+  - button "자동 줄 바꿈 사용":
+  - button "복사":
+  - code: 086ade18fb6d15dc49d470093d7f2cb672ffe63b5df5c0722462069b53d53dae
+  - heading "Assessment of A, B, and C" [level=2]
+  - table:
+    - rowgroup:
+      - row "Area Plan judgment Basis":
+        - columnheader "Area"
+        - columnheader "Plan judgment"
+        - columnheader "Basis"
+    - rowgroup:
+      - 'row "A — Additive evidence bindings Adequate The plan explicitly distinguishes same-revision union from the first explicit reconnection of an old-revision document. It also specifies no-op repeats, immutable bodies, unchanged observation times, and invalidation only when effective bindings change. This directly corrects the replacement operation still present in src/research.ts:235–247. Plan: §3, lines 43–53."':
+        - cell "A — Additive evidence bindings":
+          - strong: A — Additive evidence bindings
+        - cell "Adequate":
+          - strong: Adequate
+        - 'cell "The plan explicitly distinguishes same-revision union from the first explicit reconnection of an old-revision document. It also specifies no-op repeats, immutable bodies, unchanged observation times, and invalidation only when effective bindings change. This directly corrects the replacement operation still present in src/research.ts:235–247. Plan: §3, lines 43–53."':
+          - text: The plan explicitly distinguishes same-revision union from the first explicit reconnection of an old-revision document. It also specifies no-op repeats, immutable bodies, unchanged observation times, and invalidation only when effective bindings change. This directly corrects the replacement operation still present in src/research.ts:235–247.
+          - strong: "Plan: §3, lines 43–53."
+      - 'row "B — Bounded responses and same-session recovery Adequate Capacity reasons are exposed only after ownership checks; permanent exhaustion, temporary shared-resource pressure, and pending work are distinguished. The ≤32KiB summary is a presentation limit—not a limit on the records examined by review. Snapshot-bound pagination and explicit exact-body reads preserve access to omitted information. Plan: §4, lines 55–83."':
+        - cell "B — Bounded responses and same-session recovery":
+          - strong: B — Bounded responses and same-session recovery
+        - cell "Adequate":
+          - strong: Adequate
+        - 'cell "Capacity reasons are exposed only after ownership checks; permanent exhaustion, temporary shared-resource pressure, and pending work are distinguished. The ≤32KiB summary is a presentation limit—not a limit on the records examined by review. Snapshot-bound pagination and explicit exact-body reads preserve access to omitted information. Plan: §4, lines 55–83."':
+          - text: Capacity reasons are exposed only after ownership checks; permanent exhaustion, temporary shared-resource pressure, and pending work are distinguished. The ≤32KiB summary is a presentation limit—not a limit on the records examined by review. Snapshot-bound pagination and explicit exact-body reads preserve access to omitted information.
+          - strong: "Plan: §4, lines 55–83."
+      - 'row "C — Fact value versus necessity Adequate Server-bound necessity assessments replace the assumption that membership in required_fact_ids proves necessity. Assessment-only updates use revision/state checks without restarting research. Interview, review, and scope completion share the assessment, while fact values and unresolved evidence gaps remain intact. Plan: §5, lines 85–122."':
+        - cell "C — Fact value versus necessity":
+          - strong: C — Fact value versus necessity
+        - cell "Adequate":
+          - strong: Adequate
+        - 'cell "Server-bound necessity assessments replace the assumption that membership in required_fact_ids proves necessity. Assessment-only updates use revision/state checks without restarting research. Interview, review, and scope completion share the assessment, while fact values and unresolved evidence gaps remain intact. Plan: §5, lines 85–122."':
+          - text: Server-bound necessity assessments replace the assumption that membership in required_fact_ids proves necessity. Assessment-only updates use revision/state checks without restarting research. Interview, review, and scope completion share the assessment, while fact values and unresolved evidence gaps remain intact.
+          - strong: "Plan: §5, lines 85–122."
+  - button "표 복사":
+  - button "표 펼치기":
+  - heading "A’s revision boundary is sufficiently specified" [level=3]
+  - paragraph:
+    - text: The important distinction is
+    - strong: current effective bindings
+    - text: ", not an unconditional union with the document’s original bindings."
+  - paragraph:
+    - text: Within revision 1, [I1,I2] + [I3] must retain all three. After a genuine revision change, the first reuse into [I3] must
+    - strong: not
+    - text: revive I1/I2. A subsequent reuse into I2 in that new revision then produces [I2,I3]. An unchanged set must preserve the existing state and review; an actual addition must invalidate the review without inventing a new source observation.
+  - paragraph:
+    - text: Those distinctions are already in CF-01–03. I also read the prepared assertions covering them, including the unrelated-statute negative control. The current coverage code derives shared context from currently bound evidence for the same observed statute/article, so restoring the bindings targets the documented broadening mechanism rather than hardcoding the expected judgment.
+    - strong: "Code:"
+    - text: src/research.ts:84–87,235–247; src/researchCoverage.ts:139–147.
+    - strong: "Prepared tests:"
+    - text: tests/research-harness.test.mjs:135–193 in the later returned version.
+  - heading "B does not confuse smaller output with a smaller investigation" [level=3]
+  - paragraph:
+    - text: The current view() returns the plan, history, coverage, worklist, and evidence together; the capacity checks also collapse several limits into one RESEARCH_CAPACITY error. B addresses both without deleting the underlying records.
+    - strong: "Code:"
+    - text: src/research.ts:66–77,89–104; src/researchProgress.ts:3–26.
+  - paragraph: "The plan retains the necessary distinctions:"
+  - paragraph:
+    - strong: A summary is not the complete ledger; a completed job is not completed research; an exhausted budget is not evidence that no candidate exists.
+    - text: All mandatory records remain review inputs, while pages and explicit reads expose them to the client. CF-04–07 cover the relevant boundaries, including no provider call on refusal, correct reference namespaces, snapshot replacement detection, and continued access to stored bodies.
+  - paragraph:
+    - text: "There is no need to add a new persistence system or redesign all internal storage before implementing this plan. Its stated stop condition is appropriate: if fixing A and reducing responses still leaves normal cases unable to fit the preserved storage budget, that requires further evidence-based work—not a completion override."
+    - strong: "Plan:"
+    - text: §4 B-1–B-3, particularly lines 65–77.
+  - heading "C preserves the distinction that matters for the second failure" [level=3]
+  - paragraph: "The three states are not interchangeable:"
+  - list:
+    - strong: unresolved
+    - text: means the necessity assessment remains unfinished—not that an additional legal condition has been established.
+    - strong: required with an unknown value
+    - text: remains a genuine question or blocking factual gap.
+    - strong: not_required_for_question
+    - text: removes that item as a prerequisite for the scoped question; it does
+    - strong: not
+    - text: turn the fact into provided or establish its truth.
+  - paragraph:
+    - text: "This is a suitable correction to the current unconditional required-fact loop and interview behavior. The existing checks on facts actually used in claims and scope assessments remain relevant: necessity exclusion is not permission to present an unknown fact as established."
+    - strong: "Code:"
+    - text: src/researchInterview.ts:9–29; src/researchReview.ts:32–35,71–75; src/scopeCompletion.ts:51–60.
+  - paragraph:
+    - text: "CF-08–11 provide the appropriate discriminating contracts: unsupported hypothesis versus an actual additional requirement; evidence-backed exclusion versus deletion or invalid references; assessment-only changes versus a real revision change. The plan also explicitly preserves semantic review because a valid citation reference can still accompany a legally wrong necessity assessment. That limitation is acknowledged rather than disguised as deterministic legal verification."
+    - strong: "Plan:"
+    - text: §5 C-1–C-3 and §6 CF-08–11.
+  - heading "Evidence boundary and actual reads" [level=2]
+  - paragraph:
+    - text: The existing selection was absent. I confirmed sim-pc-5060 online, selected
+    - strong: only
+    - text: C:\repos\simdorei\legal_harness using the specified resource, and confirmed it with device_info.
+  - table:
+    - rowgroup:
+      - row "File Independently read":
+        - columnheader "File"
+        - columnheader "Independently read"
+    - rowgroup:
+      - row "docs/AUTHORITY_COVERAGE_COMPLETION_FIX_PLAN.md 1–167, entire file; 41–120 rechecked":
+        - cell "docs/AUTHORITY_COVERAGE_COMPLETION_FIX_PLAN.md"
+        - cell "1–167, entire file; 41–120 rechecked":
+          - strong: 1–167, entire file
+          - text: ; 41–120 rechecked
+      - row "docs/evidence/authority-completion-planning-20261001.json 1–138, entire file":
+        - cell "docs/evidence/authority-completion-planning-20261001.json"
+        - cell "1–138, entire file":
+          - strong: 1–138, entire file
+      - row "docs/reviews/AUTHORITY_COVERAGE_RELEASE_RESULT_2026-10-01.md 1–60, entire file":
+        - cell "docs/reviews/AUTHORITY_COVERAGE_RELEASE_RESULT_2026-10-01.md"
+        - cell "1–60, entire file":
+          - strong: 1–60, entire file
+      - row "src/research.ts 1–325, entire file; 232–258 rechecked":
+        - cell "src/research.ts"
+        - cell "1–325, entire file; 232–258 rechecked":
+          - strong: 1–325, entire file
+          - text: ; 232–258 rechecked
+      - row "src/researchCoverage.ts 1–245, entire file":
+        - cell "src/researchCoverage.ts"
+        - cell "1–245, entire file":
+          - strong: 1–245, entire file
+      - row "src/researchProgress.ts 1–27, entire file":
+        - cell "src/researchProgress.ts"
+        - cell "1–27, entire file":
+          - strong: 1–27, entire file
+      - row "src/researchContracts.ts 1–144, entire file":
+        - cell "src/researchContracts.ts"
+        - cell "1–144, entire file":
+          - strong: 1–144, entire file
+      - row "src/researchInterview.ts 1–53, entire file":
+        - cell "src/researchInterview.ts"
+        - cell "1–53, entire file":
+          - strong: 1–53, entire file
+      - row "src/researchReview.ts 1–138, entire file":
+        - cell "src/researchReview.ts"
+        - cell "1–138, entire file":
+          - strong: 1–138, entire file
+      - row "src/scopeCompletion.ts 1–108, entire file":
+        - cell "src/scopeCompletion.ts"
+        - cell "1–108, entire file":
+          - strong: 1–108, entire file
+      - row "src/researchProfiles.ts 1–31, entire file":
+        - cell "src/researchProfiles.ts"
+        - cell "1–31, entire file":
+          - strong: 1–31, entire file
+      - row "tests/research-harness.test.mjs 1–470 in the first returned version; 120–309 and 471–670 in a later version":
+        - cell "tests/research-harness.test.mjs"
+        - cell "1–470 in the first returned version; 120–309 and 471–670 in a later version":
+          - strong: 1–470
+          - text: in the first returned version;
+          - strong: 120–309 and 471–670
+          - text: in a later version
+  - button "표 복사":
+  - button "표 펼치기":
+  - paragraph:
+    - text: The test file grew from
+    - strong: 637 to 698 lines during the reads
+    - text: ", consistent with regression preparation. I read prepared CF-01–05, CF-07, and CF-08 assertions, but"
+    - strong: did not execute them or count them as additional passes
+    - text: . These test reads are not a single immutable test-file snapshot.
+  - paragraph: "The plan hash remained unchanged across its reads. The evidence JSON’s returned SHA-256 was:"
+  - generic: 일반 텍스트
+  - button "자동 줄 바꿈 사용":
+  - button "복사":
+  - code: 486c98cc902d4e16384fe738eae272748392d6b970ce3a61b575556ad189b2ad
+  - paragraph: I independently confirmed the binding-replacement mechanism in code. The call indexes, byte counts, and trial history come from the supplied evidence files; I did not reconstruct them from raw traces. Masked identifiers and the prohibition on Git operations also mean I did not independently establish HEAD/product-tree equality.
+  - heading "What this approval does—and does not—establish" [level=2]
+  - paragraph:
+    - text: The recorded
+    - strong: 284 tests, 9 installed-package tests, and exact-HEAD CI
+    - text: remain reusable baseline evidence. They are not evidence that A–C already work. The frozen pilot remains
+    - strong: 22 semantic PASS / 2 FAIL
+    - text: ", with the failures preserved."
+    - strong: "Record:"
+    - text: AUTHORITY_COVERAGE_RELEASE_RESULT_2026-10-01.md:7–32.
+  - paragraph:
+    - text: The plan retains the original
+    - strong: 8×3 trials, 1,500-second limit, normal-control completion, semantic acceptance, and prohibition on replacing failures with unchanged-code reruns
+    - text: . That is sufficient for plan approval; no additional protocol layer or release waiver is warranted.
+    - strong: "Plan:"
+    - text: §7–8, lines 139–167.
+  - paragraph:
+    - strong: "Final disposition: PLAN PASS for this specific plan snapshot. Implementation verification, the new frozen pilot, final independent review, and release approval remain outstanding."
+  - button "복사":
+  - button "응답 평가":
+  - button "공유":
+  - button "소리 내어 읽기":
+  - button "응답 다시 생성":
+  - button "추가 액션":

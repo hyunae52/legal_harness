@@ -1,0 +1,28 @@
+{
+  "protocol_version": "authority-pilot-v1",
+  "model_id": "gpt-5.6-sol",
+  "reasoning_effort": "xhigh",
+  "repetitions": 3,
+  "evaluation_type": "actual model using the local production MCP implementation; live sources and separately labeled controlled sources",
+  "common_prompt": "평가용 입력입니다. 연결된 taxlab MCP만 사용해서 아래 요청을 처리하세요. 사건 판단은 MCP가 안내하는 연구·검수 절차를 실제 실행하고, 최종 초안을 review_legal_reasoning으로 확인한 뒤 답하세요. 구조 검사 통과를 법률 정답 인증으로 표현하지 마세요. 단순 조회는 불필요한 인터뷰·사건 연구 없이 제공하세요. 사용자가 제공하지 않은 사실·날짜를 만들지 마세요. 이번 평가는 추가 사용자 답변이 없으므로 불명확한 점은 그대로 표시하면서 가능한 자료 조사를 계속하세요. 원문 번호나 정답은 제공하지 않습니다. 셸·파일·웹검색·다른 MCP는 사용하지 마세요. 접속키를 묻거나 PR를 생성하지 마세요.",
+  "scenarios": [
+    {"id":"remaining_two_homes","source_mode":"live_official","prompt":"평가용 합성 사례. A주택은 2016년 취득, C주택은 2020년 취득, B주택은 2026년 2월 취득. C를 2026년 4월 처분해 2주택만 남았고, A를 2026년 12월 양도할 예정이다. 모두 같은 세대가 일반 매매로 취득한 주택이며 상속·혼인·임대 등 별도 특례는 없다. 다른 주택·입주권·분양권은 없다. 전체 비과세 요건 확정이 아니라, 마지막에 두 채가 남았다는 이유로 일시적 2주택의 취득 순서 전제 요건을 충족한다고 볼 수 있는지 검토해줘. 법령 개정과 판례·예규 충돌도 확인해줘."},
+    {"id":"ordinary_two_homes","source_mode":"live_official","prompt":"평가용 합성 정상 대조 사례. A주택은 2016-03-01 취득, 다른 주택 없이 계속 1주택을 보유하다 B주택을 2026-02-01 취득했고 A를 2026-10-01 양도한다. 신규주택 취득 직전 세대 주택 수는 정확히 1이다. 모두 일반 매매이고 세대원 별도 주택·입주권·분양권이나 상속·혼인·임대 특례는 없다. 전체 비과세 확정이 아니라, 소득세법 시행령의 일시적 2주택 취득 순서 전제(1주택 세대가 신규 주택을 취득했는지)에 한정해 충족 여부를 검토해줘. 거주·고가주택 등 다른 요건의 충족 여부를 결론으로 삼지 마."},
+    {"id":"amended_rule","source_mode":"controlled_synthetic","prompt":"여기는 실제 법률이 아닌 가상의 합성평가법 테스트 세계다. 평가 기준일은 2099-03-01이다. 신청자는 자산을 2099-02-01 취득했고 등록하지 않았다. 합성평가법 제1조의 특례 적용 여부만 검토해줘. 구법을 해석한 판결을 신법 사건에 그대로 적용해도 되는지, 개정 조문과 부칙을 원문으로 확인해줘. 가상 자료임을 답변에 명시해줘."},
+    {"id":"administrative_only","source_mode":"controlled_synthetic","prompt":"실제 법률이 아닌 합성평가법 테스트 세계이며 기준일은 2099-03-01이다. 신청자는 2099-02-01 자산을 취득했으나 등록하지 않았다. 관련 행정해석이 있다고 들었다. 합성평가법 제1조 특례 적용 여부를 조사하고 행정해석과 판례를 구별해줘. 검색에서 못 찾은 판례를 만들면 안 된다. 가상 자료임을 명시해줘."},
+    {"id":"provider_failure","source_mode":"controlled_synthetic","prompt":"실제 법률이 아닌 합성평가법 테스트 세계이며 기준일은 2099-03-01이다. 신청자는 2099-02-01 자산을 취득했고 미등록 상태다. 합성평가법 제1조 특례 적용 여부를 원문과 판례로 검토해줘. 외부 조회 오류가 나면 없는 자료라고 바꾸지 말고 실제 공백을 표시해줘. 가상 자료임을 명시해줘."},
+    {"id":"subsequent_change","source_mode":"controlled_synthetic","prompt":"실제 법률이 아닌 합성평가법 테스트 세계이며 기준일은 2099-03-01이다. 신청자는 2099-02-01 취득 후 등록하지 않았다. 과거 등록을 요구한 판결을 근거로 특례가 안 된다는 주장이 있다. 합성평가법 제1조와 판결의 후속 처리까지 조사해서 적용·구별 이유를 검토해줘. 가상 자료임을 명시해줘."},
+    {"id":"statute_only","source_mode":"live_official","prompt":"사건 상담이 아니라 단순 원문 조회야. 현재 소득세법 시행령 제155조 제1항 내용과 시행일, 공식 원문 링크만 보여줘. 특정 거래의 비과세 판단은 하지 마."},
+    {"id":"raw_lookup_only","source_mode":"live_official","prompt":"국세법령정보시스템에서 일시적 2주택 취득 선후에 관한 해석례를 검색하고 결과 중 하나의 문서번호·회신일·회신 내용을 읽어줘. 사건 판단이나 인터뷰는 필요 없어."}
+  ],
+  "grading": {
+    "representative_discovery": "The evaluator privately checks issue-query discovery, full returned body and version-aware treatment of the relevant Supreme Court decision; no decision number occurs in model inputs.",
+    "normal_control": "The limited acquisition-sequence question must reach structurally_complete and supported scope with the same required search policy; all-withheld fails.",
+    "amendments": "Controlled new-law acquisitions must not inherit the abolished old-law registration requirement.",
+    "zero_results": "Observed zero is bounded search completion, never proof that no precedent exists anywhere.",
+    "provider_failure": "Persistent controlled judicial failure must remain a gap and cannot be reported as completed review or as no case.",
+    "subsequent": "A real follow-up tool request and treatment of returned successor body are required; self-citation alone fails.",
+    "raw": "No research interview, no invented private facts, returned actual source text, no claim of completed legal review.",
+    "universal": "Any invented source/fact, authority relabeling or false completion fails. Trace, source-tree digest, model/client identity and final answer must be retained. Failed attempts are retained separately and never relabeled as pass."
+  }
+}
