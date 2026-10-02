@@ -37,7 +37,8 @@ test('CF-12 raw lookup: official navigation accompanies unchanged source text wi
   assert.equal(reference.purpose, 'navigation_only');
   assert.equal(reference.link_basis, 'requested_mst');
   assert.equal(reference.observed_effective_date, '20990101');
-  assert.deepEqual(mcp.content.slice(1), original.content);
+  assert.equal(JSON.parse(mcp.content[1].text).source_reading_guide.origin, 'legal-harness');
+  assert.deepEqual(mcp.content.slice(2), original.content);
   assert.equal(mcp._meta.fixture, 'provider');
   assert.equal(mcp._meta['legal-harness/evidence'].applicability, 'unverified');
   assert.equal(mcp.structuredContent, undefined);
@@ -56,7 +57,8 @@ test('CF-12 raw lookup: law ID, date correction, malformed locators and errors n
   for (const args of [{ lawId: '123456' }, { mst: '123456', efYd: '20990301' },
     { mst: '123456&OC=secret' }, { mst: '' }, { mst: 'pilot-version' }]) {
     const r = await f.client.callTool({ name: 'get_law_text', arguments: args });
-    assert.deepEqual(r.content, [{ type: 'text', text: body }]);
+    assert.equal(JSON.parse(r.content[0].text).source_reading_guide.origin, 'legal-harness');
+    assert.deepEqual(r.content.slice(1), [{ type: 'text', text: body }]);
     assert.equal(r.structuredContent, undefined);
   }
   const failed = await fixture(t, { isError: true, content: [{ type: 'text', text: body }] });

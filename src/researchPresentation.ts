@@ -2,9 +2,11 @@ import { ServiceError } from './contracts.js';
 import type { ResearchTool } from './researchContracts.js';
 import type { ResearchEvidence } from './researchEvidence.js';
 import { storedBytes } from './researchStorage.js';
+import { answerWritingGuide, researchReadingGuide } from './evidence.js';
+import { reviewRecoveryGuide } from './inputDiagnostics.js';
 
 type RecordValue = Record<string, any>;
-export const researchResponseContract = 'research-response-v2-20261002';
+export const researchResponseContract = 'research-response-v3-fidelity-20261002';
 const sizeLimit = 30_000; // Leave room for the authoritative public continuation handle and JSON envelope.
 const pick = (value: RecordValue, names: string[]) => Object.fromEntries(names.filter(k => k in value).map(k => [k, value[k]]));
 const identityFields = ['status', 'research_id', 'revision', 'state_version', 'expires_at', 'policy_version', 'pending', 'remaining_attempts', 'last_review', 'legal_verification'];
@@ -18,11 +20,13 @@ function collections(state: RecordValue): Record<string, any[]> {
 /** Public presentation only: the deterministic reviewer still consumes the entire server state. */
 export function presentResearch(name: ResearchTool, raw: unknown, state: RecordValue): RecordValue {
   const input = raw as RecordValue;
-  if (name === 'review_legal_reasoning') return { ...state, response_mode: 'review', response_contract: researchResponseContract };
+  if (name === 'review_legal_reasoning') return { ...state, response_mode: 'review', response_contract: researchResponseContract,
+    answer_writing_guide: answerWritingGuide, review_recovery: { ...reviewRecoveryGuide, review_performed: true, review_status: state.status } };
   const head = { ...pick(state, identityFields), response_contract: researchResponseContract };
   const lists = collections(state);
   if (name === 'get_legal_research' && input.evidence_ids) return { ...head, response_mode: 'selected_evidence',
     evidence: state.evidence, evidence_selection: state.evidence_selection,
+    source_reading_guide: researchReadingGuide(state.evidence),
     evidence_index: lists.evidence_index,
     manifests: (state.manifests ?? []).filter((m: RecordValue) => m.evidence_ids.some((id: string) => input.evidence_ids.includes(id))),
     note: '선택한 원문만 반환합니다. 본문은 저장한 바이트 그대로이며 다른 원문은 evidence_index 페이지에서 확인하세요.' };

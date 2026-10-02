@@ -82,6 +82,11 @@ export const actionsSchema = {
             content: { type: 'array', items: { type: 'object', properties: { type: { type: 'string' }, text: { type: 'string' } }, additionalProperties: true } },
             structuredContent: { type: 'object', additionalProperties: true }, isError: { type: 'boolean' },
           }, additionalProperties: true }, evidence: { type: 'object', properties: { applicability: { type: 'string' }, observed_at: { type: 'string' }, note: { type: 'string' } }, additionalProperties: true },
+          source_reading_guide: { type: 'object', description: 'Harness-authored reading guidance, separate from provider data; not a legal or completeness verdict. JSON pointers address this REST response.', properties: {
+            origin: { type: 'string', const: 'legal-harness' }, purpose: { type: 'string' },
+            source_references: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } },
+            references_truncated: { type: 'boolean' }, instructions: { type: 'array', items: { type: 'string' } },
+          }, additionalProperties: true },
         }, additionalProperties: true } },
       }), default: errorResponse },
     } },

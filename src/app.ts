@@ -10,7 +10,7 @@ import { ResearchCapacityError } from './researchRecovery.js';
 import { presentResearch } from './researchPresentation.js';
 import { GateEngine } from './gates.js';
 import { createAuthenticator } from './auth.js';
-import { retrievalEnvelope, rawStatuteNavigation } from './evidence.js';
+import { retrievalEnvelope, rawStatuteNavigation, sourceReadingGuide } from './evidence.js';
 import { type SourceVerifier } from './sourceVerifier.js';
 import { safeToolDiagnostic } from './errorDiagnostics.js';
 import { landingHeaders, landingHtml } from './landing.js';
@@ -22,7 +22,7 @@ import { researchTools, researchRoutes, researchSchemas, researchInstructions, r
 import { ResourceBudgets, positiveLimit, type ResourceOptions } from './resourceBudgets.js';
 import { serveStateless, type RequestGuard } from './statelessHttp.js';
 import { PublicAccess, actorBudgetKey, assertNoPublicSession } from './publicAccess.js';
-import { inputDiagnostics } from './inputDiagnostics.js';
+import { inputDiagnostics, ToolInputError } from './inputDiagnostics.js';
 
 interface Options {
   law: Pick<KoreanLawClient, 'listTools' | 'callTool' | 'close' | 'releaseVersion'> & { taxlawRelease?: { version?: string; commit: string } | null };
@@ -82,6 +82,7 @@ export function createApp(options: Options) {
     if (error instanceof ServiceError && error.code === 'PUBLIC_SESSION_REQUIRED') return { status: error.status, body: {
       code: error.code, recovery: { available_actions: ['reuse_original_client_session', 'report_unrecoverable_session'], create_new_research: false,
         note: '같은 대화의 최초 연구/PR 준비 응답에 있는 client_session을 후속 도구 인수에 그대로 넣으세요. 빠진 인수만 수정해 기존 작업을 이어가세요. 핸들을 복구할 수 없으면 결과 불명을 알리고 작업을 자동 재생성하지 마세요. 사용자에게 키를 발급받으라고 하지 마세요.' } } };
+    if (error instanceof ToolInputError) return { status: 400, body: error.body };
     if (error instanceof z.ZodError) return { status: 400, body: inputDiagnostics(error) };
     if (error instanceof LawMcpError && error.code==='MCP_TOOL_ERROR' && error.result) return {status:error.status,body:{code:error.code,result:safeToolDiagnostic(error.result,env)}};
     if (error instanceof ServiceError || error instanceof LawMcpError) return { status: error.status, body: { code: error.code } };
@@ -117,7 +118,9 @@ export function createApp(options: Options) {
     const evidence = { ...retrievalEnvelope(name, args, result.result, result.server?.version ?? version, dates),
       upstream_name: result.server?.name ?? 'unidentified' };
     const reference = rawStatuteNavigation(name, args, result.result);
+    const readingGuide = sourceReadingGuide(name, result.result, '/data/result');
     return { ...result, evidence, ...(reference ? { retrieval_reference: reference } : {}),
+      ...(readingGuide ? { source_reading_guide: readingGuide } : {}),
       corrections: options.corrections?.search(correctionQuery) ?? { status: 'unavailable', items: [] } };
   };
   const submit = (actor: Actor, input: unknown) => {
@@ -128,6 +131,11 @@ export function createApp(options: Options) {
   const runResearch = async (name: ResearchTool, actor: Actor, input: unknown) => {
     const scoped = publicAccess.scope(actor, input, name === 'start_legal_research');
     assertNoPublicSession(scoped.input);
+    // Bind request errors to this tool's public contract, before any provider or service execution.
+    if (name === 'review_legal_reasoning') {
+      const parsed = researchSchemas[name].safeParse(scoped.input);
+      if (!parsed.success) throw new ToolInputError(inputDiagnostics(parsed.error, researchTools.find(t => t.name === name)!.inputSchema));
+    }
     return publicAccess.result(presentResearch(name, scoped.input, await research.run(name, scoped.actor, scoped.input)), scoped.token);
   };
   const checkSources = (actor: Actor, input: unknown) => {
@@ -260,7 +268,9 @@ export function createApp(options: Options) {
             return { content: [{ type: 'text' as const, text: JSON.stringify(data) }], structuredContent: data };
           }
           const data = await retrieve(actor, name, args);
+          const readingGuide = sourceReadingGuide(name, data.result, '', (data.retrieval_reference ? 1 : 0) + 1);
           return { ...data.result, content: [...(data.retrieval_reference ? [{ type: 'text' as const, text: JSON.stringify({ retrieval_reference: data.retrieval_reference }) }] : []),
+            ...(readingGuide ? [{ type: 'text' as const, text: JSON.stringify({ source_reading_guide: readingGuide }) }] : []),
             ...data.result.content, ...(data.corrections.items.length ? [{ type: 'text' as const, text: JSON.stringify({ merged_correction_notes: data.corrections }) }] : [])],
             _meta: { ...data.result._meta, 'legal-harness/evidence': data.evidence, 'legal-harness/corrections': data.corrections } };
         });
