@@ -1,6 +1,6 @@
 # 단순 원문 조회의 적용조건 보존 보완안
 
-상태: 2026-10-02 후속 보완안. **아직 구현·검증하지 않았다.** SSS는 고정 커밋 `c8edd6e5b6f2816f70d3d734989f7ab91e5f163c`의 관련 경로를 읽고 아래 방향을 권고했다. [검토 원문](reviews/AUTHORITY_RAW_REMEDIATION_SSS_RESPONSE_2026-10-02.txt)은 새 CODE PASS나 출시 PASS가 아니다.
+상태: 2026-10-02에 작성한 후속 보완 원안이다. **구현·로컬 검증과 SSS 코드 재검수 현황은 [후속 구현 기록](AUTHORITY_FIDELITY_RECOVERY_IMPLEMENTATION.md)을 따른다.** SSS는 이 원안 작성 당시 고정 커밋 `c8edd6e5b6f2816f70d3d734989f7ab91e5f163c`의 관련 경로를 읽고 아래 방향을 권고했다. [당시 검토 원문](reviews/AUTHORITY_RAW_REMEDIATION_SSS_RESPONSE_2026-10-02.txt)은 새 CODE PASS나 출시 PASS가 아니다.
 
 ## 관측과 목표
 

@@ -1,0 +1,30 @@
+    - article:
+      - paragraph: LEGAL-HARNESS-SSS-FIDELITY-CODE-20261002-78c9089
+      - paragraph:
+        - text: "CODE: PASS — 이번 변경과 직접 연결 경계에 한정"
+        - text: "출시: HOLD"
+        - text: "남은 P1/P2: 확인되지 않음"
+      - paragraph: 78c9089b1d31aab78332aaa71b30af8846e4fd46을 기준 3517c432와 대조해 읽었어. 수용했던 최소 구현 계약과 일치해
+      - list:
+        - text: 원문·참조 전달
+        - text: sourceReadingGuide는 고정 안내와 실제 문자열 위치만 생성해. MCP의 탐색 링크+안내 블록만큼 인덱스를 보정하고, REST는 /data/result 아래를 가리켜. 원래 content의 상대 순서·structuredContent를 유지하며 출처 해시도 장식 전 결과를 대상으로 해
+      - paragraph: 실제 LawMcpError는 기존 redaction 경로로 빠져 읽기 성공 안내가 붙지 않아. 응답 한도 초과도 원문 절단 대신 기존 명시적 오류를 유지해
+      - list:
+        - paragraph:
+          - text: 사건 답변 안내
+          - text: researchPresentation의 selected_evidence 참조는 실제 반환된 passages에서만 만들어져. 다른 조각이 남을 수 있다는 안내도 있어. review의 작성·복구 안내는 표현 계층에 추가되며 검수 상태·검색·manifest·세션 예산을 바꾸지 않아
+        - paragraph:
+          - text: 입력 복구
+          - text: app.ts의 review 요청 사전 검증에만 해당 공개 inputSchema를 결합하는 방식이 적절해. provider 오류나 REST 바깥 요청 오류에 review 스키마가 붙지 않아
+      - paragraph: inputDiagnostics는 N2의 누락·빈 배열·오형식에 부모/item 스키마를 제공하고, 동일 조각을 합쳐 전체 크기를 제한해. 큰 조각은 제약을 잘라내지 않고 통째로 생략·표시해. 제출값·미등록 키·custom message를 반사하지 않으며, 형식 수리와 법적 타당성을 구분하는 안내도 유지돼
+      - paragraph: 검사 보강 권고는 두 가지야. 현재 코드 결함으로 분류하지는 않아
+      - list:
+        - listitem: 64개를 넘는 참조에서 references_truncated와 원문 불변을 직접 검사
+        - text: 여러 조각 중 일부만 selected_evidence로 읽어, 안내 참조가 반환된 조각에만 속하고 manifest의 다른 조각을 읽었다고 오인시키지 않는지 검사
+        - text: 현재 FR-06은 단일 조각이라 이 두 번째 경계를 독립적으로 재현하지는 않아
+      - paragraph: 실제로 읽은 범위는 변경 소스 6개(app/evidence/inputDiagnostics/researchPresentation/researchContracts/setup), raw-lookup·source-fidelity·review-input-recovery 테스트, 구현 문서와 preflight야
+      - paragraph: 342/342·설치 9/9·비밀 검사·CLI 가시성 시험은 제공된 실행 기록으로 확인했으며 내가 실행하거나 집계 SHA를 독립 재계산한 것은 아니야. 특히 structured-only 값 재현 1회는 해당 클라이언트의 가시성 근거이며 조건·예외 보존 효과의 증거는 아니야
+      - paragraph: pilot-o의 원래 24회 평가는 아직 남아 있으므로 출시 HOLD를 유지해. 이번 CODE PASS로 pilot-n의 21/24와 보존된 실패를 상쇄하지 않아
+      - generic "메시지 액션":
+        - button "반응 선택":
+        - button "답장":

@@ -157,3 +157,40 @@ test('FR-08: MCP and REST bind invalid review input to its own schema without co
   const upstream = await provider.client.callTool({ name: 'get_tax_document', arguments: {} });
   assert.equal(upstream.isError, true); assert.equal(JSON.parse(upstream.content[0].text).schema_hints, undefined);
 });
+
+test('FR-10: more than 64 source pointers are explicitly omitted while every provider block remains intact', async t => {
+  const original = { content: Array.from({ length: 70 }, (_, n) => ({ type: 'text', text: `원문 ${n}: 조건(예외)\r\n😀` })) };
+  const before = structuredClone(original), f = await fixture(t, original);
+  const mcp = await f.client.callTool({ name: 'get_tax_document', arguments: {} }), g = guide(mcp);
+  assert.equal(g.references_truncated, true); assert.equal(g.source_references.length, 64);
+  assert.deepEqual(mcp.content.slice(1), original.content);
+  assert.equal(mcp._meta['legal-harness/evidence'].content_hash, digest(before));
+  for (const [i, ref] of g.source_references.entries()) assert.equal(pointer(mcp, ref.path), original.content[i].text);
+  const rest = await f.rest('get_tax_document'); assert.equal(rest.body.data.source_reading_guide.references_truncated, true);
+  assert.equal(rest.body.data.source_reading_guide.source_references.length, 64); assert.deepEqual(rest.body.data.result, before);
+  assert.deepEqual(original, before); assert.equal(f.calls.length, 2);
+});
+
+test('FR-11: a real split document read references only the selected fragment, not other manifest chunks', async t => {
+  const body = '법령명: 합성법\n시행일: 20200101\n제1조\nFIRST-PREMISE ' + 'synthetic body '.repeat(2400) + ' LAST-EXCEPTION';
+  const f = await fixture(t, { content: [{ type: 'text', text: body }] }, { researchOptions: { limits: { receiptBytes: 8192 } } });
+  const start = (await f.client.callTool({ name: 'start_legal_research', arguments: { plan: coveragePlan() } })).structuredContent;
+  const session = { research_id: start.research_id, client_session: start.client_session };
+  await f.client.callTool({ name: 'research_legal_sources', arguments: { ...session, expected_revision: 1,
+    issue_ids: ['case'], purpose: 'timing', tool: 'get_law_text', arguments: { lawId: '100', jo: '제1조' } } });
+  const full = (await f.client.callTool({ name: 'get_legal_research', arguments: { ...session, view: 'full' } })).structuredContent;
+  assert.ok(full.evidence.length > 1); assert.equal(full.manifests.length, 1); assert.equal(full.manifests[0].complete, true);
+  const last = full.evidence.at(-1), args = { ...session, evidence_ids: [last.evidence_id] };
+  const response = await f.client.callTool({ name: 'get_legal_research', arguments: args }), selected = response.structuredContent;
+  assert.deepEqual(selected.evidence, [last]); assert.deepEqual(selected.manifests, full.manifests);
+  const g = selected.source_reading_guide;
+  assert.equal(g.source_completeness, 'unverified'); assert.equal(g.semantic_verification, 'unverified');
+  assert.equal(g.source_references.length, last.passages.length);
+  assert.deepEqual(g.source_references.map(r => pointer(selected, r.path)), last.passages.map(p => p.text));
+  assert.ok(g.source_references.every(r => r.path.startsWith('/evidence/0/')));
+  assert.match(last.passages.map(p => p.text).join(''), /LAST-EXCEPTION/);
+  assert.equal(last.passages.some(p => p.text.includes('FIRST-PREMISE')), false);
+  const rest = await f.researchPost('status', args); assert.equal(rest.status, 200); assert.deepEqual(rest.body, selected);
+  const after = (await f.client.callTool({ name: 'get_legal_research', arguments: { ...session, view: 'full' } })).structuredContent;
+  assert.deepEqual(after, full); assert.equal(f.calls.length, 1);
+});

@@ -36,3 +36,11 @@ FR-01~08의 RED→GREEN은 전달·보존·수리 계약을 검증한다. 자연
 [로컬 검사 증거](evidence/authority-fidelity-recovery-preflight-20261002.json): 독립 baseline에서 7개 전달/수리 계약 RED와 기존 오류 보호 1개 PASS, 수정본 8/8 GREEN. 전체 342/342, 설치 9/9. 초기 크기 fixture가 초기화 단계에서 막힌 문제 및 `needs_info`가 아닌 `blocked`여야 하는 oracle 오류를 바로잡고 동일한 최종 테스트로 baseline/수정본을 재검사했다. 진단 중간 실행은 최종 RED로 계산하지 않았다.
 
 Codex CLI 0.159.0 / gpt-5.6-sol xhigh가 실제 MCP에서 텍스트 원문 없이 `structuredContent`에만 있는 무작위 질의·회신 값을 정확히 읽었다(1회). 안내와 프롬프트에는 그 값을 넣지 않았다. 이 증거는 해당 클라이언트의 가시성만 확인하며 모든 MCP 클라이언트 또는 법률 의미 정확성을 인증하지 않는다.
+
+## 코드 검수와 평가 시작
+
+SSS는 제품 커밋 `78c9089b1d31aab78332aaa71b30af8846e4fd46`의 변경과 직접 연결 경계에 **CODE PASS / 출시 HOLD**를 반환했다([원문](reviews/AUTHORITY_FIDELITY_RECOVERY_SSS_CODE_2026-10-02.txt)). 같은 커밋의 [GitHub CI](https://github.com/hyunae52/legal_harness/actions/runs/36962744287)도 통과했다.
+
+비차단 보강 권고 두 가지를 FR-10/11 테스트로 추가했다. 70개 원문 블록을 그대로 반환하면서 참조만 64개로 제한하고 그 사실을 표시하는지, 실제 분할 저장 후 마지막 조각만 선택했을 때 MCP·REST의 모든 안내 참조가 그 반환 조각에만 속하는지 검사했다. 원문·manifest·상태 불변을 포함한 관련 10/10이 통과했다. 이 둘은 현재 구현에 대한 추가 회귀 보장으로 RED를 새로 주장하지 않는다. 제품 소스는 검수한 커밋과 동일하다.
+
+원래 고정 조건의 `pilot-o` 24회 실제 모델 평가를 해당 제품으로 시작했다. 실행 중 제품·컴파일된 런타임을 변경하지 않는다. 모든 시행과 실패는 보존하며 최종 의미 판정 전 출시를 승인하지 않는다.
