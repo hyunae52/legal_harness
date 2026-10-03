@@ -28,6 +28,87 @@ function requests({ latest = '4.13.0', law = 'b'.repeat(40), tax = 'a'.repeat(40
   };
 }
 const check = (request, previous) => checkUpstreams(installed, previous, { request, now: () => stamp });
+const tagUrl = 'https://api.github.com/repos/chrisryugj/korean-law-mcp/git/ref/tags/v4.13.0';
+function withoutGitHead({ tagCommit = 'b'.repeat(40), annotated = false, ...options } = {}) {
+  const normal = requests(options), tagSha = '1'.repeat(40);
+  return async url => {
+    if (url === tagUrl) return { ref: 'refs/tags/v4.13.0',
+      object: { type: annotated ? 'tag' : 'commit', sha: annotated ? tagSha : tagCommit, url: 'https://untrusted.test/' } };
+    if (url === `https://api.github.com/repos/chrisryugj/korean-law-mcp/git/tags/${tagSha}`) {
+      return { sha: tagSha, tag: 'v4.13.0', object: { type: 'commit', sha: tagCommit } };
+    }
+    const result = await normal(url);
+    if (url.startsWith('https://registry.npmjs.org/')) delete result.gitHead;
+    return result;
+  };
+}
+
+test('missing npm gitHead uses an explicit official release-tag baseline without inventing npm provenance', async () => {
+  const result = await check(withoutGitHead());
+  assert.equal(result.status, 'current');
+  assert.deepEqual(result.candidates, []);
+  assert.equal(result.sources.law_installed.value.commit, null);
+  assert.deepEqual(result.sources.law_release_tag.value, { version: '4.13.0', commit: 'b'.repeat(40), basis: 'release_tag' });
+  assert.equal((await check(requests())).sources.law_release_tag, undefined);
+});
+
+test('release-tag fallback still detects new npm releases and repository changes', async () => {
+  const result = await check(withoutGitHead({ latest: '4.13.1', law: 'c'.repeat(40) }));
+  assert.equal(result.status, 'updates_available');
+  assert.deepEqual(result.candidates.map(c => c.kind), ['npm_release', 'repository_change']);
+  assert.ok(result.candidates.every(c => c.activation === 'human_review_required'));
+});
+
+test('annotated release tags resolve only through the fixed official repository', async () => {
+  const request = withoutGitHead({ annotated: true }), urls = [];
+  const result = await check(async url => { urls.push(url); return request(url); });
+  assert.equal(result.status, 'current');
+  assert.equal(result.sources.law_release_tag.value.commit, 'b'.repeat(40));
+  assert.ok(urls.some(url => url.endsWith('/git/tags/' + '1'.repeat(40))));
+  assert.ok(urls.every(url => !url.includes('untrusted.test')));
+});
+
+test('unavailable or malformed release tags cannot falsely report current', async () => {
+  for (const bad of [null, { ref: 'refs/tags/v4.12.0', object: { type: 'commit', sha: 'b'.repeat(40) } },
+    { ref: 'refs/tags/v4.13.0', object: { type: 'blob', sha: 'b'.repeat(40) } },
+    { ref: 'refs/tags/v4.13.0', object: { type: 'commit', sha: 'invalid' } }]) {
+    const request = withoutGitHead();
+    const result = await check(async url => {
+      if (url === tagUrl) { if (bad === null) throw new Error('HTTP_404'); return bad; }
+      return request(url);
+    });
+    assert.equal(result.status, 'partial');
+    assert.equal(result.sources.law_release_tag.value, null);
+    assert.equal(result.candidates[0].kind, 'repository_baseline_unknown');
+  }
+});
+
+test('a moved or unavailable tag preserves the observed baseline and does not hide changes', async () => {
+  const previous = await check(withoutGitHead());
+  const moved = await check(withoutGitHead({ tagCommit: 'c'.repeat(40), law: 'c'.repeat(40) }), previous);
+  assert.equal(moved.status, 'partial');
+  assert.equal(moved.sources.law_release_tag.error, 'RELEASE_TAG_CHANGED');
+  assert.equal(moved.sources.law_release_tag.value.commit, 'b'.repeat(40));
+  assert.equal(moved.candidates[0].kind, 'repository_change');
+  const request = withoutGitHead({ law: 'c'.repeat(40) });
+  const unavailable = await check(async url => { if (url === tagUrl) throw new Error('HTTP_404'); return request(url); }, previous);
+  assert.equal(unavailable.status, 'partial');
+  assert.equal(unavailable.sources.law_release_tag.last_success_at, stamp);
+  assert.equal(unavailable.candidates[0].commit, 'c'.repeat(40));
+});
+
+test('release-tag baselines never cross installed package versions', async () => {
+  const previous = await check(withoutGitHead()), request = withoutGitHead();
+  const next = { ...installed, law: { version: '4.13.1' } };
+  const result = await checkUpstreams(next, previous, { request: async url => {
+    if (url === 'https://registry.npmjs.org/korean-law-mcp/4.13.1') return { name: 'korean-law-mcp', version: '4.13.1' };
+    if (url.endsWith('/git/ref/tags/v4.13.1')) throw new Error('HTTP_404');
+    return request(url);
+  } });
+  assert.equal(result.status, 'partial');
+  assert.equal(result.sources.law_release_tag.value, null);
+  assert.equal(result.candidates[0].kind, 'repository_baseline_unknown');
+});
 
 test('daily upstream check detects npm and both repo changes without authorizing activation', async () => {
   const result = await check(requests({ latest: '4.13.1', law: 'c'.repeat(40),
