@@ -77,6 +77,21 @@ const commitValue = data => {
   if (!Array.isArray(data) || !sha.test(data[0]?.sha)) throw new Error('INVALID_METADATA');
   return { commit: data[0].sha };
 };
+async function releaseTagValue(version, request) {
+  const base = `https://api.github.com/repos/${repositories.law}`;
+  const ref = await request(`${base}/git/ref/tags/v${version}`);
+  if (ref?.ref !== `refs/tags/v${version}` || !sha.test(ref.object?.sha)) throw new Error('INVALID_METADATA');
+  let object = ref.object;
+  if (object.type === 'tag') {
+    // Construct the URL locally; never follow a URL supplied in metadata.
+    const tag = await request(`${base}/git/tags/${object.sha}`);
+    if (tag?.sha !== object.sha || tag.tag !== `v${version}`) throw new Error('INVALID_METADATA');
+    object = tag.object;
+  }
+  if (object?.type !== 'commit' || !sha.test(object.sha)) throw new Error('INVALID_METADATA');
+  // A repository comparison baseline, not an npm build attestation.
+  return { version, commit: object.sha, basis: 'release_tag' };
+}
 const comparisonValue = data => {
   if (!['ahead', 'behind', 'identical', 'diverged'].includes(data?.status)
       || !Number.isInteger(data.ahead_by) || !Number.isInteger(data.behind_by)) throw new Error('INVALID_METADATA');
@@ -88,7 +103,7 @@ const comparisonValue = data => {
 const taxlawRuntimeChanged = comparison => comparison.changed_files === null
   || comparison.changed_files.some(path => !path.startsWith('.github/') && !path.startsWith('docs/')
     && !path.startsWith('tests/') && !['README.md', 'LICENSE', 'NOTICE', '.gitignore', '.dockerignore'].includes(path));
-const errorCode = error => /^(HTTP_\d{3}|RESPONSE_TOO_LARGE|INVALID_METADATA)$/.test(error?.message)
+const errorCode = error => /^(HTTP_\d{3}|RESPONSE_TOO_LARGE|INVALID_METADATA|RELEASE_TAG_CHANGED)$/.test(error?.message)
   ? error.message : error?.name === 'TimeoutError' ? 'TIMEOUT' : 'FETCH_FAILED';
 const compareVersions = (a, b) => {
   const left = a.split('.').map(Number), right = b.split('.').map(Number);
@@ -122,6 +137,20 @@ export async function checkUpstreams(installed, previous = {}, { request = fetch
         value: prior?.value ?? null, error: errorCode(error) }];
     }
   })));
+  if (sources.law_installed.value?.version === installed.law.version && !sources.law_installed.value.commit) {
+    const url = `https://api.github.com/repos/${repositories.law}/git/ref/tags/v${installed.law.version}`;
+    const cached = previous.sources?.law_release_tag;
+    const prior = cached?.url === url && cached.value?.version === installed.law.version
+      && cached.value.basis === 'release_tag' && sha.test(cached.value.commit) ? cached : undefined;
+    try {
+      const value = await releaseTagValue(installed.law.version, request);
+      if (prior && prior.value.commit !== value.commit) throw new Error('RELEASE_TAG_CHANGED');
+      sources.law_release_tag = { url, status: 'ok', checked_at: checkedAt, last_success_at: checkedAt, value };
+    } catch (error) {
+      sources.law_release_tag = { url, status: 'unavailable', checked_at: checkedAt,
+        last_success_at: prior?.last_success_at ?? null, value: prior?.value ?? null, error: errorCode(error) };
+    }
+  }
   const upstreamHead = sources.taxlaw_repository, forkHead = sources.taxlaw_fork_repository;
   const syncUrl = upstreamHead.status === 'ok' && forkHead.status === 'ok'
     ? `https://api.github.com/repos/${repositories.taxlaw_fork}/compare/${upstreamHead.value.commit}...${forkHead.value.commit}` : null;
@@ -148,7 +177,7 @@ export async function checkUpstreams(installed, previous = {}, { request = fetch
   if (latest.value && compareVersions(latest.value.version, installed.law.version) > 0) {
     add('korean-law-mcp', 'npm_release', latest, latest.value);
   }
-  const head = sources.law_repository, baseline = sources.law_installed.value?.commit;
+  const head = sources.law_repository, baseline = sources.law_installed.value?.commit ?? sources.law_release_tag?.value?.commit;
   if (head.value && head.value.commit !== baseline) {
     add('korean-law-mcp', baseline ? 'repository_change' : 'repository_baseline_unknown', head, head.value);
   }
