@@ -11,6 +11,30 @@ const client = createKoreanLawClient();
 const cases = [];
 const checks = [
   {
+    name: 'exact_precedent_number', tool: 'search_decisions',
+    args: { domain: 'precedent', query: '2024두55426', page: 1, display: 20 },
+    verify(text) {
+      assert.match(text, /2024\s*두\s*55426(?!\d)/);
+      assert.match(text, /양도소득세경정거부처분취소/);
+      assert.match(text, /603549/);
+      assert.doesNotMatch(text, /get_precedent_text/);
+      return { exact_case_found: true, official_document_id: '603549' };
+    },
+  },
+  {
+    name: 'precedent_full_body', tool: 'get_decision_text',
+    args: { domain: 'precedent', id: '603549', full: true },
+    verify(text) {
+      assert.match(text, /2024\s*두\s*55426(?!\d)/);
+      assert.match(text, /상고를 모두 기각한다/);
+      assert.match(text, /2019\.\s*4\.\s*19\./);
+      assert.match(text, /2021\.\s*11\.\s*26\./);
+      assert.match(text, /제155조/);
+      assert.doesNotMatch(text, /<br\s*\/?\s*>/i);
+      return { substantive_reasoning_and_disposition: true, official_document_id: '603549' };
+    },
+  },
+  {
     name: 'event_date_article', tool: 'get_law_text',
     args: { lawId: '001586', jo: '제18조', efYd: '20220301' },
     verify(text) {
@@ -100,7 +124,7 @@ async function check(item) {
 try {
   const catalog = await client.listTools();
   assert.equal(catalog.server?.name, 'korean-law');
-  assert.equal(catalog.server?.version, '4.15.1');
+  assert.equal(catalog.server?.version, '4.15.5');
   const annex = catalog.tools.find(t => t.name === 'get_annexes');
   assert.ok(annex?.inputSchema.properties?.date);
   // Distinct cold requests in batches matching the application's work limit.
