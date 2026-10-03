@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-03T19:15:19.917836+00:00",
+  "law_version": "4.15.5",
+  "parser_version": "4.18.2",
+  "base_commit": "362d5baccd8b6c0c11f2bdf90388b707e0bc1701",
+  "candidate_files": {
+    "package.json": "1062029f61e6a211dd45fa9912fe47e2577b377a4bbd771b2b930806d1d5f693",
+    "package-lock.json": "e3bbb261724c1601b6a465a9ad71904a92269111291810ddf71b81d31c4a7a5a",
+    "npm-shrinkwrap.json": "e3bbb261724c1601b6a465a9ad71904a92269111291810ddf71b81d31c4a7a5a",
+    "scripts/law-release-smoke.mjs": "ec65a45abee77251f882da179a65238cc19287ecfff03b9d151f1626e2f96582"
+  },
+  "local": {
+    "review_passed": 344,
+    "review_failed": 0,
+    "review_skipped": 0,
+    "package_checks_passed": 9,
+    "runtime_vulnerabilities": 0,
+    "node": "v24.13.1"
+  },
+  "gce_live_smoke": {
+    "status": "pass",
+    "checked_at": "2026-10-03T19:13:23.424Z",
+    "node": "v22.23.2",
+    "upstream": {
+      "name": "korean-law",
+      "version": "4.15.5"
+    },
+    "tool_count": 10,
+    "maximum_concurrent_calls": 3,
+    "cases": [
+      {
+        "name": "exact_precedent_number",
+        "status": "pass",
+        "milliseconds": 805,
+        "response_bytes": 519,
+        "exact_case_found": true,
+        "official_document_id": "603549"
+      },
+      {
+        "name": "precedent_full_body",
+        "status": "pass",
+        "milliseconds": 838,
+        "response_bytes": 7541,
+        "substantive_reasoning_and_disposition": true,
+        "official_document_id": "603549"
+      },
+      {
+        "name": "event_date_article",
+        "status": "pass",
+        "milliseconds": 2510,
+        "response_bytes": 1685,
+        "effective_date": "20220101"
+      },
+      {
+        "name": "renamed_law_history",
+        "status": "pass",
+        "milliseconds": 3802,
+        "response_bytes": 6612,
+        "renamed_history_found": true
+      },
+      {
+        "name": "historical_annex",
+        "status": "pass",
+        "milliseconds": 4626,
+        "response_bytes": 27998,
+        "historical_annex_found": true
+      },
+      {
+        "name": "large_law_annex",
+        "status": "pass",
+        "milliseconds": 14156,
+        "response_bytes": 1024,
+        "annex_found": true
+      },
+      {
+        "name": "annex_fraction",
+        "status": "pass",
+        "milliseconds": 2110,
+        "response_bytes": 1630,
+        "fraction_preserved": true
+      },
+      {
+        "name": "annex_visible_tables",
+        "status": "pass",
+        "milliseconds": 2347,
+        "response_bytes": 3418,
+        "visible_tables": 5
+      }
+    ],
+    "scope": "Public source retrieval and historical version selection; legal applicability still requires interpretation."
+  },
+  "gce_resources": {
+    "exit_code": 0,
+    "status": "pass",
+    "minimum_available_mib": 335.0,
+    "peak_smoke_tree_rss_mib": 200.5,
+    "wall_seconds": 20.66
+  },
+  "existing_service_unchanged_during_candidate_test": true,
+  "activation_performed_by_this_record": false,
+  "limitations": [
+    "Actual-model 24-trial evaluation was not repeated for this dependency update.",
+    "Read-only legal source checks do not certify legal applicability.",
+    "Exact candidate CI, activation and final public verification remain separate gates."
+  ]
+}
