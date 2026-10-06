@@ -5,6 +5,28 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { updateFiles, stableVersion, taxVersion, compareVersion } from './prepare-provider-update.mjs';
 const repository = 'hyunae52/legal_harness';
+export async function dispatchReviewedDeployment(api, head, {sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms)), now=Date.now, budgetMs=19*60*1000}={}) {
+  assert.match(head,/^[a-f0-9]{40}$/);
+  const path='actions/workflows/review.yml/runs?event=workflow_dispatch&head_sha='+head+'&per_page=30';
+  const before=new Set((await api(path)).workflow_runs.map(run=>run.id));
+  await api('actions/workflows/review.yml/dispatches','POST',{ref:'main'});
+  const deadline=now()+budgetMs;
+  while(now()<deadline) {
+    const runs=(await api(path)).workflow_runs.filter(run=>!before.has(run.id) && run.head_sha===head
+      && run.head_branch==='main' && run.event==='workflow_dispatch' && run.path==='.github/workflows/review.yml');
+    const source=runs.sort((a,b)=>b.id-a.id)[0];
+    if(source?.status==='completed') {
+      assert.equal(source.conclusion,'success','MAIN_REVIEW_FAILED');
+      assert.equal((await api('git/ref/heads/main')).object.sha,head,'MAIN_MOVED_BEFORE_DEPLOY');
+      // Token-triggered Review did not emit a downstream workflow_run in live
+      // verification. Explicit dispatch also binds the exact successful attempt.
+      await api('actions/workflows/deploy.yml/dispatches','POST',{ref:'main',inputs:{review_run_id:String(source.id),review_attempt:String(source.run_attempt)}});
+      return {review_run_id:source.id,review_attempt:source.run_attempt,deploy_dispatched:true};
+    }
+    await sleep(15000);
+  }
+  throw Error('MAIN_REVIEW_TIMEOUT');
+}
 export function validateBundle(bundle, original) {
   assert.equal(bundle.schema_version, 1); assert.match(bundle.base, /^[a-f0-9]{40}$/);
   const entries = Object.entries(bundle.files); assert.ok(entries.length > 0 && entries.length <= 5);
@@ -53,6 +75,7 @@ async function main() {
   assert.equal((await api('git/ref/heads/main')).object.sha, base, 'MAIN_MOVED_RETRY_NEXT_RUN');
   const text = await readFile(process.argv[2], 'utf8'); assert.ok(Buffer.byteLength(text) < 2 * 1024 * 1024);
   const bundle = JSON.parse(text); assert.equal(bundle.base, base);
+  let reviewedHead=base;
   if (bundle.changed) {
     const original = Object.fromEntries(await Promise.all(updateFiles.map(async name => [name, await readFile(name, 'utf8')])));
     const entries = validateBundle(bundle, original);
@@ -67,9 +90,10 @@ async function main() {
       body: `Automated provider-only update. Full review, package smoke and runtime audit passed on these exact file contents.\n\nValidation: https://github.com/${repository}/actions/runs/${process.env.GITHUB_RUN_ID}\n\nProduction retrieval checks run before activation; a failure retains/restores the previous service.` });
     // Atomic non-force FF: concurrent main changes cannot be silently overwritten.
     await api('git/refs/heads/main', 'PATCH', { sha: commit.sha, force: false });
+    reviewedHead=commit.sha;
     console.log(JSON.stringify({ published: commit.sha, law: bundle.law, tax: bundle.tax.version }));
   }
   // GITHUB_TOKEN pushes don't trigger Review. Also retry a previous failed deployment.
-  await api('actions/workflows/review.yml/dispatches', 'POST', { ref: 'main' });
+  console.log(JSON.stringify(await dispatchReviewedDeployment(api,reviewedHead)));
 }
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) await main();

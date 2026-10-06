@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {compareVersion, lawCandidate, taxCandidate, updateFiles} from '../scripts/prepare-provider-update.mjs';
-import {validateBundle} from '../scripts/publish-provider-update.mjs';
+import {validateBundle,dispatchReviewedDeployment} from '../scripts/publish-provider-update.mjs';
 import {readAutomation} from '../scripts/run-upstream-watch.mjs';
 import {prepareEmail} from '../scripts/upstream-email-report.mjs';
 test('providers: release comparison rejects prerelease and supports post revisions',()=>{
@@ -40,4 +40,25 @@ test('providers: failed or stale automation remains visible in the daily email',
   assert.ok(automation.every(item=>item.failed));
   const email=prepareEmail({automation},{status:'partial',checked_at:'2026-10-07T00:00:00Z'});
   assert.match(email.subject,/일부 실패/);assert.match(email.text,/36시간/);assert.match(email.text,/failure/);
+});
+test('providers: token-triggered review explicitly dispatches only a fresh successful main attempt',async()=>{
+  const head='a'.repeat(40),calls=[];let queries=0;
+  const record=(id,status,conclusion)=>({id,head_sha:head,head_branch:'main',event:'workflow_dispatch',path:'.github/workflows/review.yml',run_attempt:2,status,conclusion});
+  const api=async(path,method,body)=>{
+    if(method==='POST'){calls.push({path,body});return null;}
+    if(path==='git/ref/heads/main')return {object:{sha:head}};
+    queries++;
+    return {workflow_runs:queries===1?[record(1,'completed','success')]:[record(2,queries===2?'in_progress':'completed',queries===2?null:'success'),record(1,'completed','success')]};
+  };
+  const result=await dispatchReviewedDeployment(api,head,{sleep:async()=>{}});
+  assert.equal(result.review_run_id,2);
+  assert.deepEqual(calls.map(c=>c.path),['actions/workflows/review.yml/dispatches','actions/workflows/deploy.yml/dispatches']);
+  assert.deepEqual(calls[1].body.inputs,{review_run_id:'2',review_attempt:'2'});
+  queries=0;calls.length=0;
+  await assert.rejects(dispatchReviewedDeployment(async(path,method,body)=>{
+    if(method==='POST'){calls.push(path);return null;}
+    if(path==='git/ref/heads/main')return {object:{sha:'b'.repeat(40)}};
+    return {workflow_runs:queries++===0?[]:[record(3,'completed','success')]};
+  },head,{sleep:async()=>{}}),/MAIN_MOVED/);
+  assert.deepEqual(calls,['actions/workflows/review.yml/dispatches']);
 });

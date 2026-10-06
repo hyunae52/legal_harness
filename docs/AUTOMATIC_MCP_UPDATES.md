@@ -22,6 +22,8 @@ GitHub 예약 실행은 지연될 수 있다. 앞 단계가 늦으면 다음 날
 들어간다. 후보 시험 job은 쓰기 권한과 운영 비밀이 없다. 별도 게시 job이 파일 범위와
 메타데이터를 재검사하고 main이 그대로일 때만 검증 커밋을 fast-forward한다.
 GITHUB_TOKEN push로 Review가 실행되지 않는 점을 고려해 main Review를 명시적으로 dispatch한다.
+그 실행의 성공을 기다린 뒤 정확한 검수 실행 ID·시도 번호로 Deploy도 명시적으로 요청한다.
+토큰으로 시작한 Review의 후속 workflow_run만으로 배포가 이어진다고 가정하지 않는다.
 
 고정 GCE 배포기는 MCP 버전 변경만 허용하도록 설정한다. DB migration이나 배포기 변경은
 계속 수동 운영 작업이다. 앱별 provider manifest/env 파일로 앱·law·tax를 함께 선택하며,
