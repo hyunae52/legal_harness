@@ -94,6 +94,7 @@ class ProviderUpdates(unittest.TestCase):
                     'taxlaw_release':{'commit':'a'*40}}).encode())
             with patch.object(providers.subprocess,'Popen',side_effect=launch),patch.object(providers.subprocess,'run',return_value=Mock(stdout='{"status":"pass"}')) as run,\
                 patch.object(providers.urllib.request,'urlopen',side_effect=health),patch.object(providers.os,'killpg',create=True),\
+                patch.object(providers.signal,'SIGKILL',9,create=True),\
                 patch.dict(providers.os.environ,{'GITHUB_TOKEN':'private','SUPABASE_KEY':'private'}):
                 providers.preflight(root,{'law':'4.15.7','tax_commit':'a'*40,'environment':{}},
                     {'LAW_OC':'source-id','GITHUB_TOKEN':'private','SUPABASE_KEY':'private'},root,root)
