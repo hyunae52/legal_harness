@@ -1,5 +1,5 @@
-import copy, hashlib, json, pathlib, sys, tempfile, unittest
-from unittest.mock import patch
+import copy, hashlib, io, json, pathlib, sys, tempfile, unittest
+from unittest.mock import patch, Mock
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]/'deploy/autodeploy'))
 import protocol, providers, worker
 from autodeploy_contract_test import zip_fixture, run_fixture, PROTECTION, HEAD
@@ -84,5 +84,21 @@ class ProviderUpdates(unittest.TestCase):
         seen=[]
         with patch.object(providers,'verify',side_effect=lambda s:seen.append(s['name'])): deployment.providers(False)
         self.assertEqual(seen,['healthy'])
+
+    def test_preflight_uses_ephemeral_loopback_port_and_only_source_credentials(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=pathlib.Path(temp); captured={}; child=Mock(pid=76543);child.poll.return_value=None
+            def launch(args,**kwargs):captured.update(kwargs['env']);return child
+            def health(*args,**kwargs):
+                return io.BytesIO(json.dumps({'release_commit':captured['TAXLAB_RELEASE_COMMIT'],'mcp_release':'4.15.7',
+                    'taxlaw_release':{'commit':'a'*40}}).encode())
+            with patch.object(providers.subprocess,'Popen',side_effect=launch),patch.object(providers.subprocess,'run',return_value=Mock(stdout='{"status":"pass"}')) as run,\
+                patch.object(providers.urllib.request,'urlopen',side_effect=health),patch.object(providers.os,'killpg',create=True),\
+                patch.dict(providers.os.environ,{'GITHUB_TOKEN':'private','SUPABASE_KEY':'private'}):
+                providers.preflight(root,{'law':'4.15.7','tax_commit':'a'*40,'environment':{}},
+                    {'LAW_OC':'source-id','GITHUB_TOKEN':'private','SUPABASE_KEY':'private'},root,root)
+            self.assertEqual(captured['HOST'],'127.0.0.1');self.assertNotIn('GITHUB_TOKEN',captured)
+            self.assertNotIn('SUPABASE_KEY',captured);self.assertEqual(captured['LAW_OC'],'source-id')
+            self.assertEqual(run.call_args.kwargs['env']['SMOKE_PORT'],captured['PORT'])
 
 if __name__=='__main__':unittest.main()

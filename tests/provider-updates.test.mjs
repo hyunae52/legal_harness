@@ -33,7 +33,7 @@ test('providers: trusted publication limits executable changes to pinned depende
 });
 test('providers: fixed controller version, staging, tamper and rollback regressions',async()=>{
   const result=await promisify(execFile)(process.platform==='win32'?'python':'python3',['tests/provider_updates_contract_test.py'],{timeout:20000,windowsHide:true});
-  assert.match(result.stderr,/Ran 8 tests/);assert.match(result.stderr,/OK/);
+  assert.match(result.stderr,/Ran 9 tests/);assert.match(result.stderr,/OK/);
 });
 test('providers: failed or stale automation remains visible in the daily email',async()=>{
   const automation=await readAutomation(async url=>({workflow_runs:[{id:7,created_at:'2026-10-01T00:00:00Z',status:'completed',conclusion:url.includes('deploy.yml')?'failure':'success'}]}),Date.parse('2026-10-07T00:00:00Z'));

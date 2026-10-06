@@ -1,5 +1,5 @@
 """Stage immutable provider selections without touching the running service."""
-import hashlib, json, os, pathlib, re, secrets, shutil, signal, subprocess, time, urllib.request
+import hashlib, json, os, pathlib, re, secrets, shutil, signal, socket, subprocess, time, urllib.request
 from protocol import require
 
 def version(value):
@@ -93,8 +93,11 @@ def preflight(candidate, selection, current_environment, binary, log_directory):
     env = {k:os.environ[k] for k in ('PATH','HOME','USER','LANG') if k in os.environ}
     for key in ('LAW_OC','KOREAN_LAW_API_KEY','LAW_API_PROTOCOL','MCP_MAX_UPSTREAM_BODY_BYTES','MCP_MAX_TOTAL_UPSTREAM_BODY_BYTES'):
         if key in current_environment: env[key] = current_environment[key]
-    env.update(selection['environment'], HOST='127.0.0.1', PORT='3101', TAXLAB_PUBLIC_ACCESS='1',
-               TAXLAB_PUBLIC_SESSION_SECRET=secrets.token_hex(32), PYTHONDONTWRITEBYTECODE='1')
+    with socket.socket() as reservation:
+        reservation.bind(('127.0.0.1',0)); port = str(reservation.getsockname()[1])
+    identity = secrets.token_hex(20)
+    env.update(selection['environment'], HOST='127.0.0.1', PORT=port, TAXLAB_PUBLIC_ACCESS='1',
+               TAXLAB_PUBLIC_SESSION_SECRET=secrets.token_hex(32), TAXLAB_RELEASE_COMMIT=identity, PYTHONDONTWRITEBYTECODE='1')
     with (log_directory/'provider-preflight.log').open('w') as log:
         child = subprocess.Popen(['node', str(candidate/'dist/index.js')], cwd=candidate, env=env, stdout=log, stderr=log, start_new_session=True)
         try:
@@ -102,12 +105,13 @@ def preflight(candidate, selection, current_environment, binary, log_directory):
             while True:
                 require(child.poll() is None, 'PREFLIGHT_PROCESS_EXITED')
                 try:
-                    with urllib.request.urlopen('http://127.0.0.1:3101/health', timeout=2) as response: health = json.load(response)
-                    require(health['mcp_release'] == selection['law'] and health['taxlaw_release']['commit'] == selection['tax_commit'], 'PREFLIGHT_VERSION')
+                    with urllib.request.urlopen('http://127.0.0.1:'+port+'/health', timeout=2) as response: health = json.load(response)
+                    require(health.get('release_commit') == identity and health['mcp_release'] == selection['law']
+                        and health['taxlaw_release']['commit'] == selection['tax_commit'], 'PREFLIGHT_VERSION')
                     break
                 except (OSError, ValueError):
                     require(time.monotonic() < until, 'PREFLIGHT_NOT_READY'); time.sleep(.3)
-            result = subprocess.run(['python3', str(binary/'smoke.py')], env={**env,'SMOKE_PORT':'3101'}, capture_output=True, text=True, timeout=180, check=True)
+            result = subprocess.run(['python3', str(binary/'smoke.py')], env={**env,'SMOKE_PORT':port}, capture_output=True, text=True, timeout=180, check=True)
             report = json.loads(result.stdout); require(report['status'] == 'pass', 'PREFLIGHT_RETRIEVAL_FAILED')
             return report
         finally:
