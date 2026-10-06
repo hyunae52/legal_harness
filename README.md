@@ -171,9 +171,9 @@ MCP `submit_failure` 또는 `POST /api/failures`는 공개 합성 사례 식별�
 
 ## upstream 업데이트와 배포
 
-국세청 해석례·불복 결정례의 본문 수집은 별도 Hyunae 검토 포크 제공자를 연결할 수 있습니다. 서버에서 `python3 scripts/install-taxlaw-mcp.py`로 고정 커밋을 설치하면 기존 인증 REST/MCP에 국세청·지방세 도구 12개가 추가됩니다. 원본 `zisu17/main`은 매일 변경 여부만 확인하고 자동 병합·배포하지 않습니다. 설치·본문 조회·오류 계약·실제 문서 시험은 [국세청 연결 안내](docs/TAXLAW_INTEGRATION.md), OpenTax와 korean-tax-agent를 검토한 후속 구조 제안은 [리서치 하네스 참고 검토](docs/RESEARCH_HARNESS_REFERENCES.md)에 있습니다.
+국세청 해석례·불복 결정례는 Hyunae 세법 포크의 고정 커밋으로 조회합니다. 원본 `zisu17/main` → 포크 릴리스 → 서버 순서로 매일 검사하며, 테스트와 실제 조회 검증 후 자동 갱신합니다. 충돌·실패 시 기존 운영본을 유지합니다. [자동 갱신 정책](docs/AUTOMATIC_MCP_UPDATES.md), [국세청 연결 안내](docs/TAXLAW_INTEGRATION.md), [리서치 하네스 참고 검토](docs/RESEARCH_HARNESS_REFERENCES.md)를 참고하세요.
 
-현재 GCE는 [매일 upstream 확인 작업](docs/UPSTREAM_WATCH.md)으로 korean-law-mcp의 npm 배포 버전과 두 GitHub 저장소의 최신 커밋을 한국시간 매일 03:30에 확인합니다. 변경은 **미검증 후보**로 기록하고 사람이 검수한 실행 묶음으로 배포합니다. 조회 실패·비공개 전환 시 기존 설치본과 마지막 확인 결과를 보존하며, 확인 작업은 설치·자동 활성화·서버 재시작을 하지 않습니다. 국세법령정보 MCP 포크, 독립 버전 저장소, 승인 후 전환 원칙은 [국세법령정보 MCP 포크와 운영 버전 관리](docs/TAXLAW_PROVIDER_VERSIONING.md)에 정리했습니다.
+기존 한국시간 매일 03:30 GCE 메일 알림은 유지하며 운영 버전과 자동 갱신·배포 결과를 함께 보냅니다. 포크 동기화는 02:10, 서버 갱신 검사는 02:40 GitHub Actions에서 실행합니다. 최신 정책은 [MCP 자동 갱신](docs/AUTOMATIC_MCP_UPDATES.md)에 있으며 이전 문서의 개별 수동 승인 정책을 대체합니다.
 
 구형 PM2용 `scripts/update-korean-law.sh`와 [이전 cron 예시](deploy/korean-law-update.cron.example)는 현재 systemd 운영 배포에 사용하지 않습니다. 별도 PM2 환경에서만 `KOREAN_LAW_MCP_RELEASE_FILE`과 `--bootstrap`으로 초기 설치하고, 업데이트를 설치·review·MCP schema 확인을 거친 후보로 준비할 수 있습니다. `--activate <approved-sha256>`는 검수한 후보를 수동 전환하는 PM2 운영자 명령입니다. 현재 GCE에 이 명령이나 구형 git-sync cron을 재활성화하면 안 됩니다.
 

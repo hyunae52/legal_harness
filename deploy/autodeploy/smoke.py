@@ -1,8 +1,10 @@
 """Small, read-only MCP checks after both real providers have initialized."""
-import json, urllib.request
+import json, os, urllib.request
 
 def rpc(number, method, params, allow_error=False):
-    request=urllib.request.Request('http://127.0.0.1:3100/mcp',data=json.dumps({'jsonrpc':'2.0','id':number,'method':method,'params':params}).encode(),
+    port = os.environ.get('SMOKE_PORT', '3100')
+    assert port in ('3100', '3101')
+    request=urllib.request.Request('http://127.0.0.1:'+port+'/mcp',data=json.dumps({'jsonrpc':'2.0','id':number,'method':method,'params':params}).encode(),
         headers={'Content-Type':'application/json','Accept':'application/json, text/event-stream','MCP-Protocol-Version':'2025-11-25'})
     with urllib.request.urlopen(request,timeout=55) as response: data=json.load(response)
     assert 'result' in data and (allow_error or data['result'].get('isError') is not True)

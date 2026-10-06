@@ -41,7 +41,7 @@ class DeploymentContract(unittest.TestCase):
     def test_approved_main_run(self):
         source,jobs=run_fixture();self.assertEqual(p.verify_run(source,jobs,7,2),HEAD)
     def test_unapproved_trigger_or_identity(self):
-        for key,value in [('event','pull_request'),('event','workflow_dispatch'),('head_branch','feature'),('path','.github/workflows/other.yml'),
+        for key,value in [('event','pull_request'),('event','schedule'),('head_branch','feature'),('path','.github/workflows/other.yml'),
             ('conclusion','failure'),('conclusion','cancelled'),('status','in_progress'),('id',9),('run_attempt',1),('head_sha','bad')]:
             with self.subTest(key=key,value=value):
                 source,jobs=run_fixture();source[key]=value
@@ -119,7 +119,7 @@ class DeploymentContract(unittest.TestCase):
             d.data={'events':[],'head':HEAD,'previous_pid':'999999999','previous_path':str(previous),'previous_head':'b'*40,
                 'previous_entry':w.sha(previous/'dist/index.js'),'dependencies':{'sha256':'new'},'previous_active':prior,
                 'files':{},'package_sha256':'4'*64,'artifact_digest':'sha256:'+'5'*64}
-            d.fence=lambda action:None;d.fence_present=lambda:True;d.files=lambda:None;d.providers=lambda:None;d.ready=lambda head:{'release_commit':head}
+            d.fence=lambda action:None;d.fence_present=lambda:True;d.files=lambda:None;d.providers=lambda *args:None;d.ready=lambda head:{'release_commit':head}
             with patch.object(w,'ROOT',root),patch.object(w,'MARKER',root/'maintenance.json'),patch.object(w,'run',return_value='{"status":"pass"}'),contextlib.redirect_stdout(io.StringIO()):
                 with patch.object(w,'prop',return_value=str(d.candidate)):
                     self.assertEqual(d.phase('verify-candidate')['status'],'pass')

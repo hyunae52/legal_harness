@@ -27,7 +27,7 @@ def verify_run(run, jobs, run_id, attempt):
     require(run.get('id') == run_id and run.get('run_attempt') == attempt, 'RUN_IDENTITY')
     require(run.get('repository', {}).get('id') == REPOSITORY_ID
         and run.get('head_repository', {}).get('id') == REPOSITORY_ID, 'REPOSITORY_IDENTITY')
-    require(run.get('event') == 'push' and run.get('head_branch') == 'main'
+    require(run.get('event') in ('push', 'workflow_dispatch') and run.get('head_branch') == 'main'
         and run.get('path') == WORKFLOW_PATH, 'TRIGGER_NOT_APPROVED')
     require(run.get('status') == 'completed' and run.get('conclusion') == 'success', 'REVIEW_NOT_SUCCESSFUL')
     require(isinstance(run.get('head_sha'), str) and SHA.fullmatch(run['head_sha']), 'INVALID_HEAD')
@@ -52,7 +52,7 @@ def select_artifact(artifacts, run_id, attempt, head):
     require(re.fullmatch(r'sha256:[a-f0-9]{64}', artifact.get('digest', '')), 'ARTIFACT_DIGEST_REQUIRED')
     return artifact
 
-def decode_bundle(payload, artifact, run_id, attempt, head, protection):
+def decode_bundle(payload, artifact, run_id, attempt, head, protection, auto_providers=False):
     require(len(payload) <= MAX_ARCHIVE, 'ARTIFACT_SIZE')
     require('sha256:' + hashlib.sha256(payload).hexdigest() == artifact['digest'], 'ARTIFACT_DIGEST_MISMATCH')
     with zipfile.ZipFile(io.BytesIO(payload)) as bundle:
@@ -66,7 +66,14 @@ def decode_bundle(payload, artifact, run_id, attempt, head, protection):
     require(manifest.get('schema_version') == 1 and manifest.get('repository') == REPOSITORY
         and manifest.get('head') == head and manifest.get('run_id') == run_id
         and manifest.get('run_attempt') == attempt, 'MANIFEST_IDENTITY')
-    require(manifest.get('protection') == protection, 'MANUAL_OPERATIONS_REQUIRED')
+    actual = manifest.get('protection')
+    if auto_providers:
+        require(isinstance(actual, dict) and actual.keys() == protection.keys()
+            and all(actual[k] == protection[k] for k in ('migrations', 'deployer'))
+            and HASH.fullmatch(actual.get('tax_provider', ''))
+            and re.fullmatch(r'\d+\.\d+\.\d+', actual.get('law_version', '')), 'MANUAL_OPERATIONS_REQUIRED')
+    else:
+        require(actual == protection, 'MANUAL_OPERATIONS_REQUIRED')
     require(hashlib.sha256(package).hexdigest() == manifest.get('package_sha256'), 'PACKAGE_DIGEST_MISMATCH')
     return manifest, package
 

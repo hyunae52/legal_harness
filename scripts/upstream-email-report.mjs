@@ -88,7 +88,11 @@ export function prepareEmail(report, execution, previous = null) {
     '조회 출처 상태',
     ...(sources.length ? sources.map(([name, source]) => `- ${clean(name)}: ${clean(source?.status)}`) : ['- 결과 파일 없음']),
     '',
-    '이 점검은 변경 여부만 확인하며 자동 설치나 운영 재시작은 수행하지 않습니다.',
+    '자동 갱신 실행 결과',
+    ...(report?.automation?.length ? report.automation.map(item => `- ${clean(item.name)}: ${clean(item.status)}${item.url ? '\n  '+clean(item.url) : ''}`) : ['- 실행 결과 없음']),
+    '',
+    '원본 → 세법 포크 → 서버 순서로 자동 갱신합니다. 테스트와 실제 조회 검증을 통과해야 운영에 반영됩니다.',
+    '실패·충돌 시 기존 운영본을 유지하거나 복구하며, 이 메일의 실행 링크에서 원인을 확인할 수 있습니다.',
   ];
   return {
     subject: `[${label}] MCP 버전 점검 - ${execution.checked_at.slice(0, 10)}`,

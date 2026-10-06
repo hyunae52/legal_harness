@@ -16,11 +16,12 @@ def main() -> None:
     if sys.version_info < (3, 11):
         raise SystemExit("Python 3.11 or newer is required on the server.")
     root = Path(__file__).resolve().parents[1]
-    pin = json.loads((root / "upstreams/korean-taxlaw-mcp.json").read_text(encoding="utf-8"))
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--directory", type=Path, default=root / ".runtime/taxlaw")
     parser.add_argument("--dev", action="store_true", help="Include upstream offline-test dependencies")
+    parser.add_argument("--pin", type=Path, default=root / "upstreams/korean-taxlaw-mcp.json")
     options = parser.parse_args()
+    pin = json.loads(options.pin.read_text(encoding="utf-8"))
     directory = options.directory.resolve()
     release = directory / pin["commit"]
     release.mkdir(parents=True, exist_ok=True)

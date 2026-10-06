@@ -11,14 +11,14 @@ export async function protection(root,files){
   const fingerprint=async names=>{const digest=createHash('sha256');for(const name of names){digest.update(name+'\0');digest.update(hash(await readFile(join(root,name)))+'\0');}return digest.digest('hex');};
   const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8'));
   return {migrations:await fingerprint(files.filter(p=>p.startsWith('supabase/')&&p.endsWith('.sql'))),
-    deployer:await fingerprint(files.filter(p=>p.startsWith('deploy/autodeploy/')||['scripts/rollout-gate.mjs','deploy/remote-phase.mjs','deploy/installed-dependencies.mjs'].includes(p))),
+    deployer:await fingerprint(files.filter(p=>p.startsWith('deploy/autodeploy/')||['scripts/install-taxlaw-mcp.py','scripts/rollout-gate.mjs','deploy/remote-phase.mjs','deploy/installed-dependencies.mjs'].includes(p))),
     tax_provider:hash(await readFile(join(root,'upstreams/korean-taxlaw-mcp.json'))),law_version:pkg.dependencies['korean-law-mcp']};
 }
 if(process.argv.includes('--protection-only')){
   console.log(JSON.stringify(await protection(root,tracked)));
 }else{
   assert.equal(env.GITHUB_REPOSITORY,'hyunae52/legal_harness');
-  assert.equal(env.GITHUB_EVENT_NAME,'push');assert.equal(env.GITHUB_REF,'refs/heads/main');
+  assert.ok(['push','workflow_dispatch'].includes(env.GITHUB_EVENT_NAME));assert.equal(env.GITHUB_REF,'refs/heads/main');
   const head=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();assert.equal(head,env.GITHUB_SHA);
   const run=Number(env.GITHUB_RUN_ID),attempt=Number(env.GITHUB_RUN_ATTEMPT);
   assert.ok(Number.isSafeInteger(run)&&run>0&&Number.isSafeInteger(attempt)&&attempt>0);
