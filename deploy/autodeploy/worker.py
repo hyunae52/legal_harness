@@ -1,6 +1,7 @@
 """Fixed GCE controller. The SSH receiver never evaluates uploaded commands."""
 import datetime, hashlib, json, os, pathlib, shutil, subprocess, sys, time, urllib.error, urllib.parse, urllib.request
 from protocol import REPOSITORY, REPOSITORY_ID, JOB, MAX_ARCHIVE, Rejected, require, verify_run, select_artifact, decode_bundle, package_files
+import providers
 
 ROOT = pathlib.Path('/home/cta/legal-harness-autodeploy')
 BIN = pathlib.Path('/opt/legal-harness-deployer')
@@ -75,8 +76,10 @@ class Deployment:
         save(self.directory/'status.json',{'job':self.job,'status':status,'updated_at':now(),**extra})
     @property
     def candidate(self): return ROOT/'releases'/self.data['head']
-    def providers(self):
+    def providers(self, candidate=True):
         for path,expected in self.config['provider_manifests'].items(): require(sha(pathlib.Path(path))==expected,'PROVIDER_SELECTION_CHANGED')
+        selection = self.data.get('provider_selection' if candidate else 'previous_providers')
+        if selection: providers.verify(selection)
     def files(self):
         for name,expected in self.data['files'].items():
             path=self.candidate/name
@@ -91,8 +94,9 @@ class Deployment:
                 h=health()
                 require(h['status']=='ok' and h['release_commit']==expected,'RELEASE_NOT_READY')
                 require(h['access_mode']=='public' and h['correction_pr']=='available','RUNTIME_POLICY_CHANGED')
-                require(h['mcp_release']==self.config['protection']['law_version']
-                    and h['taxlaw_release']['commit']==self.config['tax_commit'],'PROVIDER_VERSION_CHANGED')
+                selected = self.data.get('provider_selection') if expected == self.data.get('head') else self.data.get('previous_providers')
+                selected = selected or {'law':self.config['protection']['law_version'],'tax_commit':self.config['tax_commit']}
+                require(h['mcp_release']==selected['law'] and h['taxlaw_release']['commit']==selected['tax_commit'],'PROVIDER_VERSION_CHANGED')
                 return h
             except Exception:
                 if time.monotonic()>=until: raise
@@ -129,10 +133,12 @@ class Deployment:
         artifacts=gh.get(f'actions/runs/{run_id}/artifacts?per_page=100')
         require(artifacts.get('total_count',101)<=100,'TOO_MANY_ARTIFACTS')
         artifact=select_artifact(artifacts['artifacts'],run_id,attempt,head)
-        manifest,package=decode_bundle(gh.archive(artifact['id']),artifact,run_id,attempt,head,self.config['protection'])
+        manifest,package=decode_bundle(gh.archive(artifact['id']),artifact,run_id,attempt,head,self.config['protection'], self.config.get('auto_update_providers',False))
         self.providers(); current=health()
         active=json.loads((ROOT/'active.json').read_text()) if (ROOT/'active.json').exists() else {}
+        self.data['previous_providers'] = active.get('provider_selection')
         if current.get('release_commit')==head:
+            self.data['provider_selection'] = active.get('provider_selection')
             self.verify_existing(active,manifest,package)
             return {'already_active':True}
         previous=pathlib.Path(prop('WorkingDirectory'))
@@ -148,6 +154,10 @@ class Deployment:
         keep={str(previous),active.get('previous_path','')}
         for path in root.iterdir():
             if path.is_dir(): self.safe_remove_release(path,keep)
+        if self.config.get('auto_update_providers',False):
+            provider_keep = [pathlib.Path(value) for value in (
+                (active.get('provider_selection') or {}).get('tax_root'), active.get('previous_tax_root')) if value]
+            providers.prune_stores(ROOT, provider_keep)
         require(not self.candidate.exists(),'CANDIDATE_ALREADY_EXISTS')
         available=next(int(s.split()[1])*1024 for s in pathlib.Path('/proc/meminfo').read_text().splitlines() if s.startswith('MemAvailable:'))
         require(shutil.disk_usage(ROOT).free>400*1024*1024 and available>200*1024*1024,'INSUFFICIENT_RESOURCES')
@@ -170,8 +180,17 @@ class Deployment:
             self.data['dependency_install']='locked_npm_ci'
         self.data['dependencies']=self.dependencies(self.candidate)
         self.files()
-        require(json.loads((self.candidate/'node_modules/korean-law-mcp/package.json').read_text())['version']==self.config['protection']['law_version'],'LAW_DEPENDENCY_VERSION')
+        require(json.loads((self.candidate/'node_modules/korean-law-mcp/package.json').read_text())['version']==manifest['protection']['law_version'],'LAW_DEPENDENCY_VERSION')
+        require(json.loads((self.candidate/'package.json').read_text())['dependencies']['korean-law-mcp']==manifest['protection']['law_version'],'LAW_PIN_VERSION')
+        require(sha(self.candidate/'upstreams/korean-taxlaw-mcp.json')==manifest['protection']['tax_provider'],'TAX_PIN_DIGEST')
         conf='[Service]\nWorkingDirectory='+str(self.candidate)+'\nExecStart=\nExecStart=/usr/bin/node '+str(self.candidate/'dist/index.js')+'\nReadOnlyPaths='+str(self.candidate)+'\nEnvironment=TAXLAB_RELEASE_COMMIT='+head+'\n'
+        if self.config.get('auto_update_providers',False):
+            environment = providers.process_environment(self.data['previous_pid'])
+            baseline = (active.get('provider_selection') or {}).get('tax_fingerprint') or self.config.get('initial_tax_fingerprint')
+            selection = providers.stage(self.candidate, previous, environment, ROOT, BIN, self.directory, baseline)
+            self.data['provider_selection'] = selection
+            self.data['provider_preflight'] = providers.preflight(self.candidate, selection, environment, BIN, self.directory)
+            conf += 'EnvironmentFile='+selection['env_file']+'\nReadOnlyPaths='+selection['tax_root']+'\n'
         (self.directory/'candidate.conf').write_text(conf)
         return {'head':head,'package_sha256':manifest['package_sha256']}
     def verify_existing(self,active,manifest,package):
@@ -180,6 +199,7 @@ class Deployment:
         self.data['files']={name:hashlib.sha256(content).hexdigest() for name,content in package_files(package).items()}
         require(active.get('files')==self.data['files'] and prop('WorkingDirectory')==str(self.candidate),'ACTIVE_FILES_MISMATCH')
         self.files();require(active.get('dependencies')==self.dependencies(self.candidate),'ACTIVE_DEPENDENCIES_MISMATCH')
+        if active.get('provider_selection'): providers.verify(active['provider_selection'])
         self.ready(self.data['head'])
     def phase_fence(self):
         require(self.github().get('git/ref/heads/main')['object']['sha']==self.data['head'],'SUPERSEDED_BEFORE_ACTIVATION')
@@ -210,7 +230,9 @@ class Deployment:
         # A crash after resume must not leave an active release with no baseline.
         save(ROOT/'active.json',{'head':self.data['head'],'path':str(self.candidate),'previous_path':self.data['previous_path'],
             'dependencies':self.data['dependencies'],'job':self.job,'files':self.data['files'],
-            'package_sha256':self.data['package_sha256'],'artifact_digest':self.data['artifact_digest']})
+            'package_sha256':self.data['package_sha256'],'artifact_digest':self.data['artifact_digest'],
+            'provider_selection':self.data.get('provider_selection'),
+            'previous_tax_root':(self.data.get('previous_providers') or {}).get('tax_root')})
         return {'health':h,'smoke':result}
     def phase_rollback(self):
         self.fence('-C')
@@ -235,7 +257,7 @@ class Deployment:
         run(['sudo','-n','systemctl','daemon-reload']); run(['sudo','-n','systemctl','restart',SERVICE],timeout=100)
         return {}
     def phase_verify_previous(self):
-        self.providers(); h=self.ready(self.data['previous_head'])
+        self.providers(False); h=self.ready(self.data['previous_head'])
         require(prop('WorkingDirectory')==self.data['previous_path'] and sha(pathlib.Path(self.data['previous_path'])/'dist/index.js')==self.data['previous_entry'],'PREVIOUS_RELEASE_MISMATCH')
         if self.data['previous_active']:save(ROOT/'active.json',self.data['previous_active'])
         else:(ROOT/'active.json').unlink(missing_ok=True)

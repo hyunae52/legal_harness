@@ -1,0 +1,86 @@
+name: Automatic MCP update
+on:
+  schedule:
+    - cron: '40 17 * * *' # 02:40 KST, after the fork sync; email remains 03:30 KST.
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: automatic-mcp-update
+  cancel-in-progress: false
+jobs:
+  validate:
+    if: github.repository == 'hyunae52/legal_harness' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    outputs:
+      base: ${{ steps.base.outputs.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: base
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c
+        with:
+          python-version: '3.13'
+      - name: Prepare immutable provider pins
+        id: prepare
+        run: node scripts/prepare-provider-update.mjs prepare
+      - name: Install candidate without lifecycle scripts
+        if: steps.prepare.outputs.changed == 'true'
+        run: npm ci --ignore-scripts --omit=optional --no-audit --no-fund
+      - name: Install and snapshot changed tax provider
+        if: steps.prepare.outputs.tax_changed == 'true'
+        run: |
+          python scripts/install-taxlaw-mcp.py --dev
+          node scripts/snapshot-taxlaw-tools.mjs
+          python - <<'PY'
+          import json, subprocess
+          selected=json.load(open('.runtime/taxlaw/active.json'))
+          subprocess.run([selected['python'], '-I', '-m', 'pytest', '-q', '-ra', '--strict-markers', '--ignore=tests/test_live.py'], cwd=selected['cwd'], check=True)
+          PY
+      - name: Validate candidate integration
+        if: steps.prepare.outputs.changed == 'true'
+        run: |
+          npm run audit:runtime
+          npm run security:secrets
+          npm run review
+          npm run review:package
+      - name: Export restricted candidate contents
+        run: node scripts/prepare-provider-update.mjs bundle
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: provider-update-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .runtime/provider-update-bundle.json
+          retention-days: 14
+          if-no-files-found: error
+  publish:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.validate.outputs.base }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: provider-update-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .runtime/candidate
+      - name: Publish only validated provider files and dispatch main Review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TESTED_BASE: ${{ needs.validate.outputs.base }}
+        run: node scripts/publish-provider-update.mjs .runtime/candidate/provider-update-bundle.json

@@ -35,10 +35,10 @@ jobs:
       - name: npm run review:package
         run: npm run review:package
       - name: Export tested deployment package
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         run: node scripts/export-deploy-package.mjs
       - name: Store tested deployment package
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: law-release-${{ github.sha }}-${{ github.run_attempt }}

@@ -20,6 +20,7 @@ test('watch sends the fresh report from a successful check', async t => {
   await writeFile(join(options.stateDirectory, 'latest.json'), JSON.stringify(report));
   let delivered;
   const result = await runWatch(options, {
+    automation: async () => [],
     spawn: () => ({ status: 0, stdout: `${JSON.stringify({ checked_at: checkedAt, status: 'current' })}\n`, stderr: '' }),
     send: async input => { delivered = input; return { sent: true }; },
   });
@@ -32,6 +33,7 @@ test('watch sends a redacted failure record when the check cannot produce a repo
   const options = await fixture(t);
   let delivered;
   const result = await runWatch(options, {
+    automation: async () => [],
     spawn: () => ({ status: 1, stdout: '', stderr: '{"status":"check_failed"}\n' }),
     send: async input => { delivered = input; return { sent: true }; },
   });

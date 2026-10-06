@@ -37,7 +37,7 @@
     "deploy": "pm2 start ecosystem.config.cjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.30.0",
+    "@modelcontextprotocol/sdk": "1.31.0",
     "@octokit/rest": "^21.0.1",
     "@supabase/supabase-js": "^2.45.0",
     "dotenv": "^16.4.5",
