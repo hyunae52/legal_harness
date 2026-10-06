@@ -11,6 +11,29 @@ const client = createKoreanLawClient();
 const cases = [];
 const checks = [
   {
+    name: 'precedent_title_and_body', tool: 'search_decisions',
+    args: { domain: 'precedent', query: '학원강사 근로자', page: 1, display: 20, options: { search: 'both' } },
+    verify(text) {
+      assert.match(text, /제목검색 \d+건 · 본문검색 \d+건, 중복 제외 \d+건 표시/);
+      assert.match(text, /적중: 제목검색/);
+      assert.match(text, /적중: 본문검색/);
+      const ids = [...text.matchAll(/^\[(\d+)\]/gm)].map(match => match[1]);
+      assert.ok(ids.length > 1, 'Expected source hits from both search scopes');
+      assert.equal(new Set(ids).size, ids.length, 'A precedent ID must appear only once');
+      return { title_and_body_hits: true, unique_precedents: ids.length };
+    },
+  },
+  {
+    name: 'precedent_string_body_scope', tool: 'search_decisions',
+    args: { domain: 'precedent', query: '학원강사 근로자', page: 1, display: 20, options: { search: '2' } },
+    verify(text) {
+      assert.match(text, /판례 검색 결과/);
+      assert.ok([...text.matchAll(/^\[(\d+)\]/gm)].length > 3, 'String search=2 must query precedent bodies');
+      assert.doesNotMatch(text, /제목검색 적중이/);
+      return { string_body_scope: true };
+    },
+  },
+  {
     name: 'exact_precedent_number', tool: 'search_decisions',
     args: { domain: 'precedent', query: '2024두55426', page: 1, display: 20 },
     verify(text) {
@@ -124,7 +147,7 @@ async function check(item) {
 try {
   const catalog = await client.listTools();
   assert.equal(catalog.server?.name, 'korean-law');
-  assert.equal(catalog.server?.version, '4.15.5');
+  assert.equal(catalog.server?.version, '4.15.6');
   const annex = catalog.tools.find(t => t.name === 'get_annexes');
   assert.ok(annex?.inputSchema.properties?.date);
   // Distinct cold requests in batches matching the application's work limit.

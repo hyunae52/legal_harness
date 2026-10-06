@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-06T16:37:13.170100+00:00",
+  "law_version": "4.15.6",
+  "parser_version": "4.18.2",
+  "proxy_addr_version": "2.0.8",
+  "base_commit": "bbbaa53ae5109bc932060b146c847acca91a2ac5",
+  "candidate_files": {
+    "package.json": "9e2e1d98ee66ca05e257b8e72d497079607c49dc929bb0d122ccb7a744d6404c",
+    "package-lock.json": "d27875534351e98edaff77fe76bd111f4327dbd4e567f4c02b3d3091fdf03048",
+    "npm-shrinkwrap.json": "d27875534351e98edaff77fe76bd111f4327dbd4e567f4c02b3d3091fdf03048",
+    "scripts/law-release-smoke.mjs": "3dcc08a1dc63814776acb7678ad46d4f0a27ce62ed9eb1f54a5a305455e97be0",
+    "tests/proxy-trust.test.mjs": "34f174798e34c8b75404bb016eb02a6b065b2c4ac691cf7c48a610e42e986412"
+  },
+  "local": {
+    "review_passed": 351,
+    "review_failed": 0,
+    "review_skipped": 0,
+    "package_checks_passed": 9,
+    "runtime_vulnerabilities": 0,
+    "node": "v24.13.1",
+    "logs": {
+      "review.log": "54ac4609f19e9c7c7cefbcea50f27d205a1a9bd91a46cf38c729a307f0721266",
+      "package.log": "91e39d27a7603eec77d1d23139ef836dfacde8e08c96dc4fc26d4de65717d9c6",
+      "audit.log": "4887d0408c96ac1a9d11bb765d80e0ce1ad6d2595ef2def44b66d9bbc0a4361c"
+    }
+  },
+  "gce_live_smoke": {
+    "status": "pass",
+    "checked_at": "2026-10-06T16:36:12.851Z",
+    "node": "v22.23.2",
+    "upstream": {
+      "name": "korean-law",
+      "version": "4.15.6"
+    },
+    "tool_count": 10,
+    "maximum_concurrent_calls": 3,
+    "cases": [
+      {
+        "name": "exact_precedent_number",
+        "status": "pass",
+        "milliseconds": 590,
+        "response_bytes": 519,
+        "exact_case_found": true,
+        "official_document_id": "603549"
+      },
+      {
+        "name": "precedent_string_body_scope",
+        "status": "pass",
+        "milliseconds": 711,
+        "response_bytes": 3335,
+        "string_body_scope": true
+      },
+      {
+        "name": "precedent_title_and_body",
+        "status": "pass",
+        "milliseconds": 966,
+        "response_bytes": 4081,
+        "title_and_body_hits": true,
+        "unique_precedents": 21
+      },
+      {
+        "name": "precedent_full_body",
+        "status": "pass",
+        "milliseconds": 364,
+        "response_bytes": 7541,
+        "substantive_reasoning_and_disposition": true,
+        "official_document_id": "603549"
+      },
+      {
+        "name": "event_date_article",
+        "status": "pass",
+        "milliseconds": 2368,
+        "response_bytes": 1685,
+        "effective_date": "20220101"
+      },
+      {
+        "name": "renamed_law_history",
+        "status": "pass",
+        "milliseconds": 4451,
+        "response_bytes": 6612,
+        "renamed_history_found": true
+      },
+      {
+        "name": "annex_visible_tables",
+        "status": "pass",
+        "milliseconds": 2311,
+        "response_bytes": 3418,
+        "visible_tables": 5
+      },
+      {
+        "name": "historical_annex",
+        "status": "pass",
+        "milliseconds": 3053,
+        "response_bytes": 27998,
+        "historical_annex_found": true
+      },
+      {
+        "name": "large_law_annex",
+        "status": "pass",
+        "milliseconds": 12384,
+        "response_bytes": 1024,
+        "annex_found": true
+      },
+      {
+        "name": "annex_fraction",
+        "status": "pass",
+        "milliseconds": 1839,
+        "response_bytes": 1630,
+        "fraction_preserved": true
+      }
+    ],
+    "scope": "Public source retrieval and historical version selection; legal applicability still requires interpretation."
+  },
+  "gce_resources": {
+    "exit_code": 0,
+    "status": "pass",
+    "minimum_available_mib": 343.6,
+    "peak_smoke_tree_rss_mib": 200.6,
+    "wall_seconds": 21.46
+  },
+  "existing_service_unchanged_during_candidate_test": true,
+  "activation_performed_by_this_record": false,
+  "failure_history": [
+    {
+      "gate": "runtime audit",
+      "initial_result": "critical proxy-addr < 2.0.8",
+      "remediation": "Only proxy-addr patched from 2.0.7 to 2.0.8; regression reproduced on 2.0.7 and blocked on 2.0.8; full review, package audit and GCE live checks rerun on final lock."
+    }
+  ],
+  "limitations": [
+    "Actual-model evaluation was not repeated for this dependency update.",
+    "Read-only legal source checks do not certify legal applicability.",
+    "Exact candidate CI, activation and final public verification remain separate gates."
+  ]
+}
