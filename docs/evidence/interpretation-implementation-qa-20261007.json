@@ -148,10 +148,13 @@
     "r4_manifest_sha256": "c3369f77c7be00525686507a8893c48934bfd6c3605fa77881e38be2290993b1",
     "R5": "CODE PASS",
     "r5_manifest_sha256": "67352f87a815056c98ffb749efb9395948e77401ffe4eeeb60781ba96cfd4b14",
-    "QA_R5": "QA PLAN REVISE: live smoke counter obligation, successful answer binding/missing trace, and actual byte checks; corrected for re-review"
+    "QA_R5": "QA PLAN REVISE: live smoke counter obligation, successful answer binding/missing trace, and actual byte checks; corrected for re-review",
+    "R6": "CODE PASS / QA PASS; existing rollout may proceed after final exact CI and release checks",
+    "r6_manifest_sha256": "17c65f6035a954c1b03e2ab85dfd9662fced8c70d1551abd10de0cba10ce6c16",
+    "r6_bundle_sha256": "38b1da6bcb8e987959e1adb641d0bebf7cc0d9bb21dc3c6d5a471f683a6f04c4"
   },
   "quality": {
-    "state": "PASS fixed semantic criteria; Pro QA corrections pending re-review",
+    "state": "PASS fixed semantic criteria; R6 Pro QA PASS with disclosed measurement limits",
     "record": "docs/evidence/interpretation-model-quality-20261007.json",
     "runtime_delta_evidence": ".runtime/final-runtime-compatibility.json",
     "client_readiness_mismatches": 2,
@@ -162,9 +165,10 @@
   },
   "deployment": "not deployed; rollout remains disabled by default",
   "ci": {
-    "commit": "714ba44ac4add6fef740ede2e41e28ed3cf9c5fb",
-    "run_id": 37581603906,
+    "commit": "98ef5a3f3e506a7cf7b4018610fc3a717a6d714f",
+    "run_id": 37586627898,
     "conclusion": "success",
-    "url": "https://github.com/hyunae52/legal_harness/actions/runs/37581603906"
+    "url": "https://github.com/hyunae52/legal_harness/actions/runs/37586627898",
+    "scope": "Complete code commit before final review record; final exact-head CI required in PR before merge"
   }
 }

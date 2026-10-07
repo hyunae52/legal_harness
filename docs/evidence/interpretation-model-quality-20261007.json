@@ -103,7 +103,7 @@
     "R1": "FAIL normal answerability 11/12 vs 12/12",
     "R3": "FAIL normal answerability 10/12 vs 12/12"
   },
-  "qa_review": "R5 CODE PASS; QA method follow-up pending after evidence and smoke corrections",
+  "qa_review": "R6 CODE PASS / QA PASS for repaired methodology and recorded fixed-oracle evidence; not independent regrading or DEPLOY VERIFIED",
   "deployment": "not deployed at time of assessment",
   "runtime_delta": {
     "changed_paths": [
