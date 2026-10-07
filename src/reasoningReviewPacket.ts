@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { digest, ServiceError } from './contracts.js';
 import { storedBytes } from './researchStorage.js';
 import { contentHash, reviewContextHash, type ReasoningState, type ReviewSnapshot } from './reasoningReviewState.js';
-import { reasoningPolicy } from './reasoningContracts.js';
+import { reasoningPolicy, semanticReviewPolicy } from './reasoningContracts.js';
 
 export interface ReviewPacket {
   packet_id: string; actor: string; research_id: string; revision: number; issued_state_version: number;
@@ -11,7 +11,8 @@ export interface ReviewPacket {
   review_context: Pick<ReasoningState, 'findings' | 'responses'>;
 }
 function units(state: ReasoningState, snapshot: ReviewSnapshot, context: ReviewPacket['review_context']) {
-  return [{ id: 'plan', data: snapshot.plan }, { id: 'artifact', data: state.artifact }, { id: 'structure', data: state.structure },
+  return [{ id: 'plan', data: snapshot.plan }, { id: 'review_policy', data: semanticReviewPolicy },
+    { id: 'artifact', data: state.artifact }, { id: 'structure', data: state.structure },
     { id: 'observations', data: { requirements: snapshot.requirements, requirement_history: snapshot.requirement_history,
       attempts: snapshot.attempts, ledger: snapshot.ledger, manifests: snapshot.manifests, adopted: snapshot.review_adopted_evidence_ids } },
     { id: 'review_history', data: { ...context, response_hashes: context.responses.map(r => ({ finding_id: r.finding_id, response_hash: digest(r) })) } },

@@ -78,7 +78,10 @@ else:
         normal = [r for r in rows if cases[r['case']]['group'] == 'normal']
         arms[arm] = {'trials': len(rows), 'protocol_unverified': sum(not r['protocol_valid'] for r in rows),
                      'semantic_pass': sum(r['protocol_valid'] and r['grade']['semantic_pass'] for r in rows),
+                     'injected_detection_misses': sum(not (r['protocol_valid'] and r['grade']['decisive_error_detected']) for r in injected),
+                     'injected_wrong_or_unverified': sum(not (r['protocol_valid'] and r['grade']['semantic_pass']) for r in injected),
                      'injected_misses': sum(not (r['protocol_valid'] and r['grade']['semantic_pass'] and r['grade']['decisive_error_detected']) for r in injected),
+                     'critical_classes_detected': sorted({cases[r['case']]['class'] for r in injected if r['protocol_valid'] and r['grade']['decisive_error_detected']}),
                      'heldout_wrong_or_unverified': sum(not (r['protocol_valid'] and r['grade']['semantic_pass']) for r in rows if cases[r['case']]['heldout']),
                      'normal_answerable': sum(r['protocol_valid'] and r['grade']['semantic_pass'] and r['grade']['answerable'] for r in normal),
                      'median_seconds': statistics.median(r['elapsed_seconds'] for r in rows),

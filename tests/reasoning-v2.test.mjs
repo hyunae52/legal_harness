@@ -468,3 +468,25 @@ test('LH-IR-CODE-03: remap target metadata cannot hide a remaining claim error',
   await assert.rejects(() => submit(f, mapped, { prior_findings: [{ finding_id: response.finding_id, disposition: 'resolved',
     reason: '오류가 남아 있어야 한다.', response_hash: digest(response) }] }), code('REVIEW_STRUCTURE_UNRESOLVED'));
 });
+
+test('IR-09/13: the question-scope review policy is an immutable required packet unit', async t => {
+  const f = await reasoningFixture(); t.after(() => f.service.close()); await review(f);
+  const p = await prepare(f), packet = p.response.packet;
+  const policyOffset = packet.required_units.findIndex(u => u.id === 'review_policy');
+  assert.ok(policyOffset >= 0);
+  for (let offset = 0; offset < packet.required_units.length; offset++) {
+    if (offset === policyOffset) continue;
+    await f.service.run('get_legal_research', coverageActor, { research_id: f.state.research_id, view: 'review_packet',
+      packet_id: packet.packet_id, packet_manifest_hash: packet.manifest_hash, limit: 1,
+      packet_cursor: { packet_id: packet.packet_id, manifest_hash: packet.manifest_hash, offset } });
+  }
+  const incomplete = await submit(f, p);
+  assert.equal(incomplete.response.code, 'REVIEW_MATERIAL_INCOMPLETE');
+  assert.equal(incomplete.response.accepted, false);
+  assert.deepEqual(incomplete.response.missing_units, ['review_policy']);
+  const page = await f.service.run('get_legal_research', coverageActor, { research_id: f.state.research_id, view: 'review_packet',
+    packet_id: packet.packet_id, packet_manifest_hash: packet.manifest_hash, limit: 1,
+    packet_cursor: { packet_id: packet.packet_id, manifest_hash: packet.manifest_hash, offset: policyOffset } });
+  assert.equal(digest(page.items[0].data), packet.required_units[policyOffset].hash);
+  assert.equal((await submit(f, p)).response.ready_for_answer, true);
+});
