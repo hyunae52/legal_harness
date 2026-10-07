@@ -5,20 +5,23 @@ import { inspectScopeCompletion } from './scopeCompletion.js';
 import { inspectLegalApplicability } from './legalApplicability.js';
 import { researchCoverage, candidateGaps, isCoverageComplete, type CandidateLedger } from './researchCoverage.js';
 import { makeRequirements, effectiveRequirements, requirementMissing, type Requirement } from './researchRequirements.js';
-import { substantiveCitations } from './researchCitations.js';
+import { substantiveCitations, reasoningCitations } from './researchCitations.js';
+import { inspectApplication, inspectAnswer, newDateRoles } from './reasoningApplication.js';
+import { inspectConflicts } from './reasoningConflicts.js';
+import type { CheckTargetInput } from './reasoningContracts.js';
 
-export const coreEvidenceIds = (input: ReviewInput) => input.analysis.flatMap(a => [...substantiveCitations(a).filter(c => c.relation !== 'background').map(c => c.evidence_id),
+export const coreEvidenceIds = (input: ReviewInput) => input.analysis.flatMap(a => [...substantiveCitations(a, input.answer_blocks).filter(c => c.relation !== 'background').map(c => c.evidence_id),
     ...(a.legal_basis?.authorities.filter(a => a.disposition === 'applied' || a.disposition === 'analogy').map(a => a.evidence_id) ?? [])]);
 export function inspectResearch(input: ReviewInput, plan: Plan, evidence: ResearchEvidence[], attempts: ResearchAttempt[], ledger?: CandidateLedger, registeredRequirements?: Requirement[]) {
   const core = coreEvidenceIds(input);
   const coverage = researchCoverage(plan, input.expected_revision, evidence, attempts, ledger, undefined, core);
   evidence = evidence.filter(e => e.revision === input.expected_revision);
   const requirements = effectiveRequirements(registeredRequirements ?? makeRequirements(plan, input.expected_revision), plan, input.expected_revision, evidence);
-  const findings: { code: string; severity: 'blocked' | 'needs_info'; issue_id?: string; detail: string; gap_id?: string }[] = [];
+  const findings: { code: string; severity: 'blocked' | 'needs_info'; issue_id?: string; scope_track_id?: string; detail: string; gap_id?: string; target?: CheckTargetInput }[] = [];
   const citationChecks: Record<string, unknown>[] = [];
   const gapId = (code: string, detail: string, issue_id?: string) => 'gap-' + digest({ revision: input.expected_revision, code, detail, issue_id }).slice(0, 24);
-  const add = (code: string, severity: 'blocked' | 'needs_info', detail: string, issue_id?: string) => findings.push({ code, severity, detail,
-    gap_id: gapId(code, detail, issue_id), ...(issue_id ? { issue_id } : {}) });
+  const add = (code: string, severity: 'blocked' | 'needs_info', detail: string, issue_id?: string, target?: CheckTargetInput) => findings.push({ code, severity, detail,
+    gap_id: gapId(code, detail, issue_id), ...(issue_id ? { issue_id } : {}), ...(target ? { target } : {}) });
   for (const r of requirements.filter(r => r.scope_status === 'unmapped')) add('REQUIREMENT_SCOPE_UNRESOLVED', 'needs_info', r.requirement_id + ': ' + r.description);
   const byEvidence = new Map(evidence.map(e => [e.evidence_id, e]));
   const claimIds = new Set<string>();
@@ -29,8 +32,8 @@ export function inspectResearch(input: ReviewInput, plan: Plan, evidence: Resear
     const issue = plan.issues.find(i => i.id === analysis.issue_id);
     if (!issue) continue;
     const beginning = findings.length;
-    const block = (code: string, detail: string) => add(code, 'blocked', detail, issue.id);
-    const gap = (code: string, detail: string) => add(code, 'needs_info', detail, issue.id);
+    const block = (code: string, detail: string, target?: CheckTargetInput) => add(code, 'blocked', detail, issue.id, target);
+    const gap = (code: string, detail: string, target?: CheckTargetInput) => add(code, 'needs_info', detail, issue.id, target);
     for (const item of coverage.preparation_gaps.filter(g => g.issue_id === issue.id)) gap(item.code, '실제 법령 조문 앵커 또는 지원하는 조회 경로를 확보하세요.');
     const obligations = coverage.obligations.filter(o => o.issue_id === issue.id);
     if (!obligations.length || obligations.some(o => !isCoverageComplete(o))) gap('REQUIRED_SEARCH_INCOMPLETE', '필수 자료군·후속/개정 조회 범위가 미완료입니다. coverage를 확인하세요.');
@@ -49,7 +52,7 @@ export function inspectResearch(input: ReviewInput, plan: Plan, evidence: Resear
       if (r.status === 'unresolved') gap('REQUIREMENT_NECESSITY_UNRESOLVED', `${r.requirement_id}: ${r.target.id}; 원문과 질문 범위에서 필요성을 먼저 평가하세요.`);
       else if (r.status === 'required' && r.target.kind === 'fact') {
         const fact = plan.facts.find(f => f.id === r.target.id)!;
-        gap('REQUIRED_FACT_UNCONFIRMED', `${r.target.id}: ${fact.description} (${fact.status})`);
+        gap('REQUIRED_FACT_UNCONFIRMED', `${r.target.id}: ${fact.description} (${fact.status})`, { kind: 'fact', id: r.target.id });
       }
     }
     // A successful current unit cannot erase failed roles in the same lookup,
@@ -92,13 +95,13 @@ export function inspectResearch(input: ReviewInput, plan: Plan, evidence: Resear
       for (const factId of claim.fact_ids) {
         const fact = plan.facts.find(f => f.id === factId);
         if (!fact) block('FACT_NOT_FOUND', factId);
-        else if (fact.status !== 'provided') gap('USED_FACT_UNCONFIRMED', factId);
+        else if (fact.status !== 'provided') gap('USED_FACT_UNCONFIRMED', factId, { kind: 'fact', id: factId });
       }
       let direct = false;
       for (const citation of claim.citations) {
         if (checkCitation(citation, claim.id)) direct = true;
       }
-      if (!direct) gap('DIRECT_SUPPORT_REQUIRED', claim.id + ': 확인 가능한 직접 본문 인용이 부족합니다. 유추 여부의 의미 판단은 별도입니다.');
+      if (!direct) gap('DIRECT_SUPPORT_REQUIRED', claim.id + ': 확인 가능한 직접 본문 인용이 부족합니다. 유추 여부의 의미 판단은 별도입니다.', { kind: 'claim', id: claim.id });
     }
     const counterIds = analysis.counter_evidence.map(c => c.evidence_id);
     if (new Set(counterIds).size !== counterIds.length) block('DUPLICATE_COUNTER', '반대 자료를 중복 처리했습니다.');
@@ -124,14 +127,20 @@ export function inspectResearch(input: ReviewInput, plan: Plan, evidence: Resear
     }
     const effectiveIssue = { ...issue, required_date_roles: issue.required_date_roles.filter(id => issueRequirements.some(r =>
       r.target.kind === 'date' && r.target.id === id && (r.status === 'required' || r.status !== 'not_required_for_question' && !requirementMissing(r, plan)))) };
-    inspectLegalApplicability(analysis, effectiveIssue, plan, evidence, checkCitation, block, gap, coverage);
+    if (input.reasoning_contract_version === 2) {
+      for (const citation of reasoningCitations(analysis, input.answer_blocks)) checkCitation(citation, 'reasoning_v2');
+      inspectApplication(analysis, plan, evidence, requirements, block, gap);
+      inspectConflicts(analysis, evidence, attempts, block, gap);
+    }
+    inspectLegalApplicability(analysis, { ...effectiveIssue, required_date_roles: [...new Set([...effectiveIssue.required_date_roles, ...newDateRoles(analysis)])] },
+      plan, evidence, checkCitation, block, gap, coverage, (input.answer_blocks ?? []).filter(b => b.issue_id === issue.id).flatMap(b => b.citations));
     const usedDateRoles = new Set([...effectiveIssue.required_date_roles, ...analysis.timing.date_roles,
-      ...(analysis.legal_basis?.statutes.flatMap(s => s.date_roles) ?? [])]);
+      ...(analysis.legal_basis?.statutes.flatMap(s => s.date_roles) ?? []), ...newDateRoles(analysis)]);
     for (const role of usedDateRoles) {
       const date = plan.event_dates.find(d => d.role === role);
       if (!date) { block('DATE_ROLE_NOT_FOUND', role); continue; }
-      if (!analysis.timing.date_roles.includes(role)) gap('DATE_ROLE_NOT_ADDRESSED', role);
-      if (date.precision !== 'day' || date.basis !== 'provided') gap('DATE_UNCONFIRMED', `${role}: ${date.precision}/${date.basis}`);
+      if (!analysis.timing.date_roles.includes(role)) gap('DATE_ROLE_NOT_ADDRESSED', role, { kind: 'date', id: role });
+      if (date.precision !== 'day' || date.basis !== 'provided') gap('DATE_UNCONFIRMED', `${role}: ${date.precision}/${date.basis}`, { kind: 'date', id: role });
     }
     if (analysis.timing.status === 'unresolved' || (usedDateRoles.size && analysis.timing.status !== 'addressed')) gap('TIMING_REVIEW_REQUIRED', analysis.timing.reason);
     if (analysis.exceptions.status === 'unresolved') gap('EXCEPTIONS_UNRESOLVED', analysis.exceptions.reason);
@@ -155,10 +164,17 @@ export function inspectResearch(input: ReviewInput, plan: Plan, evidence: Resear
     if (hasGaps && analysis.conclusion_mode === 'definitive') block('DEFINITIVE_WITH_GAPS', '필요한 사실·근거·시점·반론의 공백이 남아 확정 결론과 모순됩니다.');
     if (hasGaps && analysis.conclusion_mode !== 'definitive' && (!analysis.unknowns.length || !analysis.next_queries.length)) block('GAPS_NOT_EXPLAINED', '조건부/유보 답변에 미확인점과 다음 질문·검색을 적으세요.');
   }
+  if (input.reasoning_contract_version === 2) inspectAnswer(input, (code, detail, target) => add(code, 'blocked', detail, undefined, target));
   const scopeCompletion = inspectScopeCompletion(input, plan, evidence, attempts, findings, coverage);
   const { findings: scopeFindings, ...scopeStatus } = scopeCompletion;
   findings.push(...scopeFindings);
-  return { status: findings.some(f => f.severity === 'blocked') ? 'blocked' : findings.length ? 'needs_info' : 'structurally_complete',
+  const blockingScopeFindings = input.reasoning_contract_version !== 2 || plan.scope_review?.mode !== 'question' ? findings : findings.filter(f => {
+    if (f.scope_track_id && plan.scope_review?.tracks.some(t => t.id === f.scope_track_id && t.relation === 'independent_notice')) return false;
+    const tracks = plan.scope_review?.tracks.filter(t => t.issue_id === f.issue_id) ?? [];
+    return !f.issue_id || !tracks.length || tracks.some(t => t.relation !== 'independent_notice');
+  });
+  return { status: blockingScopeFindings.some(f => f.severity === 'blocked') ? 'blocked' : blockingScopeFindings.length ? 'needs_info' : 'structurally_complete',
+    readiness_scope: plan.scope_review?.mode === 'comprehensive' ? 'declared_scope' : 'question',
     findings, citation_checks: citationChecks, next_queries: input.analysis.flatMap(a => a.next_queries),
     reference_guide: { fact_ids: plan.facts.map(f => f.id), date_roles: plan.event_dates.map(d => d.role),
       requirements: requirements.map(r => ({ requirement_id: r.requirement_id, issue_id: r.issue_id, target: r.target, status: r.status,

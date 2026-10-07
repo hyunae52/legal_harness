@@ -15,12 +15,16 @@ import { applyResearchProfiles } from './researchProfiles.js';
 import { documentKey } from './researchIdentity.js';
 import { ResearchCapacityError, type CapacityReason } from './researchRecovery.js';
 import { makeRequirements, effectiveRequirements, assessRequirements, requirementMissing, type Requirement, type RequirementHistory } from './researchRequirements.js';
+import { emptyReasoningState, contentHash, recordArtifact, reasoningStatus, acceptedReceipt, admitReceipt, acceptModelReview,
+  type ReasoningState, type ReviewSnapshot, type ReviewReceipt } from './reasoningReviewState.js';
+import { preparePacket, assertPacket, packetSummary, readPacketPage } from './reasoningReviewPacket.js';
 
 export const researchPolicyVersion = coveragePolicy;
 const defaults = { ttlMs: 1_800_000, maxSessions: 50, maxSessionsPerActor: 5, maxReceipts: 32, maxAttempts: 40,
   maxSessionBytes: 1_048_576, maxTotalBytes: 8_388_608, receiptBytes: 131_072, metadataReserve: 8192,
   bodyBytes: 655_360, ledgerBytes: 262_144, transientBytes: 4_194_304, yieldMs: 40_000 };
 export interface ResearchOptions { now?: () => number; limits?: Partial<typeof defaults>; policyVersion?: string;
+  reasoningV2Enabled?: boolean;
   beforeSourceCall?: (actor: Actor) => void;
   /** Fault injection at the atomic commit boundary; never externally configurable. */
   beforeDocumentCommit?: () => void;
@@ -36,6 +40,7 @@ interface Session {
   evidence_bindings: { evidence_id: string; revision: number; issue_ids: string[] }[];
   review_adopted_evidence_ids: string[];
   requirements: Requirement[]; requirement_history: RequirementHistory[];
+  reasoning?: ReasoningState;
 }
 const owner = (actor: Actor) => actor.kind + ':' + actor.id;
 const safeCode = (e: unknown) => e instanceof ServiceError || e instanceof LawMcpError ? e.code.slice(0, 100) : 'SOURCE_RETRIEVAL_FAILED';
@@ -67,7 +72,7 @@ export class ResearchService {
     return s;
   }
   private retainedSize(s: Session) {
-    return bytes(s) + s.reservation + Math.max(0, 2048
+    return bytes(s) + s.reservation + (this.options.reasoningV2Enabled ? Math.max(0, 98304 - bytes(s.reasoning ?? {})) : 0) + Math.max(0, 2048
       - bytes({ last_review: s.last_review, review_adopted_evidence_ids: s.review_adopted_evidence_ids }));
   }
   private save(s: Session, commit = true) {
@@ -121,15 +126,22 @@ export class ResearchService {
     return binding ? { ...e, revision: s.revision, issue_ids: binding.issue_ids, cache_of: e.evidence_id, source_revision: e.revision } : e;
   }); }
   private coverage(s: Session) { return researchCoverage(s.plan, s.revision, this.evidence(s), s.attempts, s.ledger, this.policy, s.review_adopted_evidence_ids); }
+  private reasoningSnapshot(s: Session): ReviewSnapshot {
+    return { research_id: s.research_id, revision: s.revision, plan: s.plan,
+      evidence: this.evidence(s).filter(e => e.revision === s.revision), attempts: s.attempts, manifests: s.manifests, ledger: s.ledger,
+      requirements: this.requirements(s), requirement_history: s.requirement_history, evidence_bindings: s.evidence_bindings,
+      review_adopted_evidence_ids: s.review_adopted_evidence_ids, policy: this.policy };
+  }
+  private reasoningView(s: Session) { return reasoningStatus(s.reasoning, this.reasoningSnapshot(s), Boolean(s.busy), Boolean(this.options.reasoningV2Enabled)); }
   private view(s: Session, job?: Job, selectedIds?: string[]) {
     const { actor: _actor, admission_actor: _admission, reservation: _reserved, transient_reservation: _temporary, busy: _busy, deferrals: _deferrals, evidence: _stored,
-      research_id, revision, state_version, ...state } = s;
+      reasoning: _reasoning, research_id, revision, state_version, ...state } = s;
     const fullCoverage = this.coverage(s), evidence = this.evidence(s);
     const { effective_evidence: _evidence, ...coverage } = fullCoverage;
     return structuredClone({ status: 'research_session', research_id, revision, state_version,
       // Explicit document reads put the requested text ahead of a potentially long plan/history.
       ...(selectedIds?.length ? { evidence: evidence.filter(e => selectedIds.includes(e.evidence_id)) } : {}),
-      ...researchProgress(fullCoverage), ...state, policy_version: this.policy, ...(job ? { job } : {}), coverage,
+      ...researchProgress(fullCoverage), ...state, ...this.reasoningView(s), policy_version: this.policy, ...(job ? { job } : {}), coverage,
       last_review: s.last_review ? { ...s.last_review, current: s.last_review.state_version === s.state_version && !s.busy } : null,
       remaining_attempts: this.limits.maxAttempts - s.attempts.length, pending: Boolean(s.busy), interview: interviewState({ ...s, requirements: this.requirements(s) }),
       requirements: this.requirements(s).map(r => ({ ...r, missing: requirementMissing(r, s.plan) })),
@@ -269,7 +281,7 @@ export class ResearchService {
       jobs: current.jobs.map(j => j.job_id === job.job_id ? result : j) };
     this.save(finished); return this.view(finished, result);
   }
-  async run(name: ResearchTool, actor: Actor, raw: unknown): Promise<Record<string, unknown>> {
+  async run(name: ResearchTool, actor: Actor, raw: unknown, beforeMaterialCommit?: (response: Record<string, unknown>) => void): Promise<Record<string, unknown>> {
     this.purge(); if (this.stopped) throw new ServiceError(503, 'SHUTTING_DOWN');
     if (name === 'start_legal_research') {
       const input = researchSchemas[name].parse(raw);
@@ -284,6 +296,16 @@ export class ResearchService {
     }
     if (name === 'get_legal_research') {
       const input = researchSchemas[name].parse(raw), s = this.get(actor, input.research_id);
+      if (input.view === 'review_packet') {
+        if (!this.options.reasoningV2Enabled) throw new ServiceError(404, 'REASONING_V2_DISABLED');
+        if (s.busy) throw new ServiceError(409, 'RESEARCH_BUSY');
+        const page = readPacketPage(s.reasoning ?? emptyReasoningState(), this.reasoningSnapshot(s), owner(actor), {
+          packet_id: input.packet_id!, packet_manifest_hash: input.packet_manifest_hash!, limit: input.limit, packet_cursor: input.packet_cursor });
+        const response = { ...page.result, ...this.reasoningView({ ...s, reasoning: page.state }), revision: s.revision, state_version: s.state_version };
+        beforeMaterialCommit?.(response);
+        this.save({ ...s, reasoning: page.state });
+        return response;
+      }
       if (input.evidence_ids?.some(id => !s.evidence.some(e => e.evidence_id === id))) throw new ServiceError(400, 'RESEARCH_EVIDENCE_NOT_FOUND');
       return this.view(s, undefined, input.evidence_ids);
     }
@@ -396,7 +418,42 @@ export class ResearchService {
         }, this.limits.yieldMs); })]);
       } finally { clearTimeout(timer); }
     }
+    if (name === 'prepare_reasoning_review' || name === 'submit_reasoning_review') {
+      if (!this.options.reasoningV2Enabled) throw new ServiceError(404, 'REASONING_V2_DISABLED');
+      const input = researchSchemas[name].parse(raw), old = this.get(actor, input.research_id), state = old.reasoning ?? emptyReasoningState();
+      const accepted = acceptedReceipt(state, name, input);
+      if (accepted) return { research_id: old.research_id, revision: old.revision, state_version: old.state_version,
+        receipt: accepted, replayed: true, ...this.reasoningView(old) };
+      this.get(actor, input.research_id, input.expected_revision, true);
+      if (input.expected_state_version !== old.state_version) throw new ServiceError(409, 'RESEARCH_STATE_CHANGED');
+      if (state.reviews_accepted >= 3) throw new ServiceError(409, 'REVIEW_ROUND_LIMIT');
+      const snapshot = this.reasoningSnapshot(old);
+      let next: ReasoningState, result: ReviewReceipt['result'];
+      if ('artifact_id' in input) {
+        if (input.artifact_id !== state.artifact?.artifact_id || input.artifact_hash !== state.artifact?.artifact_hash) throw new ServiceError(409, 'REVIEW_ARTIFACT_STALE');
+        const packet = preparePacket(state, snapshot, owner(actor), old.state_version, old.expires_at);
+        next = { ...state, previous_packet: state.packet ? { packet_id: state.packet.packet_id, content_hash: state.packet.content_hash,
+          manifest_hash: state.packet.manifest_hash } : state.previous_packet, packet }; result = 'prepared';
+      } else {
+        const p = assertPacket(state, snapshot, input.packet_id, input.manifest_hash, owner(actor));
+        if (p.accepted) throw new ServiceError(409, 'REVIEW_PACKET_ALREADY_ACCEPTED');
+        if (input.content_hash !== p.content_hash) throw new ServiceError(409, 'REVIEW_PACKET_STALE');
+        const missing = p.required_units.filter(u => !p.provided_units.includes(u.id)).map(u => u.id);
+        if (missing.length) return { code: 'REVIEW_MATERIAL_INCOMPLETE', accepted: false, missing_units: missing,
+          research_id: old.research_id, revision: old.revision, state_version: old.state_version, ...this.reasoningView(old) };
+        next = acceptModelReview(state, input, snapshot); result = input.result;
+      }
+      const receipt: ReviewReceipt = { tool: name, request_id: input.request_id, input_hash: digest(input), packet_id: next.packet!.packet_id,
+        content_hash: next.packet!.content_hash, manifest_hash: next.packet!.manifest_hash, revision: old.revision,
+        state_version: old.state_version + 1, result, review_number: next.reviews_accepted, finding_ids: next.findings.map(f => f.finding_id) };
+      next = admitReceipt(next, receipt);
+      const saved = { ...old, reasoning: next, state_version: old.state_version + 1 };
+      this.save(saved);
+      return { research_id: saved.research_id, revision: saved.revision, state_version: saved.state_version, receipt, replayed: false,
+        packet: packetSummary(next.packet!), ...this.reasoningView(saved) };
+    }
     const input = researchSchemas.review_legal_reasoning.parse(raw), old = this.get(actor, input.research_id, input.expected_revision, true);
+    if (input.reasoning_contract_version === 2 && !this.options.reasoningV2Enabled) throw new ServiceError(404, 'REASONING_V2_DISABLED');
     if (input.expected_state_version !== old.state_version) throw new ServiceError(409, 'RESEARCH_STATE_CHANGED');
     const observed = this.evidence(old).filter(e => e.revision === old.revision);
     const adopted = [...new Set(coreEvidenceIds(input).filter(id => old.ledger.candidates.some(c => requiresCoreAdoption(c)
@@ -407,6 +464,14 @@ export class ResearchService {
     const s: Session = changed ? { ...old, review_adopted_evidence_ids: adopted, state_version: old.state_version + 1, last_review: null } : old;
     if (s.manifests.some(m => !verifyManifest(m, s.evidence))) throw new ServiceError(409, 'RESEARCH_MANIFEST_INVALID');
     const result = inspectResearch(input, s.plan, this.evidence(s), s.attempts, s.ledger, this.requirements(s));
+    if (input.reasoning_contract_version === 2) {
+      const reasoning = recordArtifact(s.reasoning ?? emptyReasoningState(), input, result, this.reasoningSnapshot(s));
+      const saved = { ...s, reasoning, state_version: s.state_version + 1, last_review: null };
+      this.save(saved);
+      return { ...result, research_id: saved.research_id, revision: saved.revision, state_version: saved.state_version, expires_at: saved.expires_at,
+        policy_version: this.policy, ...this.reasoningView(saved), claim_coverage: 'whole_answer_submitted_for_model_review',
+        interview: interviewState({ ...saved, requirements: this.requirements(saved) }) };
+    }
     const planHash = digest(s.plan), snapshotHash = digest({ revision: s.revision, state_version: s.state_version,
       evidence: s.evidence, evidence_bindings: s.evidence_bindings, review_adopted_evidence_ids: s.review_adopted_evidence_ids,
       attempts: s.attempts, ledger: s.ledger, manifests: s.manifests, jobs: s.jobs, requirements: s.requirements,
@@ -415,8 +480,10 @@ export class ResearchService {
       policy_version: this.policy, plan_hash: planHash, snapshot_hash: snapshotHash, draft_hash: result.draft_hash, analysis_hash: result.analysis_hash,
       scope_assessment_hash: result.scope_assessment_hash, correction_needed: input.correction_needed };
     const bindingHash = digest(binding);
-    this.save({ ...s, last_review: { state_version: s.state_version, binding_hash: bindingHash, snapshot_hash: snapshotHash, draft_hash: result.draft_hash } });
+    this.save({ ...s, reasoning: s.reasoning ? { ...s.reasoning, structure: null } : undefined,
+      last_review: { state_version: s.state_version, binding_hash: bindingHash, snapshot_hash: snapshotHash, draft_hash: result.draft_hash } });
     return { ...binding, ...result, binding_hash: bindingHash, expires_at: s.expires_at,
+      reasoning_contract_version: 1, ready_for_answer: false, model_review: { status: 'not_requested', reason: 'v2_not_performed' },
       interview: interviewState({ ...s, requirements: this.requirements(s) }) };
   }
 }

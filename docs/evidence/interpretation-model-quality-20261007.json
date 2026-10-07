@@ -1,0 +1,132 @@
+{
+  "scope": "Source discovery is fixed and already performed equally for both arms. The live production MCP contracts are exercised for interpretation, draft inspection and (v2 only) packet-based model review. No conclusions about real-law accuracy or source-discovery recall.",
+  "model": "gpt-5.6-sol",
+  "effort": "xhigh",
+  "protocol_sha256": "18e9ec71a647149d4761f05747a441bdbeca06a6a4d1b8ce78ecb93f0e582d7b",
+  "oracle_sha256": "2aaa385a2d0216543768daad46ff3fc244df63aa23213aba27de7af00dbb66fd",
+  "runtime": {
+    "baseline": "4b75f116b9b6acbf9bc20bd6212a11827a927799e33a054bfaacfa1c34e8dbbd",
+    "candidate": "52382e7f82d4f321d68e6f646fc890835afa9fceaa534e43ce7ff0210b377614"
+  },
+  "provenance": {
+    "baseline": {
+      "directory": "C:\\repos\\simdorei\\legal-harness-interpretation-plan-20261007\\.runtime\\reasoning-quality-20261007-r1",
+      "manifest_sha256": "9a7e6332a2092ad52acc07c4fd89cd98cdb0f08ee876842eb14313416940786d"
+    },
+    "candidate": {
+      "directory": "C:\\repos\\simdorei\\legal-harness-interpretation-plan-20261007\\.runtime\\reasoning-quality-20261007-r5",
+      "manifest_sha256": "9497aaef02874cd0813918c4881262498eab14c3dae837d4ae564514c2ae09b5"
+    }
+  },
+  "grades_sha256": "14bee895cba70c6863bdbffd939d0943da80ff36614272155fe93fe24678a776",
+  "full_report_sha256": "3ca98ae0608529cb105e2f006f6c61ce54486189af56e120d8381810a30c1262",
+  "grader": {
+    "grader": "Codex implementation owner; not independent human or Pro grading",
+    "method": "All 72 shuffled arm-hidden full answer/error_reason texts read before joining this pass with the mapping. The grader had seen earlier runs and the same deterministic shuffle, so this is not a fully independent blind study.",
+    "fail_ids": [
+      "B004",
+      "B060"
+    ],
+    "scope": "Fixed synthetic prose oracle; semantic grading only, pending separate repaired protocol/evidence checks"
+  },
+  "arms": {
+    "baseline": {
+      "trials": 36,
+      "protocol_unverified": 0,
+      "semantic_pass": 34,
+      "injected_detection_misses": 0,
+      "injected_wrong_or_unverified": 2,
+      "injected_misses": 2,
+      "critical_classes_detected": [
+        "any_vs_all",
+        "authority_wrong_version",
+        "counter_exclusion",
+        "exception_omission",
+        "hidden_context_claim",
+        "quote_inversion",
+        "transition_date",
+        "unknown_negation"
+      ],
+      "heldout_wrong_or_unverified": 2,
+      "normal_answerable": 12,
+      "median_seconds": 22.945,
+      "mcp_calls": 56,
+      "ready_self_report_mismatches": 0,
+      "ready_self_report_unverifiable": 36,
+      "tokens": {
+        "input_tokens": 5907434,
+        "cached_input_tokens": 4908672,
+        "output_tokens": 114585
+      }
+    },
+    "candidate": {
+      "trials": 36,
+      "protocol_unverified": 0,
+      "semantic_pass": 36,
+      "injected_detection_misses": 0,
+      "injected_wrong_or_unverified": 0,
+      "injected_misses": 0,
+      "critical_classes_detected": [
+        "any_vs_all",
+        "authority_wrong_version",
+        "counter_exclusion",
+        "exception_omission",
+        "hidden_context_claim",
+        "quote_inversion",
+        "transition_date",
+        "unknown_negation"
+      ],
+      "heldout_wrong_or_unverified": 0,
+      "normal_answerable": 12,
+      "median_seconds": 99.455,
+      "mcp_calls": 265,
+      "ready_self_report_mismatches": 2,
+      "ready_self_report_unverifiable": 0,
+      "tokens": {
+        "input_tokens": 22066612,
+        "cached_input_tokens": 19781248,
+        "output_tokens": 225204
+      }
+    }
+  },
+  "checks": {
+    "all_72_protocol_valid": true,
+    "zero_original_error_misses_preserved": true,
+    "all_eight_error_classes_detected": true,
+    "heldout_wrong_not_increased": true,
+    "normal_answerability_not_decreased": true
+  },
+  "semantic_quality_gate": "PASS",
+  "reviewed_answer_group": "Only normal/from-scratch final prose must be bound to successful structure and current accepted packet. Injected cases are frozen audit tasks, not reviewed corrected answers.",
+  "readiness_limit": "Two candidate C10 runs reported true while current server readiness was false; baseline v1 has no verifiable v2 readiness. Readiness is not semantic correctness.",
+  "prior_candidate_results": {
+    "R1": "FAIL normal answerability 11/12 vs 12/12",
+    "R3": "FAIL normal answerability 10/12 vs 12/12"
+  },
+  "qa_review": "R6 CODE PASS / QA PASS for repaired methodology and recorded fixed-oracle evidence; not independent regrading or DEPLOY VERIFIED",
+  "deployment": "not deployed at time of assessment",
+  "runtime_delta": {
+    "changed_paths": [
+      "src/researchSearch.ts",
+      "dist/researchSearch.js"
+    ],
+    "compatibility": {
+      "status": "pass",
+      "model_trials_retained": 36,
+      "unique_recorded_search_arguments": 1,
+      "frozen_synthetic_provider_output_identical": true,
+      "live_response_sha256": "45fc7d6a97d1e370c041e345d7a9901ac1253541d4713fdc084380c28ab92a87",
+      "live_before": {
+        "status": "partial",
+        "error_code": "SEARCH_SCOPE_UNOBSERVED"
+      },
+      "live_after": {
+        "status": "complete",
+        "total": 9,
+        "returned": 1,
+        "has_more": true
+      },
+      "limitation": "R5 model generations were not rerun on the additive live-format parser delta. The frozen provider text and every recorded law-search argument produce identical old/new observations."
+    }
+  }
+}

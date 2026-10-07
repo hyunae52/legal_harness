@@ -64,8 +64,9 @@ export function observeSearch(tool: string, args: Record<string, unknown>, respo
         related_laws: short(doc.relatedLawsText ?? doc.relatedLaws, 3000) ?? '', source_url: short(doc.sourceUrl, 1024) });
     }
   } else if (tool === 'search_law') {
-    const text = contents(result), header = /^검색 결과 \(총 (\d+)건\)/m.exec(text);
+    const text = contents(result), header = /^검색 결과 \(총 (\d+)건(?:, display=(\d+) 적용)?\)/m.exec(text);
     if (!header || /확장쿼리|응답 크기 제한|잘렸|시행예정.*실패/.test(text)) return obs;
+    if (header[2] && (Number(header[2]) !== obs.page_size || obs.page !== 1)) return obs;
     obs.total = Number(header[1]);
     for (const m of text.matchAll(/^\d+\. ([^\r\n]+)\r?\n\s*- 법령ID: ([^\r\n]+)\r?\n\s*- MST: ([^\r\n]+)(?:\r?\n\s*- 공포일: [^\r\n]*?시행일: (\d{8}))?/gm)) {
       const identity = identityFromDocument({ id: m[2] + '/' + m[3] }, 'moleg', 'statute');

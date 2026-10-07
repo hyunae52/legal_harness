@@ -23,6 +23,7 @@ import { ResourceBudgets, positiveLimit, type ResourceOptions } from './resource
 import { serveStateless, type RequestGuard } from './statelessHttp.js';
 import { PublicAccess, actorBudgetKey, assertNoPublicSession } from './publicAccess.js';
 import { inputDiagnostics, ToolInputError } from './inputDiagnostics.js';
+import { reasoningInstructions, reasoningPolicy } from './reasoningContracts.js';
 
 interface Options {
   law: Pick<KoreanLawClient, 'listTools' | 'callTool' | 'close' | 'releaseVersion'> & { taxlawRelease?: { version?: string; commit: string } | null };
@@ -47,8 +48,10 @@ export function createApp(options: Options) {
   const maxTransportsPerActor = positiveLimit(env.TAXLAB_MAX_TRANSPORTS_PER_ACTOR, 5);
   const auth = options.authenticate ?? createAuthenticator(env, fetch, publicAccess);
   const gates = options.gates ?? new GateEngine();
+  const reasoningV2Enabled = options.researchOptions?.reasoningV2Enabled ?? env.REASONING_REVIEW_V2_ENABLED === 'true';
+  const enabledResearchTools = researchTools.filter(t => reasoningV2Enabled || !['prepare_reasoning_review', 'submit_reasoning_review'].includes(t.name));
   const research = new ResearchService(options.law, options.sources ? input => options.sources!.check(input) : undefined, {
-    ...options.researchOptions, limits: { ...options.researchOptions?.limits, yieldMs: Math.max(1, Math.min(40_000, budgets.limits.responseMs - 1000)) },
+    ...options.researchOptions, reasoningV2Enabled, limits: { ...options.researchOptions?.limits, yieldMs: Math.max(1, Math.min(40_000, budgets.limits.responseMs - 1000)) },
     beforeSourceCall: actor => { budgets.consume(actor, 'lookup'); options.researchOptions?.beforeSourceCall?.(actor); },
   });
   const app = express();
@@ -128,7 +131,7 @@ export function createApp(options: Options) {
     if (!options.failures) throw new ServiceError(503, 'MAINTENANCE_UNAVAILABLE');
     return options.failures.submit(actor, input);
   };
-  const runResearch = async (name: ResearchTool, actor: Actor, input: unknown) => {
+  const runResearch = async (name: ResearchTool, actor: Actor, input: unknown, checkMaterial?: (data: Record<string, unknown>) => void) => {
     const scoped = publicAccess.scope(actor, input, name === 'start_legal_research');
     assertNoPublicSession(scoped.input);
     // Bind request errors to this tool's public contract, before any provider or service execution.
@@ -136,7 +139,10 @@ export function createApp(options: Options) {
       const parsed = researchSchemas[name].safeParse(scoped.input);
       if (!parsed.success) throw new ToolInputError(inputDiagnostics(parsed.error, researchTools.find(t => t.name === name)!.inputSchema));
     }
-    return publicAccess.result(presentResearch(name, scoped.input, await research.run(name, scoped.actor, scoped.input)), scoped.token);
+    const present = (state: Record<string, unknown>) => publicAccess.result(presentResearch(name, scoped.input, state), scoped.token);
+    return present(await research.run(name, scoped.actor, scoped.input, state => {
+      const data = present(state); JSON.stringify(data); checkMaterial?.(data);
+    }));
   };
   const checkSources = (actor: Actor, input: unknown) => {
     assertNoPublicSession(input);
@@ -185,10 +191,11 @@ export function createApp(options: Options) {
       } else if (error) res.destroy();
     });
   });
-  app.get('/health', (_req, res) => res.json({ status: stopping ? 'stopping' : 'ok', version: '2.4.0', active_requests: active,
+  app.get('/health', (_req, res) => res.json({ status: stopping ? 'stopping' : 'ok', version: '2.5.0', active_requests: active,
     access_mode: publicAccess.enabled ? 'public' : 'authenticated',
     active_authentications: authActive, active_dispatches: dispatchActive, release_commit: env.TAXLAB_RELEASE_COMMIT ?? null,
-    research_harness: { policy: researchPolicyVersion, tools: researchTools.length, storage: 'ephemeral' },
+    research_harness: { policy: researchPolicyVersion, tools: enabledResearchTools.length, storage: 'ephemeral',
+      reasoning_review: { enabled: reasoningV2Enabled, contract: 2, policy: reasoningPolicy } },
     mcp_transport: { endpoint: '/mcp', mode: 'stateless', protocol: '2025-11-25', legacy_endpoint: '/sse',
       active: transportActive, max_transports: maxTransports, max_per_actor: maxTransportsPerActor, max_work: maxActive, budgets: budgets.limits },
     mcp_release: options.law.releaseVersion ?? null, taxlaw_release: options.law.taxlawRelease ?? null, rules_version: gates.version, maintenance: options.failures ? 'intake_only' : 'unavailable', correction_pr: options.corrections ? 'available' : 'unavailable' }));
@@ -219,7 +226,7 @@ export function createApp(options: Options) {
   app.post('/api/evolve', protectedRoute(async () => { throw new ServiceError(410, 'USE_SUBMIT_FAILURE'); }));
 
   const custom: Tool[] = [
-    ...researchTools,
+    ...enabledResearchTools,
     { name: 'prepare_correction_pr', description: correctionInstructions, inputSchema: correctionInputs.prepare,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false } },
     { name: 'create_correction_pr', description: '사용자가 공개 preview와 저장소를 보고 PR 생성에 동의한 뒤에만 호출하세요. 실제 교정 자료 draft PR을 생성합니다. 수정·머지 승인이 아닙니다. 응답 유실 시 get_correction_pr로 기존 제안을 조회하세요.', inputSchema: correctionInputs.confirm,
@@ -238,16 +245,19 @@ export function createApp(options: Options) {
   ];
   function mcpServer(actor: Actor, guard: RequestGuard = operation => operation()) {
     const mcpWork = <T>(operation: () => Promise<T>) => guard(() => work(operation));
-    const server = new Server({ name: 'taxlab-legal-harness', version: '2.4.0' }, { capabilities: { tools: {} },
-      instructions: researchInstructions + requirementInstructions + ' 법령 도구 결과는 조회 자료입니다. 사건 기준일·연혁·부칙·후속 해석을 확인하세요. 국세청 해석례는 search_tax_interpretations → get_tax_document로 사실관계·질의·회신을 읽고, 문서번호를 알면 lookup_tax_document를 쓰세요(도구가 제공되는 경우). 법제처 일련번호와 국세청 ntstDcmId를 혼용하지 마세요. 기존 validate_legal_draft는 별도의 제한된 초안 검사입니다. ' + correctionInstructions });
+    const server = new Server({ name: 'taxlab-legal-harness', version: '2.5.0' }, { capabilities: { tools: {} },
+      instructions: researchInstructions + requirementInstructions + (reasoningV2Enabled ? reasoningInstructions : '') + ' 법령 도구 결과는 조회 자료입니다. 사건 기준일·연혁·부칙·후속 해석을 확인하세요. 국세청 해석례는 search_tax_interpretations → get_tax_document로 사실관계·질의·회신을 읽고, 문서번호를 알면 lookup_tax_document를 쓰세요(도구가 제공되는 경우). 법제처 일련번호와 국세청 ntstDcmId를 혼용하지 마세요. 기존 validate_legal_draft는 별도의 제한된 초안 검사입니다. ' + correctionInstructions });
     const visible = actor.kind === 'anonymous' ? custom.filter(tool => tool.name !== 'submit_failure') : custom;
     server.setRequestHandler(ListToolsRequestSchema, () => mcpWork(async () => ({ tools: [...(await options.law.listTools()).tools.filter(t => !custom.some(c => c.name === t.name)).map(t => ({...t, description: (t.description ?? '') + '\n반박·새 근거로 기존 답변을 정정하면 prepare_correction_pr로 제안 내용을 준비하고 사용자에게 PR 생성을 물어보세요.'})), ...visible] })));
-    server.setRequestHandler(CallToolRequestSchema, async request => {
+    server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       try {
         return await mcpWork(async () => {
           const { name, arguments: args = {} } = request.params;
           if (Object.hasOwn(researchSchemas, name)) {
-            const data = await runResearch(name as ResearchTool, actor, args);
+            const data = await runResearch(name as ResearchTool, actor, args, data => {
+              const envelope = { jsonrpc: '2.0', id: extra.requestId, result: { content: [{ type: 'text', text: JSON.stringify(data) }], structuredContent: data } };
+              if (Buffer.byteLength(JSON.stringify(envelope)) > budgets.limits.responseBytes) throw new ServiceError(502, 'RESPONSE_TOO_LARGE');
+            });
             return { content: [{ type: 'text' as const, text: JSON.stringify(data) }], structuredContent: data };
           }
           if (['prepare_correction_pr', 'create_correction_pr', 'get_correction_pr', 'find_legal_corrections'].includes(name)) {

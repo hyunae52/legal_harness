@@ -1,0 +1,174 @@
+{
+  "candidate_version": "2.5.0",
+  "base_commit": "66c942dfce2a4584ca78e060ef2c7e94476dbbb9",
+  "source_hashes": {
+    "src/app.ts": "5d420ba1d8289a0357d3c2ad8ad3e8559fc5dfe4785ef9727e8ae59a9a79fa60",
+    "src/auth.ts": "a93172b8685a8c0c85f4be286e82c3a83cb8840b85aa4bd5c101af8ef1a392f1",
+    "src/contracts.ts": "c3e6d8b76c605aab8ed8b2ed22da1ebd78da198b2dd77de826299d0a2039cd11",
+    "src/correctionGitHub.ts": "41f0815790fd2f6af3adbdb07e3e6a9812a542502976b4f57fc644fc18833733",
+    "src/correctionMeta.ts": "144b4dce78a4c4fd76fbfb0c46e004e340e4672ae950ab3a54428c2595223185",
+    "src/corrections.ts": "5c9c6e0719a4ef8002dbb8a5689482e0426ba8ccdd736c1b6b6f9b7b1cad9e2b",
+    "src/dates.ts": "fe109653adb750d7255530af70ec74c6661328071c170e36859adcd6563ebd64",
+    "src/errorDiagnostics.ts": "a38910e1e2c4ad6ab73102e00d5b2af1e4af6e2d4af6265f708548907a5fa587",
+    "src/evidence.ts": "d2fe5515f208bbedc354c9be08fe638290af0ffe2ed3952cb70d174971e05713",
+    "src/evolution.ts": "be86701149bb488e2dad3eee04b8496de0213943e242402e28b5a16f9e454e02",
+    "src/failures.ts": "c56632968d1282fe10bb8956389861a770056f5666276a7d48f0ac70a83813e7",
+    "src/gates.ts": "5e86a76b3d5a573be7c87595d18b646ef7859fd8630a9421e1b395b1971a7b0b",
+    "src/gitOps.ts": "9c5054cf588ea15442e0733c692b1f0f64c709aa641807d2a37fbb60e8a3efcb",
+    "src/index.ts": "a213a68c66692e4b9e3f2d62d0b1c1618aa4c50dc0f44f29118ab8f5dc19401e",
+    "src/inputDiagnostics.ts": "7618517fcda24f14e822a3cd74657cedc1818ff1ddea8ce9d748eb8db408d7be",
+    "src/koreanLawClient.ts": "1840b8e389778de6e1756ee910f13a6202a3c223c15a25c4304a1aec1f7b7718",
+    "src/landing.ts": "1cbaafab1c05a5988242b58473daa1893105a2bd841b48d6794b04aa6c653166",
+    "src/legalApplicability.ts": "cb63fad7c2fa4d5a2e6485c9993f3e994ceee1ce703f0f723895b1c2ddc85f9b",
+    "src/publicAccess.ts": "2db37af84b5c95d7ae669154fb352256097a087f60808cc36a9f4e276268bff7",
+    "src/reasoningApplication.ts": "06d2ccd032770e620137356dc28df3ffbd3aea71d0de4b8207b846df8526ad26",
+    "src/reasoningConflicts.ts": "0b3b8d6e4a0d165b91551e5c459f9f98b539e4323678e0edca5c8fa8d72711ac",
+    "src/reasoningContracts.ts": "fdb5164c62cf934d80329cc7cdad73a1b195c48e844906d26aa5642d88153a3e",
+    "src/reasoningReviewPacket.ts": "300933a9e464346aa11cc1a9db532e2ee3d4de67141645e6b167a355e363d0e1",
+    "src/reasoningReviewState.ts": "ebb28313aa0557d543d18bb6149c7e370df00aa84d192c27b8e5371e9c987306",
+    "src/releaseGate.ts": "81682cb373e8a6aefa4597f71196fe145c87556e8d7977603d52e5ee2bdc3b1c",
+    "src/research.ts": "9a36ef70e334749c4621fba0ca7c0acf3cc80ddc9fc2c54aa9f467bac9342f07",
+    "src/researchCitations.ts": "88bafee0822e88c1221c9c3e92c4e12de7743b532a536fca47a68c02b9ef324c",
+    "src/researchContracts.ts": "073693e2f077050187a2f25795ecd46876faf8de09c5476369d83827f3b9fdf3",
+    "src/researchCoverage.ts": "f826700678e428fd71847d9d4f71dfc744d89aa87a7368e545643effd4f8e4c6",
+    "src/researchEvidence.ts": "9a855c52292e2e81512e52e403b900fd52d77fb6444abcdce76daf24f0076d59",
+    "src/researchIdentity.ts": "6c9f4b937fd8749c0d9770fdf2b9093cfa2f4fe4d624dcf4b7e3eab0ebaa3c0b",
+    "src/researchInterview.ts": "fc622af762c6c99f41dc9e2f3b8fb1ee93a89bc22592c354b18e3f8b49a375a9",
+    "src/researchPresentation.ts": "ef2bc2bb91da4d559356a820a79bb303a1758bc1f792337709187855e2af792a",
+    "src/researchProfiles.ts": "bf152cdcdeeac33b0ae6459559068e7cb60457b22d42f5b4dc333557c56bfc2b",
+    "src/researchProgress.ts": "032af2b272df0bf8f0d3e3f8652e07f5d0344fe30eeccacff88ac26677e5b9eb",
+    "src/researchRecovery.ts": "f94f624a8bfab108cf3d63ff3e7ee5c6f2df79284caa81e07033c8511299cd8b",
+    "src/researchRequirements.ts": "3d45a71cb4c37b4f50626cc22617ee6645951af5b53daa1c3dbb3361699da574",
+    "src/researchReview.ts": "5ab998fd120ed53d43ec56ddd3ffb46e1f9ea8c2a59dee85ccada6a9aa39ab49",
+    "src/researchSearch.ts": "651963690674cc54bdf7330b18a66f904f990a3128e1ea03d99badf17316bcf3",
+    "src/researchStorage.ts": "228f3be810e22c7c5393d591251ac3fe8d8cd46100182b2871527edbd37f2f67",
+    "src/resourceBudgets.ts": "acefc0ec699111b3ae7a4a446bc1d0ac0823407d6d3ee74405d3414887902bf1",
+    "src/scopeCompletion.ts": "ab1700ffb3b183a2ed840053be1edcfcbe02909d456f176b595e3d109d3b9aa9",
+    "src/setup.ts": "8d7d5bcc6e279872bf8b8827dcde13d6b02e1a998fd8c496524a1ddf86217e1b",
+    "src/sourceVerifier.ts": "e3242c8b028d615eea6e9c4ac21b11d17a41bccba2e88b4ceb7dd487654bc463",
+    "src/statelessHttp.ts": "a304eaed761e5e9ab984fd380e7eadd224503439124c1991c6d06aeb357eaf88",
+    "src/supremeJudge.ts": "d46e9a497ea1a4f296d7cf7fc1b7cbc9d0e6cabc4f666666d82a9995815f4a0a",
+    "src/taxLawClient.ts": "7213107193815ecf578cc1540ab7829269be2d9e3836edd0ee7ae7c705bc4c6a"
+  },
+  "checks": {
+    "review": {
+      "path": ".runtime/review-release-final.log",
+      "sha256": "274973a321b83d61eb9866744b3427b38417b718fec233a9f4d6e958ab31e903"
+    },
+    "package": {
+      "path": ".runtime/package-release-final.log",
+      "sha256": "39260fd359f456a7af09b40002b0d2a3041729b77c4770fec61830499739e6cd"
+    },
+    "audit": {
+      "path": ".runtime/audit-r1.log",
+      "sha256": "43325fb7cb5a3cb421f515dbbe0809b6a0585b821ba95dcd864bc7dbd8dd5340"
+    },
+    "secrets_before_commit": {
+      "path": ".runtime/secrets-r1.log",
+      "sha256": "b39f45ec0c7a1177e1a804709e477191ee1af7ba452aa574b0d184ea62f73348"
+    },
+    "secrets_after_commit_3ab98a1": {
+      "path": ".runtime/secrets-r2.log",
+      "sha256": "7dff9538e396c0bb9938bc234aca461e8426ce0c536f2167ba0797f5ba534911"
+    },
+    "secrets": {
+      "path": ".runtime/secrets-r4.log",
+      "sha256": "4a8ff6c4f267d29dd7e5f01045ad9207eaa9c22af92973de31cab2dfb039ab75"
+    }
+  },
+  "review": {
+    "tests": 400,
+    "pass": 400,
+    "fail": 0
+  },
+  "package": {
+    "checks": 9,
+    "pass": true,
+    "sha256": "cc37bdfdb9e5dcf03b6a0f303e917063cd0dc503fa04f11c1f98d23bd6ae0f99"
+  },
+  "mutations": [
+    {
+      "mutation": "unknown-negation",
+      "path": "dist/reasoningApplication.js",
+      "test_pattern": "independent three-valued",
+      "original_sha256": "b038386121562e41bd3cd76995483910af1d439605c3b73a19d6c98f35a8b47e",
+      "mutated_sha256": "eb3a6e88d84802439261f2f2e4c53707b5d200d65758f10fef4b58f2039b334e",
+      "exit_code": 1,
+      "killed": true,
+      "log_sha256": "968982f45cdc22dd3af2e824a258d855c6da8412bd5ec4b8983259de322964fa"
+    },
+    {
+      "mutation": "incomplete-material",
+      "path": "dist/research.js",
+      "test_pattern": "the entire exact answer",
+      "original_sha256": "427966780e9290aa9a7aa4868d3020726ed09253094eb7d0f51c48d3f491c6ba",
+      "mutated_sha256": "58589a6887169a3a9e804cea4e5c95b939feb19adebddd8ebe08d4d75dbbce15",
+      "exit_code": 1,
+      "killed": true,
+      "log_sha256": "58e8d6d74c853b4a0930c5583e47b617d30436d1c7088982cfc8a17fb40cc9ba"
+    },
+    {
+      "mutation": "old-cas-replay",
+      "path": "dist/research.js",
+      "test_pattern": "accepted old-CAS replay",
+      "original_sha256": "427966780e9290aa9a7aa4868d3020726ed09253094eb7d0f51c48d3f491c6ba",
+      "mutated_sha256": "a106a7ac576b7ff183a79cfb983d387089208c288097d052dbb92ea5e64b8645",
+      "exit_code": 1,
+      "killed": true,
+      "log_sha256": "72706e8e5f1ae29538cce3f91cce2e07d0dbfa3c815e804174523550adbd20fc"
+    },
+    {
+      "mutation": "snapshot-staleness",
+      "path": "dist/reasoningReviewState.js",
+      "test_pattern": "same-revision necessity changes",
+      "original_sha256": "6a48138a530f7fd0fb7b0643c1005aaa25838bd1817fe02fe8952914439805b9",
+      "mutated_sha256": "f493cb2b09635245504ee6bc070d89e9a7ff606989532153c535300265146230",
+      "exit_code": 1,
+      "killed": true,
+      "log_sha256": "a69a9b27d1479705c683d79f784bc65397fd7bde850449af7d3d6a5647a09dee"
+    },
+    {
+      "mutation": "whole-answer",
+      "path": "dist/reasoningApplication.js",
+      "test_pattern": "the entire exact answer",
+      "original_sha256": "b038386121562e41bd3cd76995483910af1d439605c3b73a19d6c98f35a8b47e",
+      "mutated_sha256": "880b5639095575a9d001499b27657db83222cba12e5cbcfa7fdd52af405b64f4",
+      "exit_code": 1,
+      "killed": true,
+      "log_sha256": "cbcc7ac9e8a383ecaedb7183754599dd40efe624d0dbe5116930e1b0bd521e87"
+    }
+  ],
+  "runtime_audit_vulnerabilities": 0,
+  "pro_review": {
+    "R1": "CODE UNVERIFIED; LH-IR-CODE-01 fixed with RED then GREEN evidence",
+    "R2": "CODE REVISE; LH-IR-CODE-01/02 fixed with focused reproducer tests",
+    "url": "https://chatgpt.com/c/6abe1ed3-1050-83ee-99d7-d681aa03cf0b",
+    "R3": "CODE REVISE; final target identity bypass reproduced and fixed",
+    "R4": "CODE PASS",
+    "r4_manifest_sha256": "c3369f77c7be00525686507a8893c48934bfd6c3605fa77881e38be2290993b1",
+    "R5": "CODE PASS",
+    "r5_manifest_sha256": "67352f87a815056c98ffb749efb9395948e77401ffe4eeeb60781ba96cfd4b14",
+    "QA_R5": "QA PLAN REVISE: live smoke counter obligation, successful answer binding/missing trace, and actual byte checks; corrected for re-review",
+    "R6": "CODE PASS / QA PASS; existing rollout may proceed after final exact CI and release checks",
+    "r6_manifest_sha256": "17c65f6035a954c1b03e2ab85dfd9662fced8c70d1551abd10de0cba10ce6c16",
+    "r6_bundle_sha256": "38b1da6bcb8e987959e1adb641d0bebf7cc0d9bb21dc3c6d5a471f683a6f04c4"
+  },
+  "quality": {
+    "state": "PASS fixed semantic criteria; R6 Pro QA PASS with disclosed measurement limits",
+    "record": "docs/evidence/interpretation-model-quality-20261007.json",
+    "runtime_delta_evidence": ".runtime/final-runtime-compatibility.json",
+    "client_readiness_mismatches": 2,
+    "preserved_failed_candidates": [
+      ".runtime/reasoning-quality-20261007-r1",
+      ".runtime/reasoning-quality-20261007-r3"
+    ]
+  },
+  "deployment": "not deployed; rollout remains disabled by default",
+  "ci": {
+    "commit": "98ef5a3f3e506a7cf7b4018610fc3a717a6d714f",
+    "run_id": 37586627898,
+    "conclusion": "success",
+    "url": "https://github.com/hyunae52/legal_harness/actions/runs/37586627898",
+    "scope": "Complete code commit before final review record; final exact-head CI required in PR before merge"
+  }
+}

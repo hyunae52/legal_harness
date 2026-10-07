@@ -5,9 +5,11 @@ type Schema = Record<string, any>;
 const object = (value: unknown): value is Schema => Boolean(value && typeof value === 'object' && !Array.isArray(value));
 const branches = (node: Schema): Schema[] => [node, ...['anyOf', 'oneOf', 'allOf'].flatMap(k =>
   Array.isArray(node[k]) ? node[k].filter(object).flatMap(branches) : [])];
+const resolve = (node: Schema, root: Schema): Schema => typeof node.$ref === 'string' && node.$ref.startsWith('#/$defs/')
+  ? root.$defs?.[node.$ref.slice(8)] ?? node : node;
 function locate(schema: Schema, path: (string | number)[]): Schema[] {
   let nodes = [schema];
-  for (const part of path) nodes = nodes.flatMap(branches).flatMap(node => {
+  for (const part of path) nodes = nodes.map(n => resolve(n, schema)).flatMap(branches).flatMap(node => {
     const child = typeof part === 'number' ? node.items
       : object(node.properties) && Object.hasOwn(node.properties, part) ? node.properties[part] : undefined;
     return object(child) ? [child] : [];
@@ -41,6 +43,7 @@ export function inputDiagnostics(error: ZodError, publicSchema?: unknown) {
       ...(i.code === 'unrecognized_keys' ? { hint: 'Remove fields not declared in this tool input schema.' } : {}),
     })), issues_truncated: error.issues.length > 24,
     ...(schema ? { recovery: { ...reviewRecoveryGuide, review_performed: false },
+      ...(schema.$defs ? { schema_definitions: schema.$defs } : {}),
       schema_hints: [] as { paths: string[]; schema: Schema }[], schema_hints_truncated: false,
       schema_note: '공개 입력 스키마의 해당 부분입니다. refine 등 추가 검증이나 법적 정확성을 보장하지 않습니다. 실제 입력 검증과 현재 근거 검사가 최종 기준입니다.' } : {}) };
   // Bound all diagnostic fields, not only issues. Never cut an individual schema into a weaker contract.

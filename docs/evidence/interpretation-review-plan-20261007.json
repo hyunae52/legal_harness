@@ -1,0 +1,85 @@
+{
+  "originating_thread_id": "01a09b11-3eba-79d3-b4cc-1282b37cc21c",
+  "mode": "plan",
+  "round": 2,
+  "review_tag": "LH-INTERPRETATION-20261007-P2-R3",
+  "base_commit": "66c942dfce2a4584ca78e060ef2c7e94476dbbb9",
+  "working_directory": "C:/repos/simdorei/legal-harness-interpretation-plan-20261007",
+  "files": {
+    "docs/INTERPRETATION_REVIEW_REMEDIATION_PLAN.md": {
+      "sha256": "17b14b27ecadab94d78f7d4b23e4f3a7e18d764de18ac10dbaac3f22c805dfd5",
+      "lines": 270
+    },
+    "src/researchContracts.ts": {
+      "sha256": "efbd7ecc70e80b270c74dc609fcf5b7496e4febcf50711674ee56226d0b6525f",
+      "lines": 175
+    },
+    "src/researchReview.ts": {
+      "sha256": "09a870ee9e28589b26066d6f3ebb9cec0355b514c73615da14c3a5049097c344",
+      "lines": 184
+    },
+    "src/legalApplicability.ts": {
+      "sha256": "fcb98db5092392acd1a863c22dc2969b46309a45e31acddfe2b56c86d1ab587d",
+      "lines": 96
+    },
+    "src/researchCoverage.ts": {
+      "sha256": "f826700678e428fd71847d9d4f71dfc744d89aa87a7368e545643effd4f8e4c6",
+      "lines": 250
+    },
+    "src/research.ts": {
+      "sha256": "e744a3a073f8160a4e26ec4bfe6810f6e2ef1230f4228cffa7ae51cd71053bba",
+      "lines": 422
+    },
+    "src/gates.ts": {
+      "sha256": "69cd646422e6087096a7709e3a0a883b94cf122418435c0e14b54f1bf9bc3841",
+      "lines": 63
+    },
+    "docs/EVIDENCE_PRIORITY.md": {
+      "sha256": "af90d36e679154929b516c95a36ad05f3201c68aea1b7d067c1e6cc06a736eb0",
+      "lines": 58
+    },
+    "src/researchCitations.ts": {
+      "sha256": "a70db13da5c23efcb7ea2840afc12eab99c7376df7224d491cb17674a71115cd",
+      "lines": 10
+    },
+    "src/scopeCompletion.ts": {
+      "sha256": "57703ce18f9779798605eeaae040144debba37a84dde85b3f3b87171f7ddf7b2",
+      "lines": 110
+    },
+    "src/researchRequirements.ts": {
+      "sha256": "3d45a71cb4c37b4f50626cc22617ee6645951af5b53daa1c3dbb3361699da574",
+      "lines": 104
+    },
+    "src/researchPresentation.ts": {
+      "sha256": "c558a0a81d4e05fcb882970dde5985dab0d79a02719f5966bb44f6db2e4b81f7",
+      "lines": 83
+    },
+    "src/researchStorage.ts": {
+      "sha256": "228f3be810e22c7c5393d591251ac3fe8d8cd46100182b2871527edbd37f2f67",
+      "lines": 62
+    }
+  },
+  "inherited_ci": {
+    "url": "https://github.com/hyunae52/legal_harness/actions/runs/37506322726",
+    "conclusion": "success",
+    "scope": "existing baseline only; proposed contracts not implemented"
+  },
+  "product_changes": false,
+  "plan_revision": "R3",
+  "previous_review": {
+    "review_tag": "LH-INTERPRETATION-20261007-P1-R2",
+    "verdict": "PLAN REVISE",
+    "accepted_findings": [
+      "LH-IR-01",
+      "LH-IR-02",
+      "LH-IR-03",
+      "LH-IR-04",
+      "LH-IR-05"
+    ]
+  },
+  "local_validation": {
+    "base_head": "66c942dfce2a4584ca78e060ef2c7e94476dbbb9",
+    "tracked_product_diff": "",
+    "unique_planned_contracts": 29
+  }
+}

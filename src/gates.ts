@@ -30,11 +30,17 @@ export class GateEngine {
     const draft = DraftSchema.parse(input);
     if (draft.skip_gates.some(id => !this.rules.some(r => r.id === id))) throw new ServiceError(400, 'UNKNOWN_GATE');
     const text = `${draft.query ?? ''}\n${draft.draft_answer}`;
-    const candidates = this.rules.filter(r => r.cues.some(c => text.includes(c)));
+    const assessments = new Map(draft.gate_assessments.map(a => [a.gate_id, a]));
+    if (assessments.size !== draft.gate_assessments.length || draft.gate_assessments.some(a => !this.rules.some(r => r.id === a.gate_id)
+      || a.applicability !== 'unknown' && !a.fact_ids.length || a.fact_ids.some(id => draft.facts[id] === undefined || draft.facts[id] === null)))
+      throw new ServiceError(400, 'GATE_APPLICABILITY_INVALID');
+    const candidates = this.rules.filter(r => assessments.has(r.id) || r.cues.some(c => text.includes(c)));
     const checks = candidates.map(rule => {
+      const assessment = assessments.get(rule.id);
       const missing = rule.required_facts.filter(f => draft.facts[f] === undefined || draft.facts[f] === null);
-      const status: CheckStatus = draft.skip_gates.includes(rule.id) ? 'skipped' : missing.length ? 'needs_info' : 'unverified';
-      return { id: rule.id, case_id: rule.case_id, status, required_facts: missing, guidance: rule.guidance,
+      const status: CheckStatus = draft.skip_gates.includes(rule.id) ? 'skipped' : assessment?.applicability === 'not_applicable' ? 'not_applicable' : missing.length ? 'needs_info' : 'unverified';
+      return { id: rule.id, case_id: rule.case_id, status, applicability: assessment?.applicability ?? 'candidate',
+        applicability_basis: assessment ?? null, applicability_verification: 'client_reported', required_facts: status === 'not_applicable' ? [] : missing, guidance: rule.guidance,
         scope: 'legal_applicability', reason: status === 'unverified' ? 'Official legal basis and draft/facts agreement have not been verified.' : status };
     });
     // A separate, useful arithmetic check. It makes no claim about the legally
@@ -54,6 +60,8 @@ export class GateEngine {
     return { receipt_id: randomUUID(), checked_at: new Date().toISOString(), draft_hash: digest(draft.draft_answer), facts_hash: digest(draft.facts),
       rules_version: this.version, upstream_version: upstreamVersion, policy_version: 'scope-v1',
       checks: all, coverage: all.length ? 'limited' : 'no_coverage', assessment_complete: complete,
+      questions: [...new Set(checks.flatMap(c => c.required_facts))].map(id => ({ fact_id: id,
+        gate_ids: checks.filter(c => c.required_facts.includes(id)).map(c => c.id) })),
       scoped_pass: scopedPass, passed: false, // Legacy field never certifies an unassessed legal answer.
       legal_verification: 'unverified', draft_facts_agreement: 'unverified',
       blocked: !blockingBypass && all.some(c => c.status === 'fail'),
