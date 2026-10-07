@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+from pilot_evidence import evidence_errors, verify_frozen_files
 
 p = argparse.ArgumentParser()
 p.add_argument('--baseline', required=True)
@@ -12,6 +13,8 @@ p.add_argument('--output', required=True)
 args = p.parse_args()
 sources = {arm: Path(getattr(args, arm)).resolve() for arm in ['baseline', 'candidate']}
 manifests = {arm: json.loads((root / 'manifest.json').read_text(encoding='utf-8')) for arm, root in sources.items()}
+for arm, root in sources.items():
+    verify_frozen_files(root, manifests[arm], Path(__file__).resolve().parent.parent)
 for key in ['protocol_sha256', 'oracle_sha256', 'driver_sha256', 'model', 'effort', 'client_version']:
     if manifests['baseline'][key] != manifests['candidate'][key]:
         raise SystemExit('Cannot combine different protocols: ' + key)
@@ -21,8 +24,12 @@ for arm, arm_jobs in jobs.items():
     if len(arm_jobs) != 36 or {(case, n) for case, _, n in arm_jobs} != expected:
         raise SystemExit('Each arm must retain all 12 cases x 3 repetitions')
     for case, _, n in arm_jobs:
-        if not (sources[arm] / 'trials' / f'{case}-{arm}-{n}' / 'run.json').exists():
+        trial = sources[arm] / 'trials' / f'{case}-{arm}-{n}'
+        if not (trial / 'run.json').exists():
             raise SystemExit('All trials must finish before combining')
+        errors = evidence_errors(trial, json.loads((trial / 'run.json').read_text(encoding='utf-8')))
+        if errors:
+            raise SystemExit('Trial evidence mismatch: ' + str(trial) + ' ' + ','.join(errors))
 out = Path(args.output).resolve()
 out.mkdir(parents=True, exist_ok=False)
 for name in ['protocol.json', 'oracle.json', 'pilot.mjs']:

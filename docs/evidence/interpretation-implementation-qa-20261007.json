@@ -23,8 +23,8 @@
     "src/publicAccess.ts": "2db37af84b5c95d7ae669154fb352256097a087f60808cc36a9f4e276268bff7",
     "src/reasoningApplication.ts": "06d2ccd032770e620137356dc28df3ffbd3aea71d0de4b8207b846df8526ad26",
     "src/reasoningConflicts.ts": "0b3b8d6e4a0d165b91551e5c459f9f98b539e4323678e0edca5c8fa8d72711ac",
-    "src/reasoningContracts.ts": "5738267082eeb10266e2304d12ab1509d914c6a8bece707a14d5d4b9b1bab561",
-    "src/reasoningReviewPacket.ts": "6e237441b32eaf2fd7a401bb8b5f138580d4dc2f018df947266d42f50170e598",
+    "src/reasoningContracts.ts": "fdb5164c62cf934d80329cc7cdad73a1b195c48e844906d26aa5642d88153a3e",
+    "src/reasoningReviewPacket.ts": "300933a9e464346aa11cc1a9db532e2ee3d4de67141645e6b167a355e363d0e1",
     "src/reasoningReviewState.ts": "ebb28313aa0557d543d18bb6149c7e370df00aa84d192c27b8e5371e9c987306",
     "src/releaseGate.ts": "81682cb373e8a6aefa4597f71196fe145c87556e8d7977603d52e5ee2bdc3b1c",
     "src/research.ts": "9a36ef70e334749c4621fba0ca7c0acf3cc80ddc9fc2c54aa9f467bac9342f07",
@@ -40,7 +40,7 @@
     "src/researchRecovery.ts": "f94f624a8bfab108cf3d63ff3e7ee5c6f2df79284caa81e07033c8511299cd8b",
     "src/researchRequirements.ts": "3d45a71cb4c37b4f50626cc22617ee6645951af5b53daa1c3dbb3361699da574",
     "src/researchReview.ts": "5ab998fd120ed53d43ec56ddd3ffb46e1f9ea8c2a59dee85ccada6a9aa39ab49",
-    "src/researchSearch.ts": "3727d3d6c8681a6264f8fb888c4f8246ea94b7279a1e36008ce084be25af4fb8",
+    "src/researchSearch.ts": "651963690674cc54bdf7330b18a66f904f990a3128e1ea03d99badf17316bcf3",
     "src/researchStorage.ts": "228f3be810e22c7c5393d591251ac3fe8d8cd46100182b2871527edbd37f2f67",
     "src/resourceBudgets.ts": "acefc0ec699111b3ae7a4a446bc1d0ac0823407d6d3ee74405d3414887902bf1",
     "src/scopeCompletion.ts": "ab1700ffb3b183a2ed840053be1edcfcbe02909d456f176b595e3d109d3b9aa9",
@@ -52,12 +52,12 @@
   },
   "checks": {
     "review": {
-      "path": ".runtime/review-final-r4.log",
-      "sha256": "b9bb2a8f1181eadf844a5674fba7a44a347c1aba2aefc925d0b4b12ff795c570"
+      "path": ".runtime/review-release-final.log",
+      "sha256": "274973a321b83d61eb9866744b3427b38417b718fec233a9f4d6e958ab31e903"
     },
     "package": {
-      "path": ".runtime/package-final-r4.log",
-      "sha256": "022fdd0cf66df63169ed34defa7e00bb364194ccca678ce0c50e8dd2aac4222e"
+      "path": ".runtime/package-release-final.log",
+      "sha256": "39260fd359f456a7af09b40002b0d2a3041729b77c4770fec61830499739e6cd"
     },
     "audit": {
       "path": ".runtime/audit-r1.log",
@@ -70,17 +70,21 @@
     "secrets_after_commit_3ab98a1": {
       "path": ".runtime/secrets-r2.log",
       "sha256": "7dff9538e396c0bb9938bc234aca461e8426ce0c536f2167ba0797f5ba534911"
+    },
+    "secrets": {
+      "path": ".runtime/secrets-r4.log",
+      "sha256": "4a8ff6c4f267d29dd7e5f01045ad9207eaa9c22af92973de31cab2dfb039ab75"
     }
   },
   "review": {
-    "tests": 394,
-    "pass": 394,
+    "tests": 400,
+    "pass": 400,
     "fail": 0
   },
   "package": {
     "checks": 9,
     "pass": true,
-    "sha256": "c3b2d342f77d08682ed3f9026789b532d2180d69226637077a839e9b7ab21902"
+    "sha256": "cc37bdfdb9e5dcf03b6a0f303e917063cd0dc503fa04f11c1f98d23bd6ae0f99"
   },
   "mutations": [
     {
@@ -91,7 +95,7 @@
       "mutated_sha256": "eb3a6e88d84802439261f2f2e4c53707b5d200d65758f10fef4b58f2039b334e",
       "exit_code": 1,
       "killed": true,
-      "log_sha256": "f482816942d90f074990fe7a397bc4c400c74fb183027a8944788523b58ea75a"
+      "log_sha256": "968982f45cdc22dd3af2e824a258d855c6da8412bd5ec4b8983259de322964fa"
     },
     {
       "mutation": "incomplete-material",
@@ -101,7 +105,7 @@
       "mutated_sha256": "58589a6887169a3a9e804cea4e5c95b939feb19adebddd8ebe08d4d75dbbce15",
       "exit_code": 1,
       "killed": true,
-      "log_sha256": "bdd6ff465489cbc282e3e88a1e4b0b5e70a712f541f3dbd284eb4ce0905c1eef"
+      "log_sha256": "58e8d6d74c853b4a0930c5583e47b617d30436d1c7088982cfc8a17fb40cc9ba"
     },
     {
       "mutation": "old-cas-replay",
@@ -111,17 +115,17 @@
       "mutated_sha256": "a106a7ac576b7ff183a79cfb983d387089208c288097d052dbb92ea5e64b8645",
       "exit_code": 1,
       "killed": true,
-      "log_sha256": "8816e6a66820deb3d51c29aa022a657ca32dd13795f9b67a01114295e77a360a"
+      "log_sha256": "72706e8e5f1ae29538cce3f91cce2e07d0dbfa3c815e804174523550adbd20fc"
     },
     {
       "mutation": "snapshot-staleness",
       "path": "dist/reasoningReviewState.js",
       "test_pattern": "same-revision necessity changes",
-      "original_sha256": "5c9c8703fc80acced04ed12875044eaaebc11f813666d1fbc7812bf0723bdb89",
-      "mutated_sha256": "e33a000dc33e69f7cf6e83f5c0076fad78b6f65582cbe6b80c253c84269eed8d",
+      "original_sha256": "6a48138a530f7fd0fb7b0643c1005aaa25838bd1817fe02fe8952914439805b9",
+      "mutated_sha256": "f493cb2b09635245504ee6bc070d89e9a7ff606989532153c535300265146230",
       "exit_code": 1,
       "killed": true,
-      "log_sha256": "8fd1b51f90d49a61c487f5a862dfeb771f0f25890e2e18bef45255a518044706"
+      "log_sha256": "a69a9b27d1479705c683d79f784bc65397fd7bde850449af7d3d6a5647a09dee"
     },
     {
       "mutation": "whole-answer",
@@ -131,7 +135,7 @@
       "mutated_sha256": "880b5639095575a9d001499b27657db83222cba12e5cbcfa7fdd52af405b64f4",
       "exit_code": 1,
       "killed": true,
-      "log_sha256": "026e6dd0b786cf7ca933ffcceeded7be03cc9e6463545597469b50725fdee5d7"
+      "log_sha256": "cbcc7ac9e8a383ecaedb7183754599dd40efe624d0dbe5116930e1b0bd521e87"
     }
   ],
   "runtime_audit_vulnerabilities": 0,
@@ -139,16 +143,28 @@
     "R1": "CODE UNVERIFIED; LH-IR-CODE-01 fixed with RED then GREEN evidence",
     "R2": "CODE REVISE; LH-IR-CODE-01/02 fixed with focused reproducer tests",
     "url": "https://chatgpt.com/c/6abe1ed3-1050-83ee-99d7-d681aa03cf0b",
-    "R3": "SUBMITTED; awaiting complete response"
+    "R3": "CODE REVISE; final target identity bypass reproduced and fixed",
+    "R4": "CODE PASS",
+    "r4_manifest_sha256": "c3369f77c7be00525686507a8893c48934bfd6c3605fa77881e38be2290993b1",
+    "R5": "CODE PASS",
+    "r5_manifest_sha256": "67352f87a815056c98ffb749efb9395948e77401ffe4eeeb60781ba96cfd4b14",
+    "QA_R5": "QA PLAN REVISE: live smoke counter obligation, successful answer binding/missing trace, and actual byte checks; corrected for re-review"
   },
   "quality": {
-    "state": "running",
-    "cases": 12,
-    "repetitions_per_arm": 3,
-    "baseline_and_prior_candidate": ".runtime/reasoning-quality-20261007-r1",
-    "final_candidate": ".runtime/reasoning-quality-20261007-r3",
-    "note": "All superseded candidate trials retained; same protocol/oracle and unchanged baseline reused.",
-    "candidate_validation_delta": "R3 experiment source plus canonical remap-target schema restriction in R4. Trial relevance and reuse must be assessed explicitly before rollout."
+    "state": "PASS fixed semantic criteria; Pro QA corrections pending re-review",
+    "record": "docs/evidence/interpretation-model-quality-20261007.json",
+    "runtime_delta_evidence": ".runtime/final-runtime-compatibility.json",
+    "client_readiness_mismatches": 2,
+    "preserved_failed_candidates": [
+      ".runtime/reasoning-quality-20261007-r1",
+      ".runtime/reasoning-quality-20261007-r3"
+    ]
   },
-  "deployment": "not deployed; rollout remains disabled by default"
+  "deployment": "not deployed; rollout remains disabled by default",
+  "ci": {
+    "commit": "714ba44ac4add6fef740ede2e41e28ed3cf9c5fb",
+    "run_id": 37581603906,
+    "conclusion": "success",
+    "url": "https://github.com/hyunae52/legal_harness/actions/runs/37581603906"
+  }
 }
