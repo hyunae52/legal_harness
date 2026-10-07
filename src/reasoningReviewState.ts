@@ -6,7 +6,7 @@ import type { DocumentManifest } from './researchStorage.js';
 import { storedBytes } from './researchStorage.js';
 import type { Requirement, RequirementHistory } from './researchRequirements.js';
 import type { CandidateLedger } from './researchCoverage.js';
-import { reasoningPolicy, type FindingResponseInput, type SubmitInput } from './reasoningContracts.js';
+import { reasoningPolicy, type FindingResponseInput, type SubmitInput, type CheckTargetInput } from './reasoningContracts.js';
 import type { inspectResearch } from './researchReview.js';
 import type { ReviewPacket } from './reasoningReviewPacket.js';
 import { referenceUsage } from './researchCitations.js';
@@ -23,7 +23,8 @@ export interface StructureRecord { content_hash: string; status: string; finding
   question_scope_complete: boolean; declared_scope_review_complete: boolean }
 export type ModelFinding = SubmitInput['findings'][number] & {
   finding_id: string; origin_content_hash: string; origin_block_hash: string; status: 'open' | 'resolved'; resolved_content_hash?: string;
-  deterministic_checks: { code: string; issue_id?: string }[];
+  deterministic_checks: { code: string; target: CheckTargetInput; detail?: string }[];
+  originally_blocking: boolean;
 }
 export interface ReviewReceipt {
   tool: 'prepare_reasoning_review' | 'submit_reasoning_review'; request_id: string; input_hash: string;
@@ -40,6 +41,26 @@ export const emptyReasoningState = (): ReasoningState => ({ artifact: null, stru
   findings: [], responses: [], receipts: [], reviews_accepted: 0, accepted_review: null });
 export const contentHash = (snapshot: ReviewSnapshot, artifact: ArtifactValue) => digest({ policy: reasoningPolicy, contract: 2, snapshot, artifact });
 export const reviewContextHash = (state: ReasoningState) => digest({ findings: state.findings, responses: state.responses });
+const independentIssue = (plan: Plan, issueId: string) => {
+  const tracks = plan.scope_review?.tracks.filter(t => t.issue_id === issueId) ?? [];
+  return tracks.length > 0 && tracks.every(t => t.relation === 'independent_notice' && t.blocks_track_ids.length === 0);
+};
+const checkBinding = (g: StructureRecord['findings'][number]) => ({ code: g.code,
+  target: g.target ?? (g.scope_track_id ? { kind: 'scope_track' as const, id: g.scope_track_id } : { kind: 'issue' as const, id: g.issue_id ?? '*' }),
+  ...(!g.target && !g.scope_track_id ? { detail: g.detail } : {}) });
+function targetExists(target: CheckTargetInput, snapshot: ReviewSnapshot, artifact: ArtifactValue) {
+  const { kind, id } = target;
+  if (kind === 'fact') return snapshot.plan.facts.some(f => f.id === id);
+  if (kind === 'date') return snapshot.plan.event_dates.some(d => d.role === id);
+  if (kind === 'issue') return id === '*' || snapshot.plan.issues.some(i => i.id === id);
+  if (kind === 'scope_track') return snapshot.plan.scope_review?.tracks.some(t => t.id === id);
+  if (kind === 'evidence') return snapshot.evidence.some(e => e.evidence_id === id);
+  if (kind === 'requirement') return snapshot.requirements.some(r => r.requirement_id === id);
+  if (kind === 'block') return artifact.answer_blocks?.some(b => b.id === id);
+  if (kind === 'claim') return artifact.analysis.some(a => a.claims.some(c => c.id === id));
+  if (!('issue_id' in target)) return false;
+  return artifact.analysis.some(a => a.issue_id === target.issue_id && (kind === 'conflict' ? a.authority_conflicts?.some(c => c.id === id) : a.legal_tests?.some(t => t.id === id)));
+}
 export function artifactValue(input: ReviewInput): ArtifactValue {
   return { reasoning_contract_version: 2, draft_answer: input.draft_answer, analysis: input.analysis,
     scope_assessments: input.scope_assessments, answer_blocks: input.answer_blocks, correction_needed: input.correction_needed };
@@ -66,6 +87,14 @@ export function recordArtifact(prior: ReasoningState, input: ReviewInput, result
     const f = prior.findings.find(f => f.finding_id === r.finding_id);
     if (!f || r.remap_block_id && !value.answer_blocks?.some(b => b.id === r.remap_block_id)) throw new ServiceError(400, 'REVIEW_RESPONSE_INVALID');
     checkFeedbackCitations(r.citations, snapshot.evidence, f.issue_id);
+    const remaps = r.check_remaps ?? [];
+    if (new Set(remaps.map(m => digest(m.from))).size !== remaps.length || remaps.some(m => m.from.kind !== m.to.kind
+      || !f.deterministic_checks.some(c => digest(c.target) === digest(m.from)) || targetExists(m.from, snapshot, value) || !targetExists(m.to, snapshot, value)))
+      throw new ServiceError(400, 'REVIEW_CHECK_REMAP_INVALID');
+    const removals = r.check_removals ?? [];
+    if (new Set(removals.map(m => digest(m.target))).size !== removals.length || removals.some(m =>
+      !f.deterministic_checks.some(c => digest(c.target) === digest(m.target)) || targetExists(m.target, snapshot, value)
+      || remaps.some(remap => digest(remap.from) === digest(m.target)))) throw new ServiceError(400, 'REVIEW_CHECK_REMOVAL_INVALID');
   }
   const artifact = prior.artifact?.artifact_hash === hash ? prior.artifact : { artifact_id: randomUUID(), artifact_hash: hash, value, reference_usage: referenceUsage(input) };
   return { ...prior, artifact, responses, structure: { content_hash: contentHash(snapshot, value), status: result.status, findings: result.findings,
@@ -75,9 +104,7 @@ export function findingView(f: ModelFinding, state: ReasoningState, currentHash:
   const b = state.artifact?.value.answer_blocks?.find(b => b.id === f.block_id && b.issue_id === f.issue_id && b.text.includes(f.quote));
   const resolved = f.status === 'resolved' && f.resolved_content_hash === currentHash;
   const status = resolved ? 'resolved' : !b ? 'unmapped' : 'open';
-  const tracks = plan.scope_review?.tracks.filter(t => t.issue_id === f.issue_id) ?? [];
-  const independent = tracks.length > 0 && tracks.every(t => t.relation === 'independent_notice' && t.blocks_track_ids.length === 0);
-  return { ...f, status, blocking: !resolved && (status === 'unmapped' || !independent) };
+  return { ...f, status, blocking: !resolved && (status === 'unmapped' || f.originally_blocking || !independentIssue(plan, f.issue_id)) };
 }
 export function reasoningStatus(state: ReasoningState | undefined, snapshot: ReviewSnapshot, busy: boolean, enabled: boolean) {
   const hash = state?.artifact ? contentHash(snapshot, state.artifact.value) : null;
@@ -120,15 +147,20 @@ export function acceptModelReview(state: ReasoningState, input: SubmitInput, sna
     if (!f) throw new ServiceError(400, 'REVIEW_FINDING_INVALID');
     if (p.disposition === 'resolved') {
       if (!response || p.response_hash !== digest(response)) throw new ServiceError(409, 'REVIEW_AUTHOR_RESPONSE_REQUIRED');
-      // Close this finding independently of unrelated gaps. A linked server check
-      // must actually clear; revision/target renaming cannot discard its check family.
-      if (f.deterministic_checks.some(check => state.structure?.findings.some(g => g.code === check.code && g.issue_id === check.issue_id)))
-        throw new ServiceError(409, 'REVIEW_STRUCTURE_UNRESOLVED');
+      const checks = f.deterministic_checks.map(check => ({ ...check,
+        target: response.check_remaps?.find(m => digest(m.from) === digest(check.target))?.to ?? check.target }));
+      if (checks.some(check => !targetExists(check.target, snapshot, state.artifact!.value)
+        && !response.check_removals?.some(r => digest(r.target) === digest(check.target))))
+        throw new ServiceError(409, 'REVIEW_CHECK_UNMAPPED');
+      if (checks.some(check => state.structure?.findings.some(g => {
+        const current = checkBinding(g);
+        return g.code === check.code && digest(current.target) === digest(check.target) && (!check.detail || current.detail === check.detail);
+      }))) throw new ServiceError(409, 'REVIEW_STRUCTURE_UNRESOLVED');
       const b = state.artifact.value.answer_blocks?.find(b => b.id === (response.remap_block_id ?? f.block_id));
       if ((!b || b.issue_id !== f.issue_id || !b.text.includes(f.quote)) && !response.remap_block_id && !response.removal_reason)
         throw new ServiceError(409, 'REVIEW_FINDING_UNMAPPED');
       if (b && response.remap_block_id) { f.block_id = b.id; f.issue_id = b.issue_id; }
-      f.status = 'resolved'; f.resolved_content_hash = hash;
+      f.deterministic_checks = checks; f.status = 'resolved'; f.resolved_content_hash = hash;
     } else { f.status = 'open'; delete f.resolved_content_hash; }
   }
   for (const proposal of input.findings) {
@@ -140,9 +172,10 @@ export function acceptModelReview(state: ReasoningState, input: SubmitInput, sna
     const deterministic_checks = (proposal.structure_gap_ids ?? []).map(id => {
       const gap = state.structure?.findings.find(g => g.gap_id === id && (!g.issue_id || g.issue_id === proposal.issue_id));
       if (!gap) throw new ServiceError(400, 'REVIEW_FINDING_GAP_INVALID');
-      return { code: gap.code, ...(gap.issue_id ? { issue_id: gap.issue_id } : {}) };
+      return checkBinding(gap);
     });
-    findings.push({ ...proposal, deterministic_checks, finding_id: randomUUID(), origin_content_hash: hash, origin_block_hash: digest(b), status: 'open' });
+    findings.push({ ...proposal, deterministic_checks, originally_blocking: !independentIssue(snapshot.plan, proposal.issue_id),
+      finding_id: randomUUID(), origin_content_hash: hash, origin_block_hash: digest(b), status: 'open' });
   }
   const next = { ...state, findings };
   const blocking = findings.some(f => findingView(f, next, hash, snapshot.plan).blocking);

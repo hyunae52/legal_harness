@@ -22,6 +22,8 @@
 5. 연결한 AI가 원문·전체 답변·적용표·반론·이전 지적을 검토하고 `submit_reasoning_review`로 `revise`, `qualified`, `no_detected_issue` 중 하나를 기록한다. 제한 사항은 실제 답변 구절에 연결한다.
 6. 지적 수정은 다음 구조 검사에 `finding_responses`의 `proposed_fix` 또는 `disputed`로 제출한다. 이후 새 packet을 읽은 검토가 같은 ID를 명시적으로 다뤄야 닫힌다. 서버 검사와 관련된 지적은 현재 `structure_gap_ids`에 연결하며 해당 검사 오류가 실제로 사라져야 닫힌다. 무관한 공백은 개별 지적의 해소 기록을 막지 않고 전체 준비 상태를 별도로 차단한다.
 
+서버 검사는 오류 코드와 실제 대상(주장·요건·날짜·사실·근거)을 함께 추적한다. 대상 ID를 바꾸면 `check_remaps`, 실제로 삭제하면 대상별 이유를 담은 `check_removals`로 설명한다. 설명만으로 닫히지는 않으며 후속 검토가 필요하다. 본질문의 차단 지적을 독립 안내로 옮겨도 그 검토 전까지 차단은 유지된다.
+
 같은 모델의 검토는 `self_review`, 다른 모델이라고 클라이언트가 보고하면 `client_reported_review`다. 두 경우 모두 독립성은 서버가 확인하지 않았으므로 `independent_review=not_performed`를 유지한다. 검색 0건이면 수행한 검색 ID와 범위를 남기고 반례를 만들어내지 않는다.
 
 ## 상태와 한도

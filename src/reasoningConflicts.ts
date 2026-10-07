@@ -1,15 +1,17 @@
 import type { IssueAnalysisInput } from './researchContracts.js';
 import type { ResearchAttempt, ResearchEvidence } from './researchEvidence.js';
+import type { CheckTargetInput } from './reasoningContracts.js';
 
 export function inspectConflicts(a: IssueAnalysisInput, evidence: ResearchEvidence[], attempts: ResearchAttempt[],
-  block: (code: string, detail: string) => void, gap: (code: string, detail: string) => void) {
+  block: (code: string, detail: string, target?: CheckTargetInput) => void, gap: (code: string, detail: string, target?: CheckTargetInput) => void) {
   const conflicts = a.authority_conflicts ?? [];
   if (new Set(conflicts.map(c => c.id)).size !== conflicts.length) block('DUPLICATE_CONFLICT', a.issue_id);
   for (const c of conflicts) {
     if (c.test_ids.some(id => !a.legal_tests?.some(t => t.id === id)) || c.claim_ids.some(id => !a.claims.some(p => p.id === id))) block('CONFLICT_REFERENCE_INVALID', c.id);
-    if (c.left.proposition === c.right.proposition) block('CONFLICT_PROPOSITION_IDENTICAL', c.id);
-    if (c.disposition === 'unresolved') gap('AUTHORITY_CONFLICT_UNRESOLVED', c.id);
-    else if (!c.resolution_citations.length) block('CONFLICT_RESOLUTION_SOURCE_REQUIRED', c.id);
+    const target = { kind: 'conflict' as const, id: c.id, issue_id: a.issue_id };
+    if (c.left.proposition === c.right.proposition) block('CONFLICT_PROPOSITION_IDENTICAL', c.id, target);
+    if (c.disposition === 'unresolved') gap('AUTHORITY_CONFLICT_UNRESOLVED', c.id, target);
+    else if (!c.resolution_citations.length) block('CONFLICT_RESOLUTION_SOURCE_REQUIRED', c.id, target);
   }
   const opposition = a.strongest_opposition;
   if (!opposition) { block('STRONGEST_OPPOSITION_REQUIRED', a.issue_id); return; }

@@ -1,14 +1,18 @@
 """Mutate isolated compiled copies; never modify the working source or live server."""
 import hashlib
 import json
+import argparse
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 
 root = Path(__file__).resolve().parent.parent
-output = (root / '.runtime' / 'reasoning-mutations').resolve()
-output.mkdir(exist_ok=False)
+parser = argparse.ArgumentParser()
+parser.add_argument('--output', default='.runtime/reasoning-mutations')
+args = parser.parse_args()
+output = (root / args.output).resolve()
+output.mkdir(parents=True, exist_ok=False)
 mutations = [
     ('unknown-negation', 'reasoningApplication.js', "return v === 'unknown' ? v :", 'return false ? v :', 'independent three-valued'),
     ('incomplete-material', 'research.js', 'if (missing.length)', 'if (false)', 'the entire exact answer'),

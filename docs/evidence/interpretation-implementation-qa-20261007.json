@@ -19,13 +19,13 @@
     "src/inputDiagnostics.ts": "7618517fcda24f14e822a3cd74657cedc1818ff1ddea8ce9d748eb8db408d7be",
     "src/koreanLawClient.ts": "1840b8e389778de6e1756ee910f13a6202a3c223c15a25c4304a1aec1f7b7718",
     "src/landing.ts": "1cbaafab1c05a5988242b58473daa1893105a2bd841b48d6794b04aa6c653166",
-    "src/legalApplicability.ts": "0e1b2afa194e763ee028ff3e8621b92fbb67df1827dba6142ae58a5a6e3ece66",
+    "src/legalApplicability.ts": "cb63fad7c2fa4d5a2e6485c9993f3e994ceee1ce703f0f723895b1c2ddc85f9b",
     "src/publicAccess.ts": "2db37af84b5c95d7ae669154fb352256097a087f60808cc36a9f4e276268bff7",
-    "src/reasoningApplication.ts": "331d33cf9209efba57dba0dcebf4795dcdf27395106f01be60634e41880056b8",
-    "src/reasoningConflicts.ts": "ca0d21ddcfa37ceef76154281cc6d28b9e61df1bbea76c160e99f0e4aefec8bd",
-    "src/reasoningContracts.ts": "a6d6f796d978ba60b6051cfecdb2e1f019d4b80fd4d3d3ca658dac1c309b7d7f",
+    "src/reasoningApplication.ts": "06d2ccd032770e620137356dc28df3ffbd3aea71d0de4b8207b846df8526ad26",
+    "src/reasoningConflicts.ts": "0b3b8d6e4a0d165b91551e5c459f9f98b539e4323678e0edca5c8fa8d72711ac",
+    "src/reasoningContracts.ts": "5738267082eeb10266e2304d12ab1509d914c6a8bece707a14d5d4b9b1bab561",
     "src/reasoningReviewPacket.ts": "6e237441b32eaf2fd7a401bb8b5f138580d4dc2f018df947266d42f50170e598",
-    "src/reasoningReviewState.ts": "35e94191dd31af9e778e47f3dca59c14de2578b01e12e8b7836b0b1bd8ab8fa0",
+    "src/reasoningReviewState.ts": "ebb28313aa0557d543d18bb6149c7e370df00aa84d192c27b8e5371e9c987306",
     "src/releaseGate.ts": "81682cb373e8a6aefa4597f71196fe145c87556e8d7977603d52e5ee2bdc3b1c",
     "src/research.ts": "9a36ef70e334749c4621fba0ca7c0acf3cc80ddc9fc2c54aa9f467bac9342f07",
     "src/researchCitations.ts": "88bafee0822e88c1221c9c3e92c4e12de7743b532a536fca47a68c02b9ef324c",
@@ -39,7 +39,7 @@
     "src/researchProgress.ts": "032af2b272df0bf8f0d3e3f8652e07f5d0344fe30eeccacff88ac26677e5b9eb",
     "src/researchRecovery.ts": "f94f624a8bfab108cf3d63ff3e7ee5c6f2df79284caa81e07033c8511299cd8b",
     "src/researchRequirements.ts": "3d45a71cb4c37b4f50626cc22617ee6645951af5b53daa1c3dbb3361699da574",
-    "src/researchReview.ts": "ef700369bbf0b5e3b643c2ab401332bdac869a855d036d01575c579455c8cd99",
+    "src/researchReview.ts": "5ab998fd120ed53d43ec56ddd3ffb46e1f9ea8c2a59dee85ccada6a9aa39ab49",
     "src/researchSearch.ts": "3727d3d6c8681a6264f8fb888c4f8246ea94b7279a1e36008ce084be25af4fb8",
     "src/researchStorage.ts": "228f3be810e22c7c5393d591251ac3fe8d8cd46100182b2871527edbd37f2f67",
     "src/resourceBudgets.ts": "acefc0ec699111b3ae7a4a446bc1d0ac0823407d6d3ee74405d3414887902bf1",
@@ -52,12 +52,12 @@
   },
   "checks": {
     "review": {
-      "path": ".runtime/review-final-r2.log",
-      "sha256": "8ca3f748d2f06a6fe8d75210bb7b104e4027b34720192ab76ff9d17161a3f807"
+      "path": ".runtime/review-final-r4.log",
+      "sha256": "b9bb2a8f1181eadf844a5674fba7a44a347c1aba2aefc925d0b4b12ff795c570"
     },
     "package": {
-      "path": ".runtime/package-final-r2.log",
-      "sha256": "1c4b041198cb6692e3425d8af104305c0ebb925c13663ef612bf7543f2d8ab8d"
+      "path": ".runtime/package-final-r4.log",
+      "sha256": "022fdd0cf66df63169ed34defa7e00bb364194ccca678ce0c50e8dd2aac4222e"
     },
     "audit": {
       "path": ".runtime/audit-r1.log",
@@ -66,28 +66,32 @@
     "secrets_before_commit": {
       "path": ".runtime/secrets-r1.log",
       "sha256": "b39f45ec0c7a1177e1a804709e477191ee1af7ba452aa574b0d184ea62f73348"
+    },
+    "secrets_after_commit_3ab98a1": {
+      "path": ".runtime/secrets-r2.log",
+      "sha256": "7dff9538e396c0bb9938bc234aca461e8426ce0c536f2167ba0797f5ba534911"
     }
   },
   "review": {
-    "tests": 387,
-    "pass": 387,
+    "tests": 394,
+    "pass": 394,
     "fail": 0
   },
   "package": {
     "checks": 9,
     "pass": true,
-    "sha256": "280f262bf99483823499cbdfc27f7db2e6ab9f3a81a983f1929d23d23c3f5159"
+    "sha256": "c3b2d342f77d08682ed3f9026789b532d2180d69226637077a839e9b7ab21902"
   },
   "mutations": [
     {
       "mutation": "unknown-negation",
       "path": "dist/reasoningApplication.js",
       "test_pattern": "independent three-valued",
-      "original_sha256": "a189d1b91b85a1b74de63172c9f1202ecb85bf6e2ce13ccf710fe853c5729408",
-      "mutated_sha256": "4ac5b71998921c2c48c53b5c34d58219531921af35af5014efd89cd9c31b6679",
+      "original_sha256": "b038386121562e41bd3cd76995483910af1d439605c3b73a19d6c98f35a8b47e",
+      "mutated_sha256": "eb3a6e88d84802439261f2f2e4c53707b5d200d65758f10fef4b58f2039b334e",
       "exit_code": 1,
       "killed": true,
-      "log_sha256": "d5bafdea7c791cda48bc8aa4dfc9089e5f67395578bb9a089059b4e651b2f9d0"
+      "log_sha256": "f482816942d90f074990fe7a397bc4c400c74fb183027a8944788523b58ea75a"
     },
     {
       "mutation": "incomplete-material",
@@ -97,7 +101,7 @@
       "mutated_sha256": "58589a6887169a3a9e804cea4e5c95b939feb19adebddd8ebe08d4d75dbbce15",
       "exit_code": 1,
       "killed": true,
-      "log_sha256": "6b9096408882d3fc7128d0887d24a9ea2467068b6ced1ee8d1bfab47e4b7768e"
+      "log_sha256": "bdd6ff465489cbc282e3e88a1e4b0b5e70a712f541f3dbd284eb4ce0905c1eef"
     },
     {
       "mutation": "old-cas-replay",
@@ -107,42 +111,44 @@
       "mutated_sha256": "a106a7ac576b7ff183a79cfb983d387089208c288097d052dbb92ea5e64b8645",
       "exit_code": 1,
       "killed": true,
-      "log_sha256": "a7e113dd3c753d8209e900a5b84750bb98e6bcbd3e3a3b5bf953a067033beba9",
-      "expected_failure": "RESEARCH_STATE_CHANGED on formerly valid receipt replay"
+      "log_sha256": "8816e6a66820deb3d51c29aa022a657ca32dd13795f9b67a01114295e77a360a"
     },
     {
       "mutation": "snapshot-staleness",
       "path": "dist/reasoningReviewState.js",
       "test_pattern": "same-revision necessity changes",
-      "original_sha256": "1bc818ba2f0574ab77bf5f5ec6c34e69d293d503dd42074823b627d5cc7a60ce",
-      "mutated_sha256": "73507baaf8c1bbc707252babf9efda65506ff319c65da06839fe36401059e3fa",
+      "original_sha256": "5c9c8703fc80acced04ed12875044eaaebc11f813666d1fbc7812bf0723bdb89",
+      "mutated_sha256": "e33a000dc33e69f7cf6e83f5c0076fad78b6f65582cbe6b80c253c84269eed8d",
       "exit_code": 1,
       "killed": true,
-      "log_sha256": "58c5bc8b65bd4239bd86aac566345eff89674fdba35da1cd3ccd6e7429fcbd4a"
+      "log_sha256": "8fd1b51f90d49a61c487f5a862dfeb771f0f25890e2e18bef45255a518044706"
     },
     {
       "mutation": "whole-answer",
       "path": "dist/reasoningApplication.js",
       "test_pattern": "the entire exact answer",
-      "original_sha256": "a189d1b91b85a1b74de63172c9f1202ecb85bf6e2ce13ccf710fe853c5729408",
-      "mutated_sha256": "b701ad0ec49361899711ac4bc12a12b5e4ed63f9aa205639de24ae80668206d7",
+      "original_sha256": "b038386121562e41bd3cd76995483910af1d439605c3b73a19d6c98f35a8b47e",
+      "mutated_sha256": "880b5639095575a9d001499b27657db83222cba12e5cbcfa7fdd52af405b64f4",
       "exit_code": 1,
       "killed": true,
-      "log_sha256": "6760c513d44fc22460f54249a17216e2897c11e4d94a97385b770156899fea85"
+      "log_sha256": "026e6dd0b786cf7ca933ffcceeded7be03cc9e6463545597469b50725fdee5d7"
     }
   ],
   "runtime_audit_vulnerabilities": 0,
   "pro_review": {
     "R1": "CODE UNVERIFIED; LH-IR-CODE-01 fixed with RED then GREEN evidence",
-    "R2": "SUBMITTED; awaiting complete response",
-    "url": "https://chatgpt.com/c/6abe1ed3-1050-83ee-99d7-d681aa03cf0b"
+    "R2": "CODE REVISE; LH-IR-CODE-01/02 fixed with focused reproducer tests",
+    "url": "https://chatgpt.com/c/6abe1ed3-1050-83ee-99d7-d681aa03cf0b",
+    "R3": "SUBMITTED; awaiting complete response"
   },
   "quality": {
     "state": "running",
-    "trials_planned": 72,
     "cases": 12,
     "repetitions_per_arm": 3,
-    "runtime_path": ".runtime/reasoning-quality-20261007-r1"
+    "baseline_and_prior_candidate": ".runtime/reasoning-quality-20261007-r1",
+    "final_candidate": ".runtime/reasoning-quality-20261007-r3",
+    "note": "All superseded candidate trials retained; same protocol/oracle and unchanged baseline reused.",
+    "candidate_validation_delta": "R3 experiment source plus canonical remap-target schema restriction in R4. Trial relevance and reuse must be assessed explicitly before rollout."
   },
   "deployment": "not deployed; rollout remains disabled by default"
 }

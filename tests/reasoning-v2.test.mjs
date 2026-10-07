@@ -6,7 +6,7 @@ import { reasoningFixture, review, prepare, readAll, submit, status } from './fi
 import { coverageActor, coverageReview } from './fixtures/authority-provider.mjs';
 import { digest } from '../dist/contracts.js';
 import { evaluateTests, inspectApplication } from '../dist/reasoningApplication.js';
-import { admitReceipt, emptyReasoningState } from '../dist/reasoningReviewState.js';
+import { admitReceipt, emptyReasoningState, findingView } from '../dist/reasoningReviewState.js';
 import { GateEngine } from '../dist/gates.js';
 
 const code = expected => e => e.code === expected;
@@ -352,4 +352,119 @@ test('IR-14/25: busy sessions retain receipt replay but cannot claim readiness o
   assert.equal((await f.service.run('submit_reasoning_review', coverageActor, accepted.input)).replayed, true);
   await assert.rejects(() => prepare(f), code('RESEARCH_BUSY'));
   session.busy = null;
+});
+
+test('LH-IR-CODE-01 R2: repairing claim A closes its finding even when the same check still fails on claim B', async t => {
+  const f = await reasoningFixture(); t.after(() => f.service.close()); const a = f.input.analysis[0];
+  a.claims[0].test_result = 'unknown'; a.claims.push({ ...structuredClone(a.claims[0]), id: 'second' });
+  f.input.answer_blocks[0].claim_ids.push('second');
+  const r = await review(f), gap = r.findings.find(g => g.code === 'TEST_RESULT_MISMATCH' && g.detail.startsWith('claim:'));
+  const p = await prepare(f); await readAll(f, p);
+  const first = await submit(f, p, { result: 'revise', findings: [{ ...finding(f.input), claim_id: 'claim', structure_gap_ids: [gap.gap_id] }] });
+  const id = first.response.model_review.findings[0].finding_id;
+  const response = { finding_id: id, disposition: 'proposed_fix', reason: '첫 번째 주장의 결과만 수정했다.', citations: [] };
+  a.claims[0].test_result = 'satisfied'; f.input.finding_responses = [response]; await review(f);
+  const next = await prepare(f); await readAll(f, next);
+  const accepted = await submit(f, next, { prior_findings: [{ finding_id: id, disposition: 'resolved', reason: '첫 번째 결과가 계산과 일치한다.', response_hash: digest(response) }] });
+  assert.equal(accepted.response.model_review.findings[0].status, 'resolved'); assert.equal(accepted.response.ready_for_answer, false);
+});
+
+test('LH-IR-CODE-02: an originally blocking finding cannot silently become an independent notice', async t => {
+  const f = await reasoningFixture(); t.after(() => f.service.close()); await review(f); const p = await prepare(f); await readAll(f, p);
+  await submit(f, p, { result: 'revise', findings: [finding(f.input)] });
+  const s = f.service.sessions.get(f.state.research_id), stored = s.reasoning.findings[0], plan = structuredClone(s.plan);
+  plan.scope_review.tracks[0].relation = 'independent_notice';
+  const view = findingView(stored, s.reasoning, s.reasoning.structure.content_hash, plan);
+  assert.equal(view.status, 'open'); assert.equal(view.blocking, true);
+});
+
+test('LH-IR-CODE-01: renamed claim targets need an explicit valid remap and cannot close an unfixed error', async t => {
+  const f = await reasoningFixture(); t.after(() => f.service.close()); const claim = f.input.analysis[0].claims[0];
+  claim.test_result = 'unknown'; const r = await review(f), gap = r.findings.find(g => g.code === 'TEST_RESULT_MISMATCH');
+  const p = await prepare(f); await readAll(f, p);
+  const first = await submit(f, p, { result: 'revise', findings: [{ ...finding(f.input), structure_gap_ids: [gap.gap_id] }] });
+  const id = first.response.model_review.findings[0].finding_id;
+  claim.id = 'renamed'; f.input.answer_blocks[0].claim_ids = ['renamed'];
+  const response = { finding_id: id, disposition: 'proposed_fix', reason: '대상 이름 변경', citations: [] };
+  f.input.finding_responses = [response]; await review(f); const next = await prepare(f); await readAll(f, next);
+  const closure = () => ({ prior_findings: [{ finding_id: id, disposition: 'resolved', reason: '현재 대응 검토', response_hash: digest(response) }] });
+  await assert.rejects(() => submit(f, next, closure()), code('REVIEW_CHECK_UNMAPPED'));
+  response.check_remaps = [{ from: { kind: 'claim', id: 'claim' }, to: { kind: 'claim', id: 'renamed' } }];
+  await review(f); const mapped = await prepare(f); await readAll(f, mapped);
+  await assert.rejects(() => submit(f, mapped, closure()), code('REVIEW_STRUCTURE_UNRESOLVED'));
+  claim.test_result = 'satisfied'; await review(f); const fixed = await prepare(f); await readAll(f, fixed);
+  assert.equal((await submit(f, fixed, closure())).response.model_review.findings[0].status, 'resolved');
+});
+
+test('LH-IR-CODE-01: confirming date A clears only its linked check while date B remains unknown', async t => {
+  const f = await reasoningFixture(); t.after(() => f.service.close());
+  const plan = structuredClone(f.state.plan); plan.issues[0].required_date_roles = ['dateA', 'dateB'];
+  plan.event_dates = ['dateA', 'dateB'].map(role => ({ role, value: '2020-01', precision: 'month', basis: 'assumed', source: '합성 가정' }));
+  let s = await f.api('update_legal_research', f.state, { plan });
+  s = await f.api('reuse_legal_evidence', s, { issue_ids: ['case'], evidence_ids: f.state.evidence.map(e => e.evidence_id) });
+  f.input.analysis[0].timing = { status: 'addressed', reason: '두 날짜의 확인 상태 구분', date_roles: ['dateA', 'dateB'] };
+  f.input.analysis[0].legal_basis.statutes.forEach(l => l.date_roles = ['dateA', 'dateB']);
+  const r = await review(f), gap = r.findings.find(g => g.code === 'DATE_UNCONFIRMED' && g.target.id === 'dateA');
+  const p = await prepare(f); await readAll(f, p);
+  const first = await submit(f, p, { result: 'revise', findings: [{ ...finding(f.input), structure_gap_ids: [gap.gap_id] }] });
+  const id = first.response.model_review.findings[0].finding_id;
+  plan.event_dates[0] = { role: 'dateA', value: '2020-01-01', precision: 'day', basis: 'provided', source: '합성 확인' };
+  s = await f.api('update_legal_research', await status(f), { plan });
+  await f.api('reuse_legal_evidence', s, { issue_ids: ['case'], evidence_ids: f.state.evidence.map(e => e.evidence_id) });
+  const response = { finding_id: id, disposition: 'proposed_fix', reason: 'dateA 확인됨; dateB 미상 유지', citations: [] };
+  f.input.finding_responses = [response]; await review(f); const next = await prepare(f); await readAll(f, next);
+  const closed = await submit(f, next, { prior_findings: [{ finding_id: id, disposition: 'resolved', reason: '해당 날짜의 확인을 검토했다.', response_hash: digest(response) }] });
+  assert.equal(closed.response.model_review.findings[0].status, 'resolved'); assert.equal(closed.response.ready_for_answer, false);
+});
+
+test('LH-IR-CODE-02: an initially independent finding is nonblocking, and reviewed scope changes can close a former blocker', async t => {
+  const f = await reasoningFixture(); t.after(() => f.service.close()); await review(f); let p = await prepare(f); await readAll(f, p);
+  const first = await submit(f, p, { result: 'revise', findings: [finding(f.input)] });
+  const id = first.response.model_review.findings[0].finding_id, s = f.service.sessions.get(f.state.research_id);
+  s.plan.scope_review.tracks[0].relation = 'independent_notice';
+  const response = { finding_id: id, disposition: 'disputed', reason: '범위 변경의 이유를 제시하고 후속 검토를 요청한다.', citations: [] };
+  f.input.finding_responses = [response]; await review(f); p = await prepare(f); await readAll(f, p);
+  await assert.rejects(() => submit(f, p), code('REVIEW_RESULT_CONFLICT'));
+  const closed = await submit(f, p, { prior_findings: [{ finding_id: id, disposition: 'resolved', reason: '명시한 범위 변경과 답변의 한계를 확인했다.', response_hash: digest(response) }],
+    findings: [{ ...finding(f.input), reason: '처음부터 독립 안내에서 생성된 별개 지적' }] });
+  assert.equal(closed.response.model_review.findings[0].status, 'resolved');
+  assert.equal(closed.response.model_review.findings[1].originally_blocking, false);
+  assert.equal(closed.response.model_review.findings[1].blocking, false);
+});
+
+test('LH-IR-CODE-01: deleting an erroneous claim needs a targeted explanation and explicit later review', async t => {
+  const f = await reasoningFixture(); t.after(() => f.service.close()); const a = f.input.analysis[0];
+  a.claims.push({ ...structuredClone(a.claims[0]), id: 'extra', test_result: 'unknown' });
+  f.input.answer_blocks[0].claim_ids.push('extra');
+  const r = await review(f), gap = r.findings.find(g => g.code === 'TEST_RESULT_MISMATCH' && g.target.id === 'extra');
+  const p = await prepare(f); await readAll(f, p);
+  const first = await submit(f, p, { result: 'revise', findings: [{ ...finding(f.input), structure_gap_ids: [gap.gap_id] }] });
+  const id = first.response.model_review.findings[0].finding_id;
+  const response = { finding_id: id, disposition: 'proposed_fix', reason: '중복된 잘못된 주장을 삭제한다.', citations: [],
+    check_removals: [{ target: { kind: 'claim', id: 'extra' }, reason: '중복 주장을 삭제했고 본래 요건과 올바른 주장은 유지했다.' }] };
+  f.input.finding_responses = [response];
+  await assert.rejects(() => review(f), code('REVIEW_CHECK_REMOVAL_INVALID'));
+  a.claims.pop(); f.input.answer_blocks[0].claim_ids.pop();
+  await review(f); const next = await prepare(f); await readAll(f, next);
+  await assert.rejects(() => submit(f, next), code('REVIEW_RESULT_CONFLICT'));
+  const closed = await submit(f, next, { prior_findings: [{ finding_id: id, disposition: 'resolved',
+    reason: '삭제 설명과 남은 요건 및 답변을 검토했다.', response_hash: digest(response) }] });
+  assert.equal(closed.response.model_review.findings[0].status, 'resolved');
+  assert.equal(closed.response.ready_for_answer, true);
+});
+
+test('LH-IR-CODE-03: remap target metadata cannot hide a remaining claim error', async t => {
+  const f = await reasoningFixture(); t.after(() => f.service.close()); const claim = f.input.analysis[0].claims[0];
+  claim.test_result = 'unknown'; const r = await review(f), gap = r.findings.find(g => g.code === 'TEST_RESULT_MISMATCH');
+  const p = await prepare(f); await readAll(f, p);
+  const first = await submit(f, p, { result: 'revise', findings: [{ ...finding(f.input), structure_gap_ids: [gap.gap_id] }] });
+  claim.id = 'renamed'; f.input.answer_blocks[0].claim_ids = ['renamed'];
+  const response = { finding_id: first.response.model_review.findings[0].finding_id, disposition: 'proposed_fix', reason: '이름만 변경', citations: [],
+    check_remaps: [{ from: { kind: 'claim', id: 'claim' }, to: { kind: 'claim', id: 'renamed', issue_id: 'case' } }] };
+  f.input.finding_responses = [response];
+  await assert.rejects(() => review(f), e => e.name === 'ZodError');
+  delete response.check_remaps[0].to.issue_id;
+  await review(f); const mapped = await prepare(f); await readAll(f, mapped);
+  await assert.rejects(() => submit(f, mapped, { prior_findings: [{ finding_id: response.finding_id, disposition: 'resolved',
+    reason: '오류가 남아 있어야 한다.', response_hash: digest(response) }] }), code('REVIEW_STRUCTURE_UNRESOLVED'));
 });

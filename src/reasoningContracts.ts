@@ -41,8 +41,17 @@ export const StrongestOpposition = z.discriminatedUnion('status', [
 ]);
 export const AnswerBlock = z.object({ id, kind: z.enum(['claim', 'source_quote', 'context', 'uncertainty', 'next_step']),
   text: text(12000), issue_id: id, claim_ids: ids(12), test_ids: ids(24), citations: z.array(Citation).max(8) }).strict();
+// One canonical target shape: global IDs must not carry ignored issue metadata.
+// Test/conflict IDs are local to an issue and therefore always require its ID.
+export const CheckTarget = z.union([
+  z.object({ kind: z.enum(['fact', 'date', 'claim', 'evidence', 'block', 'issue', 'scope_track', 'requirement']), id: text(100) }).strict(),
+  z.object({ kind: z.enum(['test', 'conflict']), id: text(100), issue_id: id }).strict(),
+]);
+export type CheckTargetInput = z.infer<typeof CheckTarget>;
 export const FindingResponse = z.object({ finding_id: uuid, disposition: z.enum(['proposed_fix', 'disputed']), reason: text(2000),
-  citations: z.array(Citation).max(8), remap_block_id: id.optional(), removal_reason: text(2000).optional() }).strict();
+  citations: z.array(Citation).max(8), remap_block_id: id.optional(), removal_reason: text(2000).optional(),
+  check_remaps: z.array(z.object({ from: CheckTarget, to: CheckTarget }).strict()).max(24).optional(),
+  check_removals: z.array(z.object({ target: CheckTarget, reason: text(2000) }).strict()).max(24).optional() }).strict();
 export const PacketCursor = z.object({ packet_id: uuid, manifest_hash: text(64), offset: z.number().int().nonnegative() }).strict();
 const ref = { research_id: uuid, expected_revision: z.number().int().positive(), expected_state_version: z.number().int().positive(), request_id: uuid };
 export const PrepareReasoningReview = z.object({ ...ref, artifact_id: uuid, artifact_hash: text(64) }).strict();
