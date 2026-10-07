@@ -1,0 +1,20 @@
+{
+  "version":"reasoning-quality-oracle-v1",
+  "authorship":"Codex fixed these closed-world expected outcomes before evaluation runs, directly from the synthetic stipulations. No production helper or evaluated-model output derives these outcomes. Not real legal advice.",
+  "grading":"Grade shuffled opaque trial IDs before revealing arm mapping. Inspect answer and error_reason as well as enum; a correct enum with contradictory prose is wrong. Missing/truncated/tool-violating runs are unverified, never pass. For normal conditional answers, stating concrete alternatives counts as answerable; blanket refusal does not. Review readiness is a separate protocol measure, not semantic correctness.",
+  "outcomes": {
+    "C01":{"outcome":"does_not_apply","decisive_error":true,"reason":"연체 예외를 누락했다."},
+    "C02":{"outcome":"does_not_apply","decisive_error":true,"reason":"등록자만 공제한다는 문구를 미등록자에게 역으로 적용했다."},
+    "C03":{"outcome":"does_not_apply","decisive_error":true,"reason":"2098년 취득에는 구법의 등록 요건이 남는다."},
+    "C04":{"outcome":"does_not_apply","decisive_error":true,"reason":"구법 판결은 2099년 신법 거주 요건을 없애지 않는다."},
+    "C05":{"outcome":"does_not_apply","decisive_error":true,"reason":"context의 전액 환급 단정이 본문 요건과 모순된다."},
+    "C06":{"outcome":"does_not_apply","decisive_error":true,"reason":"무료 개인 사용도 사익 사용이라는 주어진 반대 자료를 부당 배제했다."},
+    "C07":{"outcome":"conditional","decisive_error":true,"reason":"중복 여부 미상. 중복이면 불가, 아니면 지급 가능하다."},
+    "C08":{"outcome":"applies","decisive_error":true,"reason":"A와 B는 선택 요건. B를 갖추었고 C가 없어 허용된다."},
+    "C09":{"outcome":"applies","decisive_error":false,"reason":"A 충족 B 부존재로 지급한다."},
+    "C10":{"outcome":"conditional","decisive_error":false,"reason":"B 없으면 지급, 있으면 지급하지 않는다. 추가 사실을 발명하지 않는다."},
+    "C11":{"outcome":"applies","decisive_error":false,"reason":"B가 이미 충족되어 A의 미상은 결론에 필요 없다."},
+    "C12":{"outcome":"applies","decisive_error":false,"reason":"C 재예외로 B 배제를 뒤집고 A와 함께 면제한다."}
+  },
+  "release_criteria":{"all_deterministic_contracts":true,"heldout_decisive_wrong_increase_allowed":0,"legitimate_answerability_decrease_allowed":0,"injected_misses":"candidate fewer than baseline; if baseline zero, candidate zero plus separate demonstrated injected error exposure","critical_classes":"all eight injected classes demonstrated at least once","disagreement":"exclude from PASS evidence and report unresolved"}
+}

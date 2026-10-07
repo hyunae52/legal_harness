@@ -6,6 +6,7 @@ import { researchCoverage } from '../dist/researchCoverage.js';
 import { observeSearch } from '../dist/researchSearch.js';
 import { coverageFixture, coveragePlan, coverageReview, providerResponse } from './fixtures/authority-provider.mjs';
 import { inspectResearch } from '../dist/researchReview.js';
+import { reasoningInput, review, prepare, readAll, status } from './fixtures/reasoning-v2.mjs';
 
 test('Pro F-5: independent issuer and court conflicts cannot become Supreme Court evidence', () => {
   const doc = { id: 'a', documentType: '판결', issuingAgency: '대법원', court: '서울고등법원' };
@@ -105,7 +106,7 @@ test('Rate-limited provider searches preserve a retry hint and are never zero re
   assert.equal(r.status, 'failed'); assert.equal(r.total, null); assert.equal(r.retry_after_ms, 2000);
 });
 
-function subsequentFixture({ longSuccessor = false } = {}) {
+function subsequentFixture({ longSuccessor = false, reasoningV2Enabled = false } = {}) {
   return coverageFixture((name, args) => {
     if (name === 'get_law_text') return { result: { content: [{ type: 'text', text: '법령명: 합성법\n시행일: 20200101\n제1조(취득)\n합성 취득 요건과 부칙.' }] } };
     if (name === 'search_law') return { result: { content: [{ type: 'text', text: '검색 결과 (총 0건):' }] } };
@@ -120,8 +121,51 @@ function subsequentFixture({ longSuccessor = false } = {}) {
     if (name === 'get_decision_text') return { result: { content: [{ type: 'text', text: `기본 정보:\n사건번호: ${args.id === 'next' ? '2021두2' : args.id === 'extra' ? '2022두3' : '2020두1'}\n법원: 대법원\n선고일: 20210101\n전문:\n`
       + (longSuccessor && args.id === 'next' ? '합성 판결의 실제 적용 요건.\n'.repeat(7000) : '합성 판결 요건.') }] } };
     return providerResponse(name, args);
-  });
+  }, { reasoningV2Enabled });
 }
+
+test('IR-24: moving the same applied authority into each v2 field preserves identity, law-version and follow-up obligations', async t => {
+  const f = subsequentFixture({ reasoningV2Enabled: true }); t.after(() => f.service.close());
+  const s = await f.finish(await f.law(await f.start())), e = s.evidence.find(e => e.identity?.document_number === '2021두2');
+  const citation = { evidence_id: e.evidence_id, passage_id: e.passages[0].passage_id, quote: e.passages[0].text,
+    relation: 'direct', reason: '현재 사건 적용 근거' };
+  const obligation = r => r.coverage.obligations.filter(o => o.document_key === 'moleg:precedent:next');
+  for (const slot of ['test', 'application', 'conflict', 'block', 'exclusion']) {
+    const input = reasoningInput(s), a = input.analysis[0], cite = structuredClone(citation);
+    if (slot === 'test') a.legal_tests[0].citations.push(cite);
+    if (slot === 'application') a.claims[0].application[0].citations.push(cite);
+    if (slot === 'block') input.answer_blocks[0].citations.push(cite);
+    if (slot === 'conflict') a.authority_conflicts.push({ id: 'conflict', claim_ids: ['claim'], test_ids: ['acquired'],
+      left: { proposition: '현재 적용', citations: [cite] }, right: { proposition: '예외 가능성', citations: a.legal_tests[0].citations },
+      law_difference: '같은 규정', date_difference: '같은 시점', fact_difference: '확인한 사실 차이', disposition: 'prefer_left', reason: '직접 적용 검토', resolution_citations: [cite] });
+    if (slot === 'exclusion') {
+      a.legal_tests.push({ ...a.legal_tests[0], id: 'excluded', kind: 'exception' });
+      a.excluded_tests.push({ test_id: 'excluded', reason: '예외 배제 근거', citations: [cite] });
+    }
+    const authority = { evidence_id: e.evidence_id, kind: 'lower_court', disposition: 'applied',
+      statute_evidence_ids: [a.legal_basis.statutes[0].citation.evidence_id], law_version_relation: 'different_rule', reason: '의도적인 잘못된 적용',
+      subsequent_review: { status: 'addressed', reason: '아직 수행하지 않은 후속 조회', citations: [], search_attempt_ids: [] } };
+    a.legal_basis.authorities = [authority];
+    const result = await review({ ...f, state: s }, input);
+    for (const code of ['AUTHORITY_KIND_MISMATCH', 'AUTHORITY_LAW_CONTRADICTION', 'SUBSEQUENT_SEARCH_REQUIRED'])
+      assert.ok(result.findings.some(f => f.code === code), slot + ': ' + code);
+    assert.equal(obligation(result).length, 1, slot);
+    const live = await status({ ...f, state: s }); assert.equal(obligation(live).length, 1, slot);
+    // The same source used only to describe history does not create a fresh chain.
+    cite.relation = 'background'; authority.kind = 'supreme_court'; authority.disposition = 'distinguished'; authority.law_version_relation = 'same_rule';
+    const background = await review({ ...f, state: s }, input);
+    assert.equal(obligation(background).length, 0, slot);
+  }
+});
+
+test('IR-26: review packet provides every stored chunk of a long decision without duplicating or truncating its body', async t => {
+  const f = subsequentFixture({ longSuccessor: true, reasoningV2Enabled: true }); t.after(() => f.service.close());
+  const state = await f.finish(await f.law(await f.start())), wrapped = { ...f, state, input: reasoningInput(state) };
+  const chunks = state.evidence.filter(e => e.identity?.document_number === '2021두2'); assert.ok(chunks.length > 1);
+  await review(wrapped); const p = await prepare(wrapped), material = await readAll(wrapped, p);
+  for (const e of chunks) assert.deepEqual(material.find(u => u.id === 'evidence:' + e.evidence_id).data, e);
+  assert.equal(material.filter(u => u.id.startsWith('evidence:')).length, state.evidence.length);
+});
 
 async function splitSuccessor(t) {
   const f = subsequentFixture({ longSuccessor: true }); t.after(() => f.service.close());

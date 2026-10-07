@@ -11,7 +11,8 @@ const isStatute = (e: ResearchEvidence | undefined) => e?.tool === 'get_law_text
 
 /** Checks submitted links against this session's receipts. Authority and legal meaning remain model assertions. */
 export function inspectLegalApplicability(analysis: IssueAnalysisInput, issue: Plan['issues'][number], plan: Plan,
-  evidence: ResearchEvidence[], checkCitation: (citation: CitationInput, label: string) => boolean, block: Finding, gap: Finding, coverage?: Coverage) {
+  evidence: ResearchEvidence[], checkCitation: (citation: CitationInput, label: string) => boolean, block: Finding, gap: Finding, coverage?: Coverage,
+  answerCitations: CitationInput[] = []) {
   const basis = analysis.legal_basis;
   if (!basis) { gap('LEGAL_BASIS_REQUIRED', '적용 법령 버전·시점·판례/해석례 연결을 legal_basis로 제출하세요.'); return; }
   const byId = new Map(evidence.map(e => [e.evidence_id, e]));
@@ -47,7 +48,7 @@ export function inspectLegalApplicability(analysis: IssueAnalysisInput, issue: P
 
   const authorities = new Map(basis.authorities.map(a => [a.evidence_id, a]));
   if (authorities.size !== basis.authorities.length) block('DUPLICATE_AUTHORITY', '같은 자료는 한 번만 평가하세요.');
-  const cited = substantiveCitations(analysis);
+  const cited = [...substantiveCitations(analysis), ...answerCitations];
   // Timing, counter resolution and subsequent-treatment sources can change a
   // conclusion too. Their receipts must not bypass the same applicability map.
   const allCitations = [...cited, ...basis.authorities.flatMap(a => a.subsequent_review.citations)];

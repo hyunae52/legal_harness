@@ -2,7 +2,7 @@ import type { Plan, ReviewInput, ScopeAssessmentInput } from './researchContract
 import type { ResearchAttempt, ResearchEvidence } from './researchEvidence.js';
 import { researchCoverage, type Coverage } from './researchCoverage.js';
 
-type Finding = { code: string; severity: 'blocked' | 'needs_info'; issue_id?: string; detail: string };
+type Finding = { code: string; severity: 'blocked' | 'needs_info'; issue_id?: string; scope_track_id?: string; detail: string };
 type Track = NonNullable<Plan['scope_review']>['tracks'][number];
 
 const closedStatuses = new Set<ScopeAssessmentInput['status']>(['supported', 'excluded']);
@@ -78,7 +78,8 @@ export function inspectScopeCompletion(input: ReviewInput, plan: Plan, evidence:
     }
     if (!closed && !closedStatuses.has(assessment.status)) {
       reasons.push(`open_status:${assessment.status}`);
-      add('SCOPE_TRACK_OPEN', 'needs_info', `${track.id}: ${assessment.status}; ${assessment.reason}`, track.issue_id ?? undefined);
+      findings.push({ code: 'SCOPE_TRACK_OPEN', severity: 'needs_info', detail: `${track.id}: ${assessment.status}; ${assessment.reason}`,
+        scope_track_id: track.id, ...(track.issue_id ? { issue_id: track.issue_id } : {}) });
     }
     return { track_id: track.id, relation: track.relation, status: assessment.status, closed, reasons };
   }

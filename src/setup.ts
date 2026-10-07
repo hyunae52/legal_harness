@@ -1,6 +1,7 @@
 // Public setup artifacts require no access key; never interpolate environment credentials.
 import { correctionActionPaths, correctionInstructions } from './correctionMeta.js';
 import { researchActionPaths, researchInstructions } from './researchContracts.js';
+import { reasoningInstructions } from './reasoningContracts.js';
 export const serviceOrigin = 'https://law.taxlab.kr';
 export const mcpEndpoint = serviceOrigin + '/sse';
 export const streamableEndpoint = serviceOrigin + '/mcp';
@@ -30,6 +31,7 @@ https://law.taxlab.kr/setup.md 를 읽고, 이 PC에서 설정할 수 있는 앱
 
 export const gptInstructions = `TaxLab의 공식 법령 조회 도구로 한국 법령과 해석 자료를 찾아 답합니다.
 ${researchInstructions}
+${reasoningInstructions}
 조회 전에 사건의 기준일과 필요한 사실을 확인하세요. listTaxlabTools로 실제 도구 이름과 입력 스키마를 확인한 뒤 queryLegalSources를 호출하세요.
 법령 검색은 tool=search_law, query=법령명, arguments={"display":3}부터 시작하세요. 원문 조회는 반환된 식별자를 사용하고 추측하지 마세요.
 국세청 해석례 도구가 목록에 있으면 search_tax_interpretations → get_tax_document로 본문을 읽으세요. 문서번호를 알면 lookup_tax_document를 사용하세요. 법제처 일련번호와 국세청 ntstDcmId는 서로 다릅니다.
@@ -195,6 +197,8 @@ VS Code 예시: {"servers":{"taxlab-law":{"type":"http","url":"https://law.taxla
 ## 연구·인터뷰·PR
 
 단순 조회에는 인터뷰를 강요하지 않습니다. 사건 판단은 start_legal_research → research_legal_sources로 법령 조문 확인 → run_required_legal_research로 판례·해석·후속 조회 → review_legal_reasoning을 사용합니다.
+해석 검토 v2 도구가 표시되면 요건·예외·재예외와 사실의 적용표 및 전체 답변을 제출한 뒤, prepare_reasoning_review → get_legal_research(view:review_packet)의 모든 페이지 → submit_reasoning_review로 반론과 인용 의미를 다시 검토하세요. 지적을 고치면 같은 연구에서 새 자료 묶음으로 다시 검토하며 수락된 검토는 최대 3회입니다. 도구가 없는 서버에는 v2 완료를 주장하지 마세요.
+ready_for_answer는 같은 자료·같은 답변에 대한 절차 완료 상태이며 법률 정답이나 독립 검수 인증이 아닙니다. 자료나 답변이 바뀌면 이전 검토는 현재 결과로 사용할 수 없습니다.
 필수 조회는 한 번에 최대 4단계씩 진행합니다. AI는 반환된 coverage의 미완료 범위와 후보 원문을 확인하고 이어서 조사합니다. pending이면 같은 request_id로 상태만 확인하며 중복 조회하지 않습니다.
 정상 검색 0건은 검색을 하지 않았거나 실패한 상태와 다릅니다. 없는 반례를 만들 필요는 없지만, 정해진 검색 범위에서 찾지 못했다는 한계를 표시해야 합니다. 출처를 대법원으로 다시 적거나 원문을 자기 인용하는 것으로 판례·후속 검색을 대신할 수 없습니다.
 연구 및 PR 준비 응답에 포함된 client_session은 AI가 후속 상태 도구 인수로 전달합니다. 사용자가 입력하거나 발급받는 접속키가 아니며, 대화 간에 공유하거나 답변·검색어·PR 본문에 공개하지 마세요.

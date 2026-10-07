@@ -1,0 +1,148 @@
+{
+  "candidate_version": "2.5.0",
+  "base_commit": "66c942dfce2a4584ca78e060ef2c7e94476dbbb9",
+  "source_hashes": {
+    "src/app.ts": "5d420ba1d8289a0357d3c2ad8ad3e8559fc5dfe4785ef9727e8ae59a9a79fa60",
+    "src/auth.ts": "a93172b8685a8c0c85f4be286e82c3a83cb8840b85aa4bd5c101af8ef1a392f1",
+    "src/contracts.ts": "c3e6d8b76c605aab8ed8b2ed22da1ebd78da198b2dd77de826299d0a2039cd11",
+    "src/correctionGitHub.ts": "41f0815790fd2f6af3adbdb07e3e6a9812a542502976b4f57fc644fc18833733",
+    "src/correctionMeta.ts": "144b4dce78a4c4fd76fbfb0c46e004e340e4672ae950ab3a54428c2595223185",
+    "src/corrections.ts": "5c9c6e0719a4ef8002dbb8a5689482e0426ba8ccdd736c1b6b6f9b7b1cad9e2b",
+    "src/dates.ts": "fe109653adb750d7255530af70ec74c6661328071c170e36859adcd6563ebd64",
+    "src/errorDiagnostics.ts": "a38910e1e2c4ad6ab73102e00d5b2af1e4af6e2d4af6265f708548907a5fa587",
+    "src/evidence.ts": "d2fe5515f208bbedc354c9be08fe638290af0ffe2ed3952cb70d174971e05713",
+    "src/evolution.ts": "be86701149bb488e2dad3eee04b8496de0213943e242402e28b5a16f9e454e02",
+    "src/failures.ts": "c56632968d1282fe10bb8956389861a770056f5666276a7d48f0ac70a83813e7",
+    "src/gates.ts": "5e86a76b3d5a573be7c87595d18b646ef7859fd8630a9421e1b395b1971a7b0b",
+    "src/gitOps.ts": "9c5054cf588ea15442e0733c692b1f0f64c709aa641807d2a37fbb60e8a3efcb",
+    "src/index.ts": "a213a68c66692e4b9e3f2d62d0b1c1618aa4c50dc0f44f29118ab8f5dc19401e",
+    "src/inputDiagnostics.ts": "7618517fcda24f14e822a3cd74657cedc1818ff1ddea8ce9d748eb8db408d7be",
+    "src/koreanLawClient.ts": "1840b8e389778de6e1756ee910f13a6202a3c223c15a25c4304a1aec1f7b7718",
+    "src/landing.ts": "1cbaafab1c05a5988242b58473daa1893105a2bd841b48d6794b04aa6c653166",
+    "src/legalApplicability.ts": "0e1b2afa194e763ee028ff3e8621b92fbb67df1827dba6142ae58a5a6e3ece66",
+    "src/publicAccess.ts": "2db37af84b5c95d7ae669154fb352256097a087f60808cc36a9f4e276268bff7",
+    "src/reasoningApplication.ts": "331d33cf9209efba57dba0dcebf4795dcdf27395106f01be60634e41880056b8",
+    "src/reasoningConflicts.ts": "ca0d21ddcfa37ceef76154281cc6d28b9e61df1bbea76c160e99f0e4aefec8bd",
+    "src/reasoningContracts.ts": "a6d6f796d978ba60b6051cfecdb2e1f019d4b80fd4d3d3ca658dac1c309b7d7f",
+    "src/reasoningReviewPacket.ts": "6e237441b32eaf2fd7a401bb8b5f138580d4dc2f018df947266d42f50170e598",
+    "src/reasoningReviewState.ts": "35e94191dd31af9e778e47f3dca59c14de2578b01e12e8b7836b0b1bd8ab8fa0",
+    "src/releaseGate.ts": "81682cb373e8a6aefa4597f71196fe145c87556e8d7977603d52e5ee2bdc3b1c",
+    "src/research.ts": "9a36ef70e334749c4621fba0ca7c0acf3cc80ddc9fc2c54aa9f467bac9342f07",
+    "src/researchCitations.ts": "88bafee0822e88c1221c9c3e92c4e12de7743b532a536fca47a68c02b9ef324c",
+    "src/researchContracts.ts": "073693e2f077050187a2f25795ecd46876faf8de09c5476369d83827f3b9fdf3",
+    "src/researchCoverage.ts": "f826700678e428fd71847d9d4f71dfc744d89aa87a7368e545643effd4f8e4c6",
+    "src/researchEvidence.ts": "9a855c52292e2e81512e52e403b900fd52d77fb6444abcdce76daf24f0076d59",
+    "src/researchIdentity.ts": "6c9f4b937fd8749c0d9770fdf2b9093cfa2f4fe4d624dcf4b7e3eab0ebaa3c0b",
+    "src/researchInterview.ts": "fc622af762c6c99f41dc9e2f3b8fb1ee93a89bc22592c354b18e3f8b49a375a9",
+    "src/researchPresentation.ts": "ef2bc2bb91da4d559356a820a79bb303a1758bc1f792337709187855e2af792a",
+    "src/researchProfiles.ts": "bf152cdcdeeac33b0ae6459559068e7cb60457b22d42f5b4dc333557c56bfc2b",
+    "src/researchProgress.ts": "032af2b272df0bf8f0d3e3f8652e07f5d0344fe30eeccacff88ac26677e5b9eb",
+    "src/researchRecovery.ts": "f94f624a8bfab108cf3d63ff3e7ee5c6f2df79284caa81e07033c8511299cd8b",
+    "src/researchRequirements.ts": "3d45a71cb4c37b4f50626cc22617ee6645951af5b53daa1c3dbb3361699da574",
+    "src/researchReview.ts": "ef700369bbf0b5e3b643c2ab401332bdac869a855d036d01575c579455c8cd99",
+    "src/researchSearch.ts": "3727d3d6c8681a6264f8fb888c4f8246ea94b7279a1e36008ce084be25af4fb8",
+    "src/researchStorage.ts": "228f3be810e22c7c5393d591251ac3fe8d8cd46100182b2871527edbd37f2f67",
+    "src/resourceBudgets.ts": "acefc0ec699111b3ae7a4a446bc1d0ac0823407d6d3ee74405d3414887902bf1",
+    "src/scopeCompletion.ts": "ab1700ffb3b183a2ed840053be1edcfcbe02909d456f176b595e3d109d3b9aa9",
+    "src/setup.ts": "8d7d5bcc6e279872bf8b8827dcde13d6b02e1a998fd8c496524a1ddf86217e1b",
+    "src/sourceVerifier.ts": "e3242c8b028d615eea6e9c4ac21b11d17a41bccba2e88b4ceb7dd487654bc463",
+    "src/statelessHttp.ts": "a304eaed761e5e9ab984fd380e7eadd224503439124c1991c6d06aeb357eaf88",
+    "src/supremeJudge.ts": "d46e9a497ea1a4f296d7cf7fc1b7cbc9d0e6cabc4f666666d82a9995815f4a0a",
+    "src/taxLawClient.ts": "7213107193815ecf578cc1540ab7829269be2d9e3836edd0ee7ae7c705bc4c6a"
+  },
+  "checks": {
+    "review": {
+      "path": ".runtime/review-final-r2.log",
+      "sha256": "8ca3f748d2f06a6fe8d75210bb7b104e4027b34720192ab76ff9d17161a3f807"
+    },
+    "package": {
+      "path": ".runtime/package-final-r2.log",
+      "sha256": "1c4b041198cb6692e3425d8af104305c0ebb925c13663ef612bf7543f2d8ab8d"
+    },
+    "audit": {
+      "path": ".runtime/audit-r1.log",
+      "sha256": "43325fb7cb5a3cb421f515dbbe0809b6a0585b821ba95dcd864bc7dbd8dd5340"
+    },
+    "secrets_before_commit": {
+      "path": ".runtime/secrets-r1.log",
+      "sha256": "b39f45ec0c7a1177e1a804709e477191ee1af7ba452aa574b0d184ea62f73348"
+    }
+  },
+  "review": {
+    "tests": 387,
+    "pass": 387,
+    "fail": 0
+  },
+  "package": {
+    "checks": 9,
+    "pass": true,
+    "sha256": "280f262bf99483823499cbdfc27f7db2e6ab9f3a81a983f1929d23d23c3f5159"
+  },
+  "mutations": [
+    {
+      "mutation": "unknown-negation",
+      "path": "dist/reasoningApplication.js",
+      "test_pattern": "independent three-valued",
+      "original_sha256": "a189d1b91b85a1b74de63172c9f1202ecb85bf6e2ce13ccf710fe853c5729408",
+      "mutated_sha256": "4ac5b71998921c2c48c53b5c34d58219531921af35af5014efd89cd9c31b6679",
+      "exit_code": 1,
+      "killed": true,
+      "log_sha256": "d5bafdea7c791cda48bc8aa4dfc9089e5f67395578bb9a089059b4e651b2f9d0"
+    },
+    {
+      "mutation": "incomplete-material",
+      "path": "dist/research.js",
+      "test_pattern": "the entire exact answer",
+      "original_sha256": "427966780e9290aa9a7aa4868d3020726ed09253094eb7d0f51c48d3f491c6ba",
+      "mutated_sha256": "58589a6887169a3a9e804cea4e5c95b939feb19adebddd8ebe08d4d75dbbce15",
+      "exit_code": 1,
+      "killed": true,
+      "log_sha256": "6b9096408882d3fc7128d0887d24a9ea2467068b6ced1ee8d1bfab47e4b7768e"
+    },
+    {
+      "mutation": "old-cas-replay",
+      "path": "dist/research.js",
+      "test_pattern": "accepted old-CAS replay",
+      "original_sha256": "427966780e9290aa9a7aa4868d3020726ed09253094eb7d0f51c48d3f491c6ba",
+      "mutated_sha256": "a106a7ac576b7ff183a79cfb983d387089208c288097d052dbb92ea5e64b8645",
+      "exit_code": 1,
+      "killed": true,
+      "log_sha256": "a7e113dd3c753d8209e900a5b84750bb98e6bcbd3e3a3b5bf953a067033beba9",
+      "expected_failure": "RESEARCH_STATE_CHANGED on formerly valid receipt replay"
+    },
+    {
+      "mutation": "snapshot-staleness",
+      "path": "dist/reasoningReviewState.js",
+      "test_pattern": "same-revision necessity changes",
+      "original_sha256": "1bc818ba2f0574ab77bf5f5ec6c34e69d293d503dd42074823b627d5cc7a60ce",
+      "mutated_sha256": "73507baaf8c1bbc707252babf9efda65506ff319c65da06839fe36401059e3fa",
+      "exit_code": 1,
+      "killed": true,
+      "log_sha256": "58c5bc8b65bd4239bd86aac566345eff89674fdba35da1cd3ccd6e7429fcbd4a"
+    },
+    {
+      "mutation": "whole-answer",
+      "path": "dist/reasoningApplication.js",
+      "test_pattern": "the entire exact answer",
+      "original_sha256": "a189d1b91b85a1b74de63172c9f1202ecb85bf6e2ce13ccf710fe853c5729408",
+      "mutated_sha256": "b701ad0ec49361899711ac4bc12a12b5e4ed63f9aa205639de24ae80668206d7",
+      "exit_code": 1,
+      "killed": true,
+      "log_sha256": "6760c513d44fc22460f54249a17216e2897c11e4d94a97385b770156899fea85"
+    }
+  ],
+  "runtime_audit_vulnerabilities": 0,
+  "pro_review": {
+    "R1": "CODE UNVERIFIED; LH-IR-CODE-01 fixed with RED then GREEN evidence",
+    "R2": "SUBMITTED; awaiting complete response",
+    "url": "https://chatgpt.com/c/6abe1ed3-1050-83ee-99d7-d681aa03cf0b"
+  },
+  "quality": {
+    "state": "running",
+    "trials_planned": 72,
+    "cases": 12,
+    "repetitions_per_arm": 3,
+    "runtime_path": ".runtime/reasoning-quality-20261007-r1"
+  },
+  "deployment": "not deployed; rollout remains disabled by default"
+}

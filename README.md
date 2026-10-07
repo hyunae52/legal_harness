@@ -70,10 +70,10 @@ Cloudflare 터널이 loopback으로 연결되고 외부 직접 포트가 차단�
 ```sh
 npm run build
 npm pack --ignore-scripts
-bash scripts/install-mcp.sh /absolute/path/k-tax-agent-backend-2.4.0.tgz
+bash scripts/install-mcp.sh /absolute/path/k-tax-agent-backend-2.5.0.tgz
 ```
 
-Windows에서는 `scripts/install-mcp.ps1 -Package C:\Downloads\k-tax-agent-backend-2.4.0.tgz`를 실행합니다. 설치기는 키 없는 MCP 설정 예시를 출력하며 기존 클라이언트 설정을 덮어쓰지 않습니다. 설치된 bridge를 `node <bridge-path> --doctor`로 점검할 수 있습니다. 비공개 서버를 연결할 때만 선택적으로 기존 key 또는 `TAXLAB_AUTH_TOKEN`을 설정합니다.
+Windows에서는 `scripts/install-mcp.ps1 -Package C:\Downloads\k-tax-agent-backend-2.5.0.tgz`를 실행합니다. 설치기는 키 없는 MCP 설정 예시를 출력하며 기존 클라이언트 설정을 덮어쓰지 않습니다. 설치된 bridge를 `node <bridge-path> --doctor`로 점검할 수 있습니다. 비공개 서버를 연결할 때만 선택적으로 기존 key 또는 `TAXLAB_AUTH_TOKEN`을 설정합니다.
 
 ## 조회·검증 계약
 
@@ -82,6 +82,10 @@ Windows에서는 `scripts/install-mcp.ps1 -Package C:\Downloads\k-tax-agent-back
 사건에 적용되는 법령 버전과 부칙을 기준으로 판례·해석례를 함께 대조합니다. 사건 이후 나온 판결도 그 사건의 구법을 해석했다면 검토합니다. 연구 검토에는 `legal_basis`로 법령 원문·버전·날짜 역할·적용 이유와 후속 판례/해석 검토를 연결하고, 해결한 반론에는 원문 근거를 제출합니다. 누락된 연결은 확정 결론을 막는 공백으로 반환합니다. [근거 우선순위와 적용 기준](docs/EVIDENCE_PRIORITY.md)을 참고하세요. 이 검사는 제출된 연결의 구조 검사이며 법률적 정답 인증은 아닙니다.
 
 연결한 AI에게 이렇게 요청할 수 있습니다: **“TaxLab 연구 하네스로 쟁점을 나누고, 실제 원문과 반대 근거를 읽은 뒤, 주장별 인용·빠진 사실을 검사해줘. 다른 쟁점의 자료를 가져다 썼다면 연결 이유와 한계를 밝혀줘.”** 서버용 LLM API나 벡터 DB를 추가로 준비할 필요는 없습니다.
+
+2.5의 해석 검토 v2는 요건·예외·재예외를 사실에 연결하고, 전체 답변과 근거를 함께 모델에게 재검토시킵니다. `review_legal_reasoning(reasoning_contract_version:2)` → `prepare_reasoning_review` → `get_legal_research(view:review_packet)` 모든 페이지 → `submit_reasoning_review` 순서입니다. 지적을 고치면 작성자 대응을 남기고 새 자료 묶음으로 다시 검토합니다. 같은 연구에서 수락된 모델 검토는 최대 3회입니다. 자세한 계약·전환 절차는 [해석 검토 v2](docs/INTERPRETATION_REVIEW_V2.md)를 보세요.
+
+운영자가 `REASONING_REVIEW_V2_ENABLED=true`로 켠 서버에서 두 새 도구가 표시됩니다. 기본값은 꺼짐이며 `/health`의 `research_harness.reasoning_review.enabled`로 실제 상태를 확인합니다. `ready_for_answer`는 동일 자료와 답변에 대한 절차 완료를 뜻합니다. 셀프 검토·클라이언트가 보고한 검토를 독립 검수나 법률 정답 인증으로 바꾸지 않습니다.
 
 1. `start_legal_research`: 쟁점, 필수 사실, 사건 날짜의 역할·정밀도를 등록합니다. 사건 판단에서는 `scope_review`에 당사자, 법적 질문, 근거 사실, 요청 답변과의 차단 관계를 함께 기록합니다.
 2. `research_legal_sources`: 기존 법제처·국세청 도구를 읽고 서버가 보관한 `evidence_id`, 정확한 `passage_id/text`를 받습니다. 지지 자료와 반대 자료의 조회 목적을 구분합니다.

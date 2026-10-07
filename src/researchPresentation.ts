@@ -9,7 +9,8 @@ type RecordValue = Record<string, any>;
 export const researchResponseContract = 'research-response-v3-fidelity-20261002';
 const sizeLimit = 30_000; // Leave room for the authoritative public continuation handle and JSON envelope.
 const pick = (value: RecordValue, names: string[]) => Object.fromEntries(names.filter(k => k in value).map(k => [k, value[k]]));
-const identityFields = ['status', 'research_id', 'revision', 'state_version', 'expires_at', 'policy_version', 'pending', 'remaining_attempts', 'last_review', 'legal_verification'];
+const identityFields = ['status', 'research_id', 'revision', 'state_version', 'expires_at', 'policy_version', 'pending', 'remaining_attempts', 'last_review', 'legal_verification',
+  'reasoning_contract_version', 'reasoning_artifact', 'review_content_hash', 'ready_for_answer', 'structure_current', 'answer_binding'];
 function collections(state: RecordValue): Record<string, any[]> {
   return { attempts: state.attempts ?? [], obligations: state.coverage?.obligations ?? [], candidates: state.coverage?.candidates ?? [],
     worklist: state.review_worklist ?? [], manifests: state.manifests ?? [], jobs: state.jobs ?? [], requirements: state.requirements ?? [], requirement_history: state.requirement_history ?? [],
@@ -20,6 +21,8 @@ function collections(state: RecordValue): Record<string, any[]> {
 /** Public presentation only: the deterministic reviewer still consumes the entire server state. */
 export function presentResearch(name: ResearchTool, raw: unknown, state: RecordValue): RecordValue {
   const input = raw as RecordValue;
+  if (name === 'prepare_reasoning_review' || name === 'submit_reasoning_review' || name === 'get_legal_research' && input.view === 'review_packet')
+    return { ...state, response_contract: researchResponseContract };
   if (name === 'review_legal_reasoning') return { ...state, response_mode: 'review', response_contract: researchResponseContract,
     answer_writing_guide: answerWritingGuide, review_recovery: { ...reviewRecoveryGuide, review_performed: true, review_status: state.status } };
   const head = { ...pick(state, identityFields), response_contract: researchResponseContract };
@@ -56,6 +59,9 @@ export function presentResearch(name: ResearchTool, raw: unknown, state: RecordV
   const progress = state.retrieval_progress ?? {}, interview = state.interview ?? {};
   const available = state.recovery?.available_actions ?? [];
   const out: RecordValue = { ...head, response_mode: 'summary', recovery: state.recovery,
+    ...(state.model_review ? { model_review: { ...pick(state.model_review, ['status', 'result', 'reviewer', 'review_number', 'accepted_count', 'remaining']),
+      findings_count: state.model_review.findings?.length ?? 0, blocking_findings_count: state.model_review.findings?.filter((f: RecordValue) => f.blocking).length ?? 0,
+      details: { research_id: state.research_id, view: 'full' } } } : {}),
     ...(state.job ? { job: state.job } : {}), ...(state.replayed ? { replayed: true } : {}),
     retrieval_progress: { ...pick(progress, ['state', 'pending_search_count', 'source_gap_count']),
       missing_body_candidate_count: progress.missing_body_candidate_ids?.length ?? 0,
