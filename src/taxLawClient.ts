@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { KoreanLawClient, LawMcpError, type LawMcpOptions } from './koreanLawClient.js';
+import { documentParserFromEnv, parserPin } from './documentParser.js';
+import { attachmentTool, TaxAttachmentClient } from './taxAttachment.js';
 
 const pin = JSON.parse(readFileSync(new URL('../upstreams/korean-taxlaw-mcp.json', import.meta.url), 'utf8')) as { commit: string; version: string };
 // Input schemas and descriptions come from the pinned server's real tools/list.
@@ -107,14 +109,19 @@ export class TaxLawClient {
 }
 
 export class LegalRetrievalClient {
-  constructor(private readonly law: ManagedClient, private readonly taxlaw?: TaxLawClient) {}
+  constructor(private readonly law: ManagedClient, private readonly taxlaw?: TaxLawClient, private readonly attachments?: TaxAttachmentClient) {}
   get releaseVersion() { return this.law.releaseVersion; }
   get taxlawRelease() { return this.taxlaw ? { version: this.taxlaw.releaseVersion, commit: this.taxlaw.commit } : null; }
+  get documentParserRelease() { return this.attachments ? { name: parserPin.package, version: parserPin.version, commit: parserPin.commit } : null; }
   async listTools() {
     const base = await this.law.listTools();
-    return { ...base, tools: [...base.tools, ...(this.taxlaw ? taxLawTools : [])] };
+    return { ...base, tools: [...base.tools, ...(this.taxlaw ? taxLawTools : []), ...(this.attachments ? [attachmentTool] : [])] };
   }
   async callTool(name: string, args: Record<string, unknown>) {
+    if (name === attachmentTool.name) {
+      if (!this.attachments) throw new LawMcpError(503, 'DOCUMENT_PARSER_NOT_CONFIGURED', 'Enable the document parser and install the pinned tax-law provider first.');
+      return this.attachments.callTool(args);
+    }
     if (taxLawToolNames.has(name)) {
       if (!this.taxlaw) throw new LawMcpError(503, 'TAXLAW_NOT_CONFIGURED', 'Install the pinned tax-law provider first.');
       return this.taxlaw.callTool(name, args);
@@ -130,10 +137,12 @@ export class LegalRetrievalClient {
     }
     return this.law.callTool(name, args);
   }
-  async close() { await Promise.allSettled([this.law.close(), this.taxlaw?.close()]); }
+  async close() { await Promise.allSettled([this.attachments?.close(), this.law.close(), this.taxlaw?.close()]); }
 }
 
 export function createLegalRetrievalClient(law: ManagedClient, env: NodeJS.ProcessEnv = process.env) {
   const options = taxLawOptionsFromEnv(env);
-  return new LegalRetrievalClient(law, options ? new TaxLawClient(new KoreanLawClient(options)) : undefined);
+  const taxlaw = options ? new TaxLawClient(new KoreanLawClient(options)) : undefined;
+  const parser = documentParserFromEnv(env);
+  return new LegalRetrievalClient(law, taxlaw, taxlaw && parser ? new TaxAttachmentClient(taxlaw, parser) : undefined);
 }

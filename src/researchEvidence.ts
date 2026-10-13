@@ -5,6 +5,7 @@ export type BodyScope = 'body_returned' | 'discovery_only' | 'partial' | 'unknow
 export interface Passage {
   passage_id: string; unit_id: string; role: string; field: string; text: string; hash: string;
   body_scope: BodyScope; start: number; end: number;
+  source_url?: string; page_number?: number | null; source_sha256?: string; document_start?: number;
 }
 export interface EvidenceUnit {
   unit_id: string; role: string; date: string | null; source_access: 'available' | 'unavailable';
@@ -15,7 +16,7 @@ export interface AdaptedEvidence {
   statute_anchor?: { law_id: string; name: string; articles: string[]; version: string };
   upstream_name: string; upstream_version: string; upstream_commit: string | null; response_hash: string; body_scope: BodyScope;
   document_id: string; document_version: string; source_url: string | null;
-  source_kind: 'provider_formatted_text'; completeness: 'unverified'; units: EvidenceUnit[]; passages: Passage[];
+  source_kind: 'provider_formatted_text' | 'extracted_attachment'; completeness: 'unverified'; units: EvidenceUnit[]; passages: Passage[];
   outcome: 'completed' | 'empty' | 'failed'; error_code?: string;
 }
 export interface ResearchEvidence extends AdaptedEvidence {
@@ -41,7 +42,7 @@ const bodyFields = ['facts', 'question', 'answer', 'reasoning', 'conclusion', 'c
 const bodyTools = new Set(['lookup_tax_document', 'get_tax_document', 'lookup_local_tax_document']);
 const discoveryTools = new Set(['search_law', 'search_decisions', 'legal_research', 'search_tax_interpretations', 'search_tax_decisions',
   'search_tax_guidance', 'get_tax_guidance', 'search_tax_forms', 'search_taxlaw', 'tax_research', 'search_local_tax_interpretations', 'search_local_tax_decisions']);
-export const researchSourceTools = new Set([...bodyTools, ...discoveryTools, 'get_law_text', 'get_decision_text', 'check_legal_sources']);
+export const researchSourceTools = new Set([...bodyTools, ...discoveryTools, 'get_law_text', 'get_decision_text', 'check_legal_sources', 'read_tax_attachment']);
 const shortened = (v: string) => /나머지는 sourceUrl 원문에서 확인하세요|응답 크기 제한|자로 (?:잘렸|축약)|📋 요약 모드|이 섹션 .*축약/.test(v);
 const textBlocks = (result: RecordValue): string[] => Array.isArray(result.content)
   ? result.content.map(record).filter(c => c.type === 'text' && typeof c.text === 'string').map(c => c.text as string) : [];
@@ -109,7 +110,43 @@ export function adaptResearchEvidence(tool: string, args: RecordValue, response:
     adapted.outcome = 'failed'; adapted.error_code = 'MCP_TOOL_ERROR';
   } else {
     const data = record(result.structuredContent), doc = record(data.document), meta = record(record(result._meta)['legal-harness/taxlaw']);
-    if (bodyTools.has(tool) || (tool === 'get_decision_text' && args.domain === 'nts' && Object.keys(doc).length)) {
+    if (tool === 'read_tax_attachment') {
+      const extraction = record(doc.extraction), attachment = record(doc.attachment);
+      adapted.source_kind = 'extracted_attachment';
+      adapted.source_url = label(doc.sourceUrl) === 'unknown' ? null : label(doc.sourceUrl);
+      adapted.upstream_commit = /^[a-f0-9]{40}$/.test(String(extraction.commit)) ? String(extraction.commit) : null;
+      const hash = typeof attachment.sha256 === 'string' && /^[a-f0-9]{64}$/.test(attachment.sha256) ? attachment.sha256 : 'unknown';
+      const scope = extraction.body_scope === 'body_returned' && extraction.offset === 0
+        && extraction.end === extraction.total_length && Array.isArray(extraction.warnings) && !extraction.warnings.length
+        ? 'body_returned' : 'partial';
+      const u = unit('document', null, label(doc.id), hash, scope);
+      const invalid = () => {
+        adapted.outcome = 'failed'; adapted.error_code = 'ATTACHMENT_EVIDENCE_INVALID'; u.source_access = 'unavailable'; u.body_scope = 'unknown';
+        adapted.passages = [];
+      };
+      if (typeof doc.fullText !== 'string' || !doc.fullText.trim() || !Array.isArray(extraction.units)
+        || !extraction.units.length || hash === 'unknown' || typeof extraction.offset !== 'number'
+        || !Number.isInteger(extraction.offset) || extraction.offset < 0
+        || extraction.end !== extraction.offset + doc.fullText.length || extraction.offset_unit !== 'utf16_code_unit') invalid();
+      else {
+        let previousEnd = 0;
+        for (const raw of extraction.units) {
+          const location = record(raw), start = location.start, end = location.end, page = location.page_number;
+          if (typeof start !== 'number' || typeof end !== 'number' || !Number.isInteger(start) || !Number.isInteger(end)
+            || start < previousEnd || end <= start || end > doc.fullText.length || doc.fullText.slice(previousEnd, start).trim()
+            || (page !== null && (typeof page !== 'number' || !Number.isInteger(page) || page < 1))
+            || location.document_start !== extraction.offset + start || location.document_end !== extraction.offset + end
+            || location.source_url !== String(doc.sourceUrl) + (page === null ? '' : '#page=' + page)) { invalid(); break; }
+          previousEnd = end;
+          const before = adapted.passages.length;
+          add(u, 'document.fullText', doc.fullText, start, end);
+          if (adapted.passages.length > before) Object.assign(adapted.passages.at(-1)!, {
+            source_url: location.source_url, page_number: page, source_sha256: hash, document_start: location.document_start,
+          });
+        }
+        if (doc.fullText.slice(previousEnd).trim() || !adapted.passages.length) invalid();
+      }
+    } else if (bodyTools.has(tool) || (tool === 'get_decision_text' && args.domain === 'nts' && Object.keys(doc).length)) {
       const u = unit('document', null, label(doc.ntstDcmId ?? doc.documentNumber), label(doc.productionDate ?? doc.decisionDate), 'unknown');
       adapted.source_url = label(doc.sourceUrl) === 'unknown' ? null : label(doc.sourceUrl);
       if (doc.bodyUnavailable === true || meta.body_scope === 'unavailable') { adapted.outcome = 'failed'; adapted.error_code = 'DETAIL_NOT_AVAILABLE'; u.source_access = 'unavailable'; }

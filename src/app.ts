@@ -26,7 +26,10 @@ import { inputDiagnostics, ToolInputError } from './inputDiagnostics.js';
 import { reasoningInstructions, reasoningPolicy } from './reasoningContracts.js';
 
 interface Options {
-  law: Pick<KoreanLawClient, 'listTools' | 'callTool' | 'close' | 'releaseVersion'> & { taxlawRelease?: { version?: string; commit: string } | null };
+  law: Pick<KoreanLawClient, 'listTools' | 'callTool' | 'close' | 'releaseVersion'> & {
+    taxlawRelease?: { version?: string; commit: string } | null;
+    documentParserRelease?: { name: string; version: string; commit: string } | null;
+  };
   env?: NodeJS.ProcessEnv;
   authenticate?: (request: Request) => Promise<Actor>;
   gates?: GateEngine;
@@ -198,7 +201,7 @@ export function createApp(options: Options) {
       reasoning_review: { enabled: reasoningV2Enabled, contract: 2, policy: reasoningPolicy } },
     mcp_transport: { endpoint: '/mcp', mode: 'stateless', protocol: '2025-11-25', legacy_endpoint: '/sse',
       active: transportActive, max_transports: maxTransports, max_per_actor: maxTransportsPerActor, max_work: maxActive, budgets: budgets.limits },
-    mcp_release: options.law.releaseVersion ?? null, taxlaw_release: options.law.taxlawRelease ?? null, rules_version: gates.version, maintenance: options.failures ? 'intake_only' : 'unavailable', correction_pr: options.corrections ? 'available' : 'unavailable' }));
+    mcp_release: options.law.releaseVersion ?? null, taxlaw_release: options.law.taxlawRelease ?? null, document_parser: options.law.documentParserRelease ?? null, rules_version: gates.version, maintenance: options.failures ? 'intake_only' : 'unavailable', correction_pr: options.corrections ? 'available' : 'unavailable' }));
   app.get('/api/tools', protectedRoute(async (_req, res) => res.json({ status: 'success', data: await work(() => options.law.listTools()) })));
   app.post('/api/validate', protectedRoute(async (req, res) => res.json(await work(async () => validate(req.body)))));
   app.post('/api/sources/check', protectedRoute(async (req,res,actor) => {
@@ -246,7 +249,7 @@ export function createApp(options: Options) {
   function mcpServer(actor: Actor, guard: RequestGuard = operation => operation()) {
     const mcpWork = <T>(operation: () => Promise<T>) => guard(() => work(operation));
     const server = new Server({ name: 'taxlab-legal-harness', version: '2.5.0' }, { capabilities: { tools: {} },
-      instructions: researchInstructions + requirementInstructions + (reasoningV2Enabled ? reasoningInstructions : '') + ' 법령 도구 결과는 조회 자료입니다. 사건 기준일·연혁·부칙·후속 해석을 확인하세요. 국세청 해석례는 search_tax_interpretations → get_tax_document로 사실관계·질의·회신을 읽고, 문서번호를 알면 lookup_tax_document를 쓰세요(도구가 제공되는 경우). 법제처 일련번호와 국세청 ntstDcmId를 혼용하지 마세요. 기존 validate_legal_draft는 별도의 제한된 초안 검사입니다. ' + correctionInstructions });
+      instructions: researchInstructions + requirementInstructions + (reasoningV2Enabled ? reasoningInstructions : '') + ' 법령 도구 결과는 조회 자료입니다. 사건 기준일·연혁·부칙·후속 해석을 확인하세요. 국세청 해석례는 search_tax_interpretations → get_tax_document로 사실관계·질의·회신을 읽고, 문서번호를 알면 lookup_tax_document를 쓰세요(도구가 제공되는 경우). 감사원 심사청구는 search_tax_decisions(type=audit_appeal)에서 첨부를 찾고 read_tax_attachment로 본문을 읽으세요(도구가 제공되는 경우). next_arguments가 있으면 이어 읽고, 스캔본·파싱 실패·부분 결과는 전체 본문 확인으로 보고하지 마세요. 법제처 일련번호와 국세청 ntstDcmId를 혼용하지 마세요. 기존 validate_legal_draft는 별도의 제한된 초안 검사입니다. ' + correctionInstructions });
     const visible = actor.kind === 'anonymous' ? custom.filter(tool => tool.name !== 'submit_failure') : custom;
     server.setRequestHandler(ListToolsRequestSchema, () => mcpWork(async () => ({ tools: [...(await options.law.listTools()).tools.filter(t => !custom.some(c => c.name === t.name)).map(t => ({...t, description: (t.description ?? '') + '\n반박·새 근거로 기존 답변을 정정하면 prepare_correction_pr로 제안 내용을 준비하고 사용자에게 PR 생성을 물어보세요.'})), ...visible] })));
     server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {

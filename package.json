@@ -34,7 +34,8 @@
     "smoke:taxlaw": "node scripts/taxlaw-smoke.mjs --live",
     "start": "node dist/index.js",
     "dev": "tsc --watch",
-    "deploy": "pm2 start ecosystem.config.cjs"
+    "deploy": "pm2 start ecosystem.config.cjs",
+    "smoke:attachments": "npm run build && node scripts/document-parser-smoke.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.31.0",
@@ -43,8 +44,10 @@
     "dotenv": "^16.4.5",
     "express": "4.22.3",
     "js-yaml": "^5.4.2",
+    "kordoc": "4.21.31",
     "korean-law-mcp": "4.15.7",
     "nodemailer": "10.0.10",
+    "pdfjs-dist": "4.10.38",
     "zod": "^3.23.8",
     "zod-to-json-schema": "3.25.2"
   },

@@ -1,3 +1,5 @@
 * text=auto eol=lf
 # Immutable review evidence preserves the original source whitespace.
 docs/reviews/*PACKET* -whitespace
+# PDF xref offsets must survive Windows/Linux checkout byte-for-byte.
+tests/fixtures/documents/*.pdf binary

@@ -192,3 +192,7 @@ MCP `submit_failure` 또는 `POST /api/failures`는 공개 합성 사례 식별�
 `npm run review:package`는 실제 npm tarball을 빈 prefix에 설치하고 stdio→SSE→인증 API, doctor, 포함된 rules를 검사합니다. `node scripts/source-smoke.mjs --live`는 설정된 법제처 인증으로 공개 근로기준법과 사건일 연혁을 실제 조회합니다.
 
 법령 조회 A 버전은 GCE에서 공개 HTTPS로 운영하며, 기존 직접 공개 포트는 닫았습니다. 교정 자료 PR과 별개로 남은 검증 범위는 실제 Supabase 코드 개선 접수 migration/복원, 격리된 AI/patch executor, 독립 AI 검수 및 사람 승인 후 artifact 활성화/rollback 전체 흐름입니다.
+
+### 공식 첨부파일 파서
+
+taxlaw-mcp가 제공하는 감사원 심사청구 첨부는 별도 [kordoc](https://github.com/chrisryugj/kordoc) 프로세스로 읽습니다. `read_tax_attachment`는 PDF·HWP·HWPX 본문, 파일 해시, PDF 페이지 출처와 이어 읽기를 제공합니다. HWP 쪽 번호·스캔 이미지·추출 완전성은 미확인 상태로 남깁니다. 추가 API 키나 이용자 설치는 필요하지 않습니다. 원본 MIT 고지를 보존하며, [선정 근거·설치·검증·제한 사항](docs/DOCUMENT_PARSER.md)을 참고하세요.

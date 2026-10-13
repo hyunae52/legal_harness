@@ -24,6 +24,9 @@ assert.ok(packed.files.some(f=>f.path==='dist/landing.js'),'The public connectio
 for(const path of ['dist/setup.js','dist/downloads/taxlab-law.mcpb'])assert.ok(packed.files.some(f=>f.path===path),'Missing setup artifact: '+path);
 for(const path of ['dist/research.js','dist/researchContracts.js','dist/researchEvidence.js','dist/researchReview.js','dist/researchInterview.js','dist/statelessHttp.js','dist/resourceBudgets.js'])assert.ok(packed.files.some(f=>f.path===path),'Missing research module: '+path);
 assert.ok(packed.files.some(f=>f.path==='npm-shrinkwrap.json'),'Published dependencies must be pinned');
+for (const path of ['dist/documentParser.js','dist/documentParserWorker.js','dist/taxAttachment.js','upstreams/document-parser.json','upstreams/kordoc.LICENSE']) {
+  assert.ok(packed.files.some(f=>f.path===path),'Missing attachment provider artifact: '+path);
+}
 assert.deepEqual(JSON.parse(await readFile(join(root,'npm-shrinkwrap.json'),'utf8')),JSON.parse(await readFile(join(root,'package-lock.json'),'utf8')),'Published and development locks must agree');
 const artifact=join(work,packed.filename),prefix=join(work,'clean-prefix');
 await mkdir(prefix);await writeFile(join(prefix,'package.json'),'{"private":true}');
@@ -40,6 +43,14 @@ for(const name of Object.keys(shrinkwrap.packages[''].dependencies)){
   assert.equal(metadata?.version,shrinkwrap.packages['node_modules/'+name].version,`Installed version drift: ${name}`);versions[name]=metadata.version;
 }
 const {createApp}=await import(pathToFileURL(join(installed,'dist/app.js')).href);
+const {DocumentParser}=await import(pathToFileURL(join(installed,'dist/documentParser.js')).href);
+const parser=new DocumentParser();
+try {
+  for(const extension of ['pdf','hwp','hwpx']){
+    const parsed=await parser.parse(await readFile(join(root,'tests/fixtures/documents/standard.'+extension)));
+    assert.equal(parsed.format,extension);assert.ok(parsed.text.trim());
+  }
+} finally { await parser.close(); }
 const runtime=createApp({env:{TAXLAB_API_KEY:'package-fixture',TAXLAB_PUBLIC_ACCESS:'1',TAXLAB_PUBLIC_SESSION_SECRET:'package-public-signing-fixture-0123456789abcdef'},law:{releaseVersion:'fixture',listTools:async()=>({tools:[{name:'search_law',inputSchema:{type:'object'}}]}),callTool:async()=>({result:{content:[{type:'text',text:'package-fixture-result'}]}}),close:async()=>{}}});
 const server=createServer(runtime.app);await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const childEnv={...env,TAXLAB_SERVER_URL:`http://127.0.0.1:${server.address().port}`,TAXLAB_ALLOW_LOOPBACK_HTTP:'1'};
@@ -66,10 +77,10 @@ try {
   const legacy=await exec(process.execPath,[join(installed,'scripts/hermes-mcp-bridge.mjs'),'--doctor'],{cwd:prefix,env:{...childEnv,TAXLAB_API_KEY:'package-fixture'},windowsHide:true,timeout:10000});assert.equal(JSON.parse(legacy.stdout).status,'ok');
   const {stdout:imported}=await exec(process.execPath,['--input-type=module','-e',"const {GateEngine}=await import('k-tax-agent-backend/dist/gates.js');console.log(new GateEngine().rules.length)"],{cwd:prefix,env,windowsHide:true,timeout:10000});assert.equal(imported.trim(),'10');
   const digest=createHash('sha256').update(await readFile(artifact)).digest('hex');
-  await writeFile(join(work,'evidence.json'),JSON.stringify({status:'pass',artifact,sha256:digest,files:packed.files.length,checks:['clean_install','stdio_sse_public_call','public_doctor','legacy_authenticated_doctor','packaged_rules','published_lock','installed_dependency_versions','installed_research_app_and_bridge','stateless_http_public_session_contract'],versions,fixture_only:true},null,2));
+  await writeFile(join(work,'evidence.json'),JSON.stringify({status:'pass',artifact,sha256:digest,files:packed.files.length,checks:['clean_install','stdio_sse_public_call','public_doctor','legacy_authenticated_doctor','packaged_rules','published_lock','installed_dependency_versions','installed_research_app_and_bridge','stateless_http_public_session_contract','packaged_pdf_hwp_hwpx_worker'],versions,fixture_only:true},null,2));
   const head=(await exec('git',['rev-parse','HEAD'],{cwd:root,windowsHide:true})).stdout.trim();
   await writeFile(join(root,'.runtime/package-smoke-latest.json'),JSON.stringify({status:'pass',head,artifact,sha256:digest})+'\n');
-  console.log(JSON.stringify({status:'pass',artifact,sha256:digest,checks:9,versions}));
+  console.log(JSON.stringify({status:'pass',artifact,sha256:digest,checks:10,versions}));
 } finally {
   await client.close();await transport.close();await runtime.close();server.closeAllConnections();await new Promise(r=>server.close(r));
 }

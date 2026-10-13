@@ -40,6 +40,7 @@ export function identityFromDocument(doc: Record<string, unknown>, namespace: st
 export function observeIdentity(tool: string, args: Record<string, unknown>, result: Record<string, unknown>): SourceIdentity {
   const data = object(result.structuredContent), doc = object(data.document), text = contents(result);
   if (Object.keys(doc).length) {
+    if (tool === 'read_tax_attachment') return identityFromDocument(doc, 'nts', 'audit_attachment');
     const local = tool.includes('local_tax');
     const i = identityFromDocument(doc, local ? 'olta' : 'nts', local ? 'local_tax' : 'tax_document');
     if (i.document_id === 'unknown' && local) i.document_id = i.document_number ?? 'unknown';

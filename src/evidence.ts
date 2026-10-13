@@ -10,7 +10,7 @@ const fidelityInstructions = [
 ];
 const guideHead = { origin: 'legal-harness', version: 'source-reading-v1-20261002',
   source_completeness: 'unverified', semantic_verification: 'unverified' } as const;
-const bodyTools = new Set(['get_law_text', 'get_decision_text', 'get_tax_document', 'lookup_tax_document', 'lookup_local_tax_document']);
+const bodyTools = new Set(['get_law_text', 'get_decision_text', 'get_tax_document', 'lookup_tax_document', 'lookup_local_tax_document', 'read_tax_attachment']);
 const documentFields = ['summary', 'question', 'facts', 'answer', 'reasoning', 'conclusion', 'claimantView', 'agencyView', 'relatedLawsText', 'fullText'];
 const record = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
