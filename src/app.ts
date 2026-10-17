@@ -24,6 +24,7 @@ import { serveStateless, type RequestGuard } from './statelessHttp.js';
 import { PublicAccess, actorBudgetKey, assertNoPublicSession } from './publicAccess.js';
 import { inputDiagnostics, ToolInputError } from './inputDiagnostics.js';
 import { reasoningInstructions, reasoningPolicy } from './reasoningContracts.js';
+import { meterSourceClient, type UsageRecorder } from './usage.js';
 
 interface Options {
   law: Pick<KoreanLawClient, 'listTools' | 'callTool' | 'close' | 'releaseVersion'> & {
@@ -41,9 +42,11 @@ interface Options {
   sessionIdleMs?: number;
   researchOptions?: ResearchOptions;
   resourceOptions?: ResourceOptions;
+  usage?: UsageRecorder;
 }
 export function createApp(options: Options) {
   const env = options.env ?? process.env;
+  const law = meterSourceClient(options.law, options.usage);
   const publicAccess = new PublicAccess(env);
   const budgets = new ResourceBudgets(env, options.resourceOptions);
   const maxActive = positiveLimit(options.maxActive ?? env.TAXLAB_MAX_ACTIVE, 3);
@@ -53,7 +56,7 @@ export function createApp(options: Options) {
   const gates = options.gates ?? new GateEngine();
   const reasoningV2Enabled = options.researchOptions?.reasoningV2Enabled ?? env.REASONING_REVIEW_V2_ENABLED === 'true';
   const enabledResearchTools = researchTools.filter(t => reasoningV2Enabled || !['prepare_reasoning_review', 'submit_reasoning_review'].includes(t.name));
-  const research = new ResearchService(options.law, options.sources ? input => options.sources!.check(input) : undefined, {
+  const research = new ResearchService(law, options.sources ? input => options.sources!.check(input) : undefined, {
     ...options.researchOptions, reasoningV2Enabled, limits: { ...options.researchOptions?.limits, yieldMs: Math.max(1, Math.min(40_000, budgets.limits.responseMs - 1000)) },
     beforeSourceCall: actor => { budgets.consume(actor, 'lookup'); options.researchOptions?.beforeSourceCall?.(actor); },
   });
@@ -76,7 +79,7 @@ export function createApp(options: Options) {
       if (remaining) transportActors.set(key, remaining); else transportActors.delete(key);
     };
   };
-  const version = options.law.releaseVersion ?? 'unidentified';
+  const version = law.releaseVersion ?? 'unidentified';
   const work = async <T>(operation: () => Promise<T>): Promise<T> => {
     if (stopping) throw new ServiceError(503, 'SHUTTING_DOWN');
     if (active >= maxActive) throw new ServiceError(429, 'AT_CAPACITY');
@@ -101,6 +104,15 @@ export function createApp(options: Options) {
     res.status(r.status).json(r.body);
   };
   const protectedRoute = (handler: (req: Request, res: Response, actor: Actor) => Promise<unknown>) => (req: Request, res: Response) => {
+    // The Express route template is server-owned; never use user paths or identifiers as metric labels.
+    const route = String(req.route?.path ?? '');
+    if (options.usage && route.startsWith('/api/')) {
+      const name = route.slice(5).replace(/[^a-z0-9]+/g, '_');
+      options.usage.registerTools([name]);
+      const finish = options.usage.start('rest', name);
+      res.once('finish', () => finish(res.statusCode < 400));
+      res.once('close', () => finish(false));
+    }
     void (async () => {
       if (stopping) throw new ServiceError(503, 'SHUTTING_DOWN');
       if (authActive >= 20) throw new ServiceError(429, 'AT_CAPACITY');
@@ -120,7 +132,7 @@ export function createApp(options: Options) {
   const retrieve = async (actor: Actor, name: string, args: Record<string, unknown>, dates: Record<string, string> = {}, correctionQuery = String(args.query ?? '')) => {
     assertNoPublicSession(args);
     budgets.consume(actor, 'lookup');
-    const result = await options.law.callTool(name, args);
+    const result = await law.callTool(name, args);
     const evidence = { ...retrievalEnvelope(name, args, result.result, result.server?.version ?? version, dates),
       upstream_name: result.server?.name ?? 'unidentified' };
     const reference = rawStatuteNavigation(name, args, result.result);
@@ -195,14 +207,15 @@ export function createApp(options: Options) {
     });
   });
   app.get('/health', (_req, res) => res.json({ status: stopping ? 'stopping' : 'ok', version: '2.5.0', active_requests: active,
+    usage_accounting: options.usage?.status() ?? { enabled: false, healthy: false, failed_writes: 0 },
     access_mode: publicAccess.enabled ? 'public' : 'authenticated',
     active_authentications: authActive, active_dispatches: dispatchActive, release_commit: env.TAXLAB_RELEASE_COMMIT ?? null,
     research_harness: { policy: researchPolicyVersion, tools: enabledResearchTools.length, storage: 'ephemeral',
       reasoning_review: { enabled: reasoningV2Enabled, contract: 2, policy: reasoningPolicy } },
     mcp_transport: { endpoint: '/mcp', mode: 'stateless', protocol: '2025-11-25', legacy_endpoint: '/sse',
       active: transportActive, max_transports: maxTransports, max_per_actor: maxTransportsPerActor, max_work: maxActive, budgets: budgets.limits },
-    mcp_release: options.law.releaseVersion ?? null, taxlaw_release: options.law.taxlawRelease ?? null, document_parser: options.law.documentParserRelease ?? null, rules_version: gates.version, maintenance: options.failures ? 'intake_only' : 'unavailable', correction_pr: options.corrections ? 'available' : 'unavailable' }));
-  app.get('/api/tools', protectedRoute(async (_req, res) => res.json({ status: 'success', data: await work(() => options.law.listTools()) })));
+    mcp_release: law.releaseVersion ?? null, taxlaw_release: law.taxlawRelease ?? null, document_parser: law.documentParserRelease ?? null, rules_version: gates.version, maintenance: options.failures ? 'intake_only' : 'unavailable', correction_pr: options.corrections ? 'available' : 'unavailable' }));
+  app.get('/api/tools', protectedRoute(async (_req, res) => res.json({ status: 'success', data: await work(() => law.listTools()) })));
   app.post('/api/validate', protectedRoute(async (req, res) => res.json(await work(async () => validate(req.body)))));
   app.post('/api/sources/check', protectedRoute(async (req,res,actor) => {
     res.json(await work(()=>checkSources(actor, req.body)));
@@ -246,13 +259,15 @@ export function createApp(options: Options) {
       request_id: { type: 'string', format: 'uuid' }, case_id: { type: 'string' }, category: { type: 'string', enum: ['retrieval', 'validation', 'transport'] }, expected: { type: 'string', enum: ['needs_info', 'retrieval', 'reject_invalid_input'] }, actual: { type: 'string', enum: ['passed', 'empty', 'error', 'accepted_invalid_input'] }
     }, required: ['request_id', 'case_id', 'category', 'expected', 'actual'], additionalProperties: false } },
   ];
+  options.usage?.registerTools(custom.map(tool => tool.name));
   function mcpServer(actor: Actor, guard: RequestGuard = operation => operation()) {
     const mcpWork = <T>(operation: () => Promise<T>) => guard(() => work(operation));
     const server = new Server({ name: 'taxlab-legal-harness', version: '2.5.0' }, { capabilities: { tools: {} },
       instructions: researchInstructions + requirementInstructions + (reasoningV2Enabled ? reasoningInstructions : '') + ' 법령 도구 결과는 조회 자료입니다. 사건 기준일·연혁·부칙·후속 해석을 확인하세요. 국세청 해석례는 search_tax_interpretations → get_tax_document로 사실관계·질의·회신을 읽고, 문서번호를 알면 lookup_tax_document를 쓰세요(도구가 제공되는 경우). 감사원 심사청구는 search_tax_decisions(type=audit_appeal)에서 첨부를 찾고 read_tax_attachment로 본문을 읽으세요(도구가 제공되는 경우). next_arguments가 있으면 이어 읽고, 스캔본·파싱 실패·부분 결과는 전체 본문 확인으로 보고하지 마세요. 법제처 일련번호와 국세청 ntstDcmId를 혼용하지 마세요. 기존 validate_legal_draft는 별도의 제한된 초안 검사입니다. ' + correctionInstructions });
     const visible = actor.kind === 'anonymous' ? custom.filter(tool => tool.name !== 'submit_failure') : custom;
-    server.setRequestHandler(ListToolsRequestSchema, () => mcpWork(async () => ({ tools: [...(await options.law.listTools()).tools.filter(t => !custom.some(c => c.name === t.name)).map(t => ({...t, description: (t.description ?? '') + '\n반박·새 근거로 기존 답변을 정정하면 prepare_correction_pr로 제안 내용을 준비하고 사용자에게 PR 생성을 물어보세요.'})), ...visible] })));
-    server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+    server.setRequestHandler(ListToolsRequestSchema, () => mcpWork(async () => ({ tools: [...(await law.listTools()).tools.filter(t => !custom.some(c => c.name === t.name)).map(t => ({...t, description: (t.description ?? '') + '\n반박·새 근거로 기존 답변을 정정하면 prepare_correction_pr로 제안 내용을 준비하고 사용자에게 PR 생성을 물어보세요.'})), ...visible] })));
+    const measured = <T>(name: string, operation: () => Promise<T>) => options.usage ? options.usage.measure('mcp', name, operation) : operation();
+    server.setRequestHandler(CallToolRequestSchema, (request, extra) => measured(request.params.name, async () => {
       try {
         return await mcpWork(async () => {
           const { name, arguments: args = {} } = request.params;
@@ -291,7 +306,7 @@ export function createApp(options: Options) {
         if(error instanceof LawMcpError && error.code==='MCP_TOOL_ERROR' && error.result)return {...safeToolDiagnostic(error.result,env),_meta:{'legal-harness/error':error.code}};
         return { isError: true, content: [{ type: 'text', text: JSON.stringify(errorBody(error).body) }] };
       }
-    });
+    }));
     return server;
   }
   app.get('/sse', protectedRoute(async (_req, res, actor) => {
@@ -330,5 +345,5 @@ export function createApp(options: Options) {
     }
     return { status: 'drained', active_requests: active, active_authentications: authActive, active_dispatches: dispatchActive };
   };
-  return { app, drain, close: async () => { await drain(); clearInterval(timer); research.close(); await Promise.allSettled([...sessions.values()].map(s => s.server.close())); sessions.clear(); await Promise.allSettled([options.law.close(),options.sources?.close()]); } };
+  return { app, drain, close: async () => { await drain(); clearInterval(timer); research.close(); await Promise.allSettled([...sessions.values()].map(s => s.server.close())); sessions.clear(); await Promise.allSettled([law.close(),options.sources?.close()]); } };
 }

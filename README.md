@@ -187,6 +187,8 @@ MCP `submit_failure` 또는 `POST /api/failures`는 공개 합성 사례 식별�
 
 ## 검증
 
+MCP·REST 호출 수와 내부 조회 수는 운영자가 `TAXLAB_USAGE_DB`로 활성화하면 별도 SQLite에 한국시간 기준 일별·도구별로 누적합니다. 성공/실패와 응답시간만 400일간 보관하며 질문·응답 본문·사용자 식별자는 저장하지 않습니다. 통계는 공개 API 없이 운영자 명령으로 조회합니다. 설정과 조회 명령은 [사용량 통계](docs/MCP_USAGE.md)를 참고하세요.
+
 `npm run review`는 API/auth/session, 실제 stdio와 설치된 upstream 연결, PGlite SQL/RLS/transaction, 후보 활성화/rollback, 근거 상태, 독립 검수 경계 및 merge 검증을 확인합니다. 주입된 model/runner/GitHub port 테스트는 실서비스 AI 실행 증거가 아닙니다.
 
 `npm run review:package`는 실제 npm tarball을 빈 prefix에 설치하고 stdio→SSE→인증 API, doctor, 포함된 rules를 검사합니다. `node scripts/source-smoke.mjs --live`는 설정된 법제처 인증으로 공개 근로기준법과 사건일 연혁을 실제 조회합니다.
