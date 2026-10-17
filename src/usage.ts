@@ -88,10 +88,14 @@ export function configuredUsage(env: NodeJS.ProcessEnv) {
   try { return new UsageStore(env.TAXLAB_USAGE_DB); }
   catch {
     console.error('USAGE_STORAGE_UNAVAILABLE: legal retrieval remains enabled.');
+    let missed = 0;
+    const start = () => { let done = false; return (_success: boolean) => { if (!done) { done = true; missed++; } }; };
     return {
-      registerTools() {}, start() { return (_success: boolean) => {}; },
-      measure<T>(_scope: UsageScope, _tool: string, operation: () => Promise<T>) { return operation(); },
-      status() { return { enabled: true, healthy: false, failed_writes: 0 }; }, close() {},
+      registerTools() {}, start,
+      async measure<T>(_scope: UsageScope, _tool: string, operation: () => Promise<T>) {
+        const finish = start(); try { return await operation(); } finally { finish(false); }
+      },
+      status() { return { enabled: true, healthy: false, failed_writes: missed }; }, close() {},
     } satisfies UsageRecorder & { close(): void };
   }
 }

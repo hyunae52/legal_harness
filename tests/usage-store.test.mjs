@@ -97,6 +97,7 @@ test('U06: accounting is opt-in, bad storage is visible but does not stop the op
   const usage = configuredUsage({ TAXLAB_USAGE_DB: 'relative.sqlite' });
   assert.equal(usage.status().healthy, false);
   assert.equal(await usage.measure('mcp', 'search_law', async () => 'success'), 'success');
+  assert.equal(usage.status().failed_writes, 1, 'Startup failures must still show missed completions');
   usage.close();
 });
 
