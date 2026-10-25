@@ -12,6 +12,7 @@ export interface UsageRecorder {
 }
 const DAY = 86_400_000;
 export const usageDay = (time: number) => new Date(time + 9 * 3_600_000).toISOString().slice(0, 10);
+export const usageMorning = (time: number) => Math.floor((time + 3 * 3_600_000) / DAY) * DAY - 3 * 3_600_000;
 const sqlite = (): typeof import('node:sqlite') => createRequire(import.meta.url)('node:sqlite');
 const failed = (result: unknown): boolean => {
   if (!result || typeof result !== 'object') return false;
@@ -40,10 +41,17 @@ export class UsageStore implements UsageRecorder {
           calls INTEGER NOT NULL, successes INTEGER NOT NULL, failures INTEGER NOT NULL,
           duration_ms REAL NOT NULL, max_ms REAL NOT NULL,
           PRIMARY KEY(day,scope,tool)
+        ) STRICT;
+        CREATE TABLE IF NOT EXISTS usage_morning (
+          day TEXT NOT NULL, scope TEXT NOT NULL CHECK(scope IN ('mcp','rest','source')), tool TEXT NOT NULL,
+          calls INTEGER NOT NULL, successes INTEGER NOT NULL, failures INTEGER NOT NULL,
+          duration_ms REAL NOT NULL, max_ms REAL NOT NULL,
+          PRIMARY KEY(day,scope,tool)
         ) STRICT;`);
       this.db.prepare('INSERT OR IGNORE INTO usage_meta VALUES (?,?)').run('started_at', new Date(now()).toISOString());
       this.db.prepare('INSERT OR IGNORE INTO usage_meta VALUES (?,?)').run('schema_version', '1');
       if (this.db.prepare("SELECT value FROM usage_meta WHERE key='schema_version'").get()?.value !== '1') throw Error('USAGE_SCHEMA_VERSION');
+      this.db.prepare('INSERT OR IGNORE INTO usage_meta VALUES (?,?)').run('morning_started_at', new Date(now()).toISOString());
     } catch (error) { this.db.close(); throw error; }
   }
   registerTools(names: string[]) {
@@ -58,14 +66,22 @@ export class UsageStore implements UsageRecorder {
       completed = true;
       try {
         if (this.closed) throw Error('USAGE_CLOSED');
-        const today = usageDay(this.now()), duration = Math.min(DAY, Math.max(0, this.monotonic() - started));
+        const completedAt = this.now(), today = usageDay(completedAt), duration = Math.min(DAY, Math.max(0, this.monotonic() - started));
         if (!Number.isFinite(duration)) throw Error('USAGE_CLOCK_INVALID');
         this.db.exec('BEGIN IMMEDIATE');
         if (this.prunedDay !== today) this.db.prepare('DELETE FROM usage_daily WHERE day < ?').run(usageDay(this.now() - 399 * DAY));
+        if (this.prunedDay !== today) this.db.prepare('DELETE FROM usage_morning WHERE day < ?').run(usageDay(completedAt - 6 * 3_600_000 - 399 * DAY));
         this.db.prepare(`INSERT INTO usage_daily VALUES (?,?,?,1,?,?,?,?)
           ON CONFLICT(day,scope,tool) DO UPDATE SET calls=calls+1, successes=successes+excluded.successes,
           failures=failures+excluded.failures, duration_ms=duration_ms+excluded.duration_ms, max_ms=max(max_ms,excluded.max_ms)`)
           .run(day, scope, this.known.has(tool) ? tool : '_unknown', success ? 1 : 0, success ? 0 : 1, duration, duration);
+        // Completed operations belong to a closed 06:00–06:00 KST period. A call
+        // crossing the boundary is counted in the following report, never lost.
+        this.db.prepare(`INSERT INTO usage_morning VALUES (?,?,?,1,?,?,?,?)
+          ON CONFLICT(day,scope,tool) DO UPDATE SET calls=calls+1, successes=successes+excluded.successes,
+          failures=failures+excluded.failures, duration_ms=duration_ms+excluded.duration_ms, max_ms=max(max_ms,excluded.max_ms)`)
+          .run(usageDay(completedAt - 6 * 3_600_000), scope, this.known.has(tool) ? tool : '_unknown',
+            success ? 1 : 0, success ? 0 : 1, duration, duration);
         this.db.exec('COMMIT');
         this.prunedDay = today;
       } catch {
@@ -81,6 +97,29 @@ export class UsageStore implements UsageRecorder {
     catch (error) { finish(false); throw error; }
   }
   close() { if (!this.closed) { this.db.close(); this.closed = true; } }
+}
+
+/** Private operator report; historical midnight buckets cannot reconstruct this window. */
+export function readMorningUsage(path: string, now = Date.now()) {
+  if (!isAbsolute(path) || !Number.isFinite(now)) throw Error('USAGE_REPORT_INPUT');
+  const db = new (sqlite().DatabaseSync)(path, { readOnly: true });
+  try {
+    db.exec('PRAGMA busy_timeout=100; BEGIN');
+    const end = usageMorning(now), start = end - DAY;
+    const since = db.prepare("SELECT value FROM usage_meta WHERE key='morning_started_at'").get()?.value;
+    if (typeof since !== 'string' || !Number.isFinite(Date.parse(since))) throw Error('USAGE_MORNING_NOT_READY');
+    const rows = db.prepare('SELECT * FROM usage_morning WHERE day=? ORDER BY scope,calls DESC,tool')
+      .all(usageDay(start)).map(row => ({ scope: String(row.scope), tool: String(row.tool), calls: Number(row.calls),
+        successes: Number(row.successes), failures: Number(row.failures), duration_ms: Number(row.duration_ms), max_ms: Number(row.max_ms) }));
+    const totals: Record<string, { calls: number; successes: number; failures: number; duration_ms: number; max_ms: number }> = {};
+    for (const row of rows) {
+      const total = totals[row.scope] ??= { calls: 0, successes: 0, failures: 0, duration_ms: 0, max_ms: 0 };
+      for (const key of ['calls', 'successes', 'failures', 'duration_ms'] as const) total[key] += row[key];
+      total.max_ms = Math.max(total.max_ms, row.max_ms);
+    }
+    return { timezone: 'Asia/Seoul', basis: 'completed_at', from: new Date(start).toISOString(), to: new Date(end).toISOString(),
+      started_at: since, partial: Date.parse(since) > start, no_coverage: Date.parse(since) >= end, totals, tools: rows };
+  } finally { db.close(); }
 }
 
 export function configuredUsage(env: NodeJS.ProcessEnv) {

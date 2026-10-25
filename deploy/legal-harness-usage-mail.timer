@@ -1,0 +1,12 @@
+[Unit]
+Description=Send MCP usage at 06:00 Asia/Seoul
+
+[Timer]
+OnCalendar=*-*-* 06:00:00 Asia/Seoul
+AccuracySec=1s
+Persistent=true
+Unit=legal-harness-usage-mail.service
+
+[Install]
+WantedBy=timers.target
+

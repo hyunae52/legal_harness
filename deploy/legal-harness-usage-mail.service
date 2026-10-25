@@ -1,0 +1,18 @@
+[Unit]
+Description=Private daily MCP usage email
+After=network-online.target legal-harness-a.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=cta
+Group=cta
+UMask=0077
+ExecStart=/home/cta/.local/lib/legal-harness-usage-mail/run.sh
+TimeoutStartSec=75
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=/home/cta/.local/state/legal-harness-usage-mail /home/cta/.local/state/legal-harness-usage
+
