@@ -10,6 +10,15 @@ Past midnight aggregates cannot reconstruct these windows. The first report
 states its actual collection start and is marked partial. MCP, REST and internal
 source counts remain separate; counts are not unique visitors or external demand.
 
+Failure reasons are recorded per tool and fixed, allowlisted error code in the same
+transaction as the daily and morning totals. Reports include Korean categories and
+the ten most frequent tool/code pairs; remaining pairs are summarized without losing
+their failure count. Raw payloads, exception messages, arbitrary code strings and
+identities are never stored. Unknown errors remain explicitly unclassified. Historical
+failures without code rows appear as UNRECORDED; no causes are guessed or backfilled.
+The operator JSON report exposes all retained code counts and the collection start.
+Categories describe returned errors, not legal-answer correctness or server uptime.
+
 `dist/usageMail.js` previews by default. `--send` uses the closed morning window;
 `--test` sends a clearly labelled setup message. Required delivery arguments:
 `--database ABSOLUTE_PATH --config ABSOLUTE_PATH --state ABSOLUTE_PATH --to ADDRESS`.
