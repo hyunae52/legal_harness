@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "advisory": "GHSA-mrhx-c7xc-m3w5",
+  "reason": "The only remaining Zod 3 copies belong to kordoc's unused format-profile/MCP APIs. Both application consumers use only parse(Buffer). The reviewed ESM parse closures do not load Zod. This exception is invalid if these bytes, consumers, module resolutions or installed dependency paths change.",
+  "legacy_zod_version": "3.25.76",
+  "consumers": {
+    "src/documentParser.ts": "2f631aee4fb42c3c69d400e8ae7b3dd131c8477f5b53a0660e50fcf71c613d71",
+    "src/documentParserWorker.ts": "6e8da1782f1d267c74b2fc85c28fea40c3f54ff42ada77835ea687fc904ce831",
+    "node_modules/korean-law-mcp/build/lib/annex-file-parser.js": "d4b49d0b62b3adc24981c930d9cda72c3fe667c9b5d47ba8adb02e9c8a209c6f"
+  },
+  "packages": [
+    {
+      "path": "node_modules/kordoc",
+      "version": "4.21.31",
+      "files": {
+        "node_modules/kordoc/dist/index.js": "ad731d44ca43f4dbf6bf803b4209ed60fd2e08a7f736026fdaf03bff21265020",
+        "node_modules/kordoc/dist/chunk-OL425NYN.js": "1c2f626f4cd42df0258f90ea4053bda5bf0f1928f8211b1d7082ad170942a53c",
+        "node_modules/kordoc/dist/chunk-BN4EGE2J.js": "377cc13089ff4b4c45b04ef68d97346783ba0400e8753ea898873a36969bb38c",
+        "node_modules/kordoc/dist/chunk-3O6WTSFT.js": "6678b54afba24bff096dc306666e0626ae092eb7b850d6c6c2f971d5884853f0",
+        "node_modules/kordoc/dist/chunk-V4BH5SRQ.js": "342ca4cd342fa0aac66ba1506c2168785e460d5be64670bf4699ba68bccbc075",
+        "node_modules/kordoc/dist/page-range-M5SRB2WK.js": "3a307ee1a66c18cdc3894ede1cd387edddb26fe0933170c75f5f234cc5b120e1",
+        "node_modules/kordoc/dist/image-ocr-LM5T3ZIX.js": "ab1f50020db0417275f958111c197d1fdab59bde40d98e0a3269822522fe105c",
+        "node_modules/kordoc/dist/chunk-3LBHUFY3.js": "8812e16bf1fef4f60740f21dd217f2d657056f8ca0da1b1c2c7cd27777a0633c",
+        "node_modules/kordoc/dist/chunk-DC6CTQTK.js": "7048565478e9344381a2af34947908da4cae0f64d0161157a6741524dbc76438",
+        "node_modules/kordoc/dist/chunk-BUCJCB34.js": "77bae326f3d5fc2e74be3d7d0e8751d65de546028d0c65a524cc34f8f87fc6a6",
+        "node_modules/kordoc/dist/chunk-GPO4DIMO.js": "c63ecf357bd9b65758c6f1ed024922870049a347343d45f5f1f7feb1dcde279e",
+        "node_modules/kordoc/dist/parser-QJPU4FMW.js": "721eaf7bad8f423d211f9237cf6ce63c1d334950312c07d618d3fa425ffe5530",
+        "node_modules/kordoc/dist/formula-CQ6AJ43Y.js": "74b360a96fa57ca6bfbb9b643f60279bfcf659ea8d22e182a25cb979fcb92f7a",
+        "node_modules/kordoc/dist/pdf-ocr-2FE3TRVC.js": "fe373dcdb0b2d4babb229d27ae6d9f6e0c678cecf7ca6dcb3389c35f25045b22",
+        "node_modules/kordoc/package.json": "e858c29a61faef072a5ed4761fcfa871dd8416320002e8d9b8a07d5fc3a2f250"
+      },
+      "externals": [
+        "@huggingface/transformers",
+        "@hyzyla/pdfium",
+        "@xmldom/xmldom",
+        "cfb",
+        "child_process",
+        "crypto",
+        "fs",
+        "fs/promises",
+        "jszip",
+        "markdown-it",
+        "module",
+        "onnxruntime-node",
+        "os",
+        "path",
+        "pdfjs-dist/legacy/build/pdf.mjs",
+        "pdfjs-dist/legacy/build/pdf.worker.mjs",
+        "puppeteer-core",
+        "sharp",
+        "stream",
+        "stream/promises",
+        "url",
+        "zlib"
+      ]
+    },
+    {
+      "path": "node_modules/korean-law-mcp/node_modules/kordoc",
+      "version": "4.18.2",
+      "files": {
+        "node_modules/korean-law-mcp/node_modules/kordoc/dist/index.js": "48c08a0416fea4c96410df3546872aad091930eb8dd69b57b65f24c7cfa99e5a",
+        "node_modules/korean-law-mcp/node_modules/kordoc/dist/chunk-O2DI4GHD.js": "f083e3b33ba9b8e1c5f8e46c6d099c1d00862dbd4ea805719e6120122f85f44e",
+        "node_modules/korean-law-mcp/node_modules/kordoc/dist/chunk-B2E6C2LH.js": "1a0adb807e0959dc3d785d641c1a238426923777103e680073786e30cee51d36",
+        "node_modules/korean-law-mcp/node_modules/kordoc/dist/chunk-N5DQFA7L.js": "fbc520502908b1e8c3965ff2207b4519230baf25657c16a08019959940d41947",
+        "node_modules/korean-law-mcp/node_modules/kordoc/dist/chunk-V4BH5SRQ.js": "342ca4cd342fa0aac66ba1506c2168785e460d5be64670bf4699ba68bccbc075",
+        "node_modules/korean-law-mcp/node_modules/kordoc/dist/page-range-M5SRB2WK.js": "3a307ee1a66c18cdc3894ede1cd387edddb26fe0933170c75f5f234cc5b120e1",
+        "node_modules/korean-law-mcp/node_modules/kordoc/dist/image-ocr-IMYXOHHV.js": "783779c569a2a6a33898acfe140912edd8a4939cd5c2f60d9324b6c178e9f2be",
+        "node_modules/korean-law-mcp/node_modules/kordoc/dist/chunk-BL7KRE6X.js": "da1b645d6a2673b01c5d152c70b1e7459fedc4e61cf141c122e960bd3f28341c",
+        "node_modules/korean-law-mcp/node_modules/kordoc/dist/chunk-L64QRUMK.js": "2555186120a0ef243270bb487745ba54f21ed71e76d36df8c32000abb7906112",
+        "node_modules/korean-law-mcp/node_modules/kordoc/dist/chunk-LSOD2A6N.js": "5cebb511f779483fa2e6a612de7b2f5a216e21712315f65adc1c036f5c17acd0",
+        "node_modules/korean-law-mcp/node_modules/kordoc/dist/parser-M3T2EWUN.js": "fbbcb9a7cc8db0a02b66f9a1b912aafaafbdd87a703383fd4e4c6090ac4f78f9",
+        "node_modules/korean-law-mcp/node_modules/kordoc/dist/formula-AQZODKZF.js": "8aedbd095b78d83c4278814baddb0629b9f0e63ad990090a5fbb847739b1979c",
+        "node_modules/korean-law-mcp/node_modules/kordoc/dist/pdf-ocr-4S2OAHUX.js": "3e9f9f5041d7ad24d2c63f37040c12a0ad0befcd7f170f502e19008a88110269",
+        "node_modules/korean-law-mcp/node_modules/kordoc/package.json": "7ef1ab0007880f8920946086d694ae90f9c975cc68ebe9ecaecbb54d840bcd53"
+      },
+      "externals": [
+        "@huggingface/transformers",
+        "@hyzyla/pdfium",
+        "@xmldom/xmldom",
+        "cfb",
+        "child_process",
+        "crypto",
+        "fs",
+        "fs/promises",
+        "jszip",
+        "markdown-it",
+        "module",
+        "onnxruntime-node",
+        "os",
+        "path",
+        "pdfjs-dist/legacy/build/pdf.mjs",
+        "pdfjs-dist/legacy/build/pdf.worker.mjs",
+        "puppeteer-core",
+        "sharp",
+        "stream",
+        "stream/promises",
+        "url",
+        "zlib"
+      ]
+    }
+  ]
+}
