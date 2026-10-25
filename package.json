@@ -25,7 +25,7 @@
     "build": "tsc && node scripts/build-desktop-bundle.mjs",
     "review": "npm run build && node --test --test-concurrency=1 tests/*.test.mjs",
     "review:package": "npm run build && node scripts/package-smoke.mjs",
-    "audit:runtime": "npm audit --omit=dev --omit=optional --audit-level=moderate",
+    "audit:runtime": "node scripts/audit-runtime.mjs",
     "security:secrets": "node scripts/scan-git-secrets.mjs",
     "release:verify": "node scripts/verify-release.mjs",
     "smoke:mcp": "npm run build && node scripts/mcp-smoke.mjs",
@@ -38,17 +38,17 @@
     "smoke:attachments": "npm run build && node scripts/document-parser-smoke.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.31.0",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@octokit/rest": "^21.0.1",
     "@supabase/supabase-js": "^2.45.0",
     "dotenv": "^16.4.5",
     "express": "4.22.3",
     "js-yaml": "^5.4.2",
     "kordoc": "4.21.31",
-    "korean-law-mcp": "4.15.9",
-    "nodemailer": "10.0.10",
+    "korean-law-mcp": "4.15.12",
+    "nodemailer": "10.2.1",
     "pdfjs-dist": "4.10.38",
-    "zod": "^3.23.8",
+    "zod": "4.6.7",
     "zod-to-json-schema": "3.25.2"
   },
   "devDependencies": {

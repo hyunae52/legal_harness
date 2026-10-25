@@ -39,7 +39,7 @@ export interface EvolutionPorts {
 /** Single bounded attempt. Durable claiming, retry counters and CAS are owned
  * by the coordinator. These ports are not exposed through any MCP tool. */
 export async function runEvolutionAttempt(job:EvolutionJob,ports:EvolutionPorts,feedback?:string) {
-  z.object({id:z.string().uuid(),attempt_id:z.string().uuid(),base_sha:z.string().regex(/^[a-f0-9]{40}$/),execution_hash:z.string().regex(/^[a-f0-9]{64}$/),fixture_hash:z.string().regex(/^[a-f0-9]{64}$/),attempt:z.number().int(),payload:FailureSchema.omit({request_id:true})}).strict().parse(job);
+  z.object({id:z.guid(),attempt_id:z.guid(),base_sha:z.string().regex(/^[a-f0-9]{40}$/),execution_hash:z.string().regex(/^[a-f0-9]{64}$/),fixture_hash:z.string().regex(/^[a-f0-9]{64}$/),attempt:z.number().int(),payload:FailureSchema.omit({request_id:true})}).strict().parse(job);
   if(job.attempt<1||job.attempt>3) throw new ServiceError(409,'ATTEMPT_LIMIT');
   await ports.assertLease();
   if(!ports.reviewer) {await ports.record('waiting_dependency',{reason:'reviewer_unavailable'});return {state:'waiting_dependency'};}

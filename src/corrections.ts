@@ -6,7 +6,7 @@ import { type Actor, digest, ServiceError } from './contracts.js';
 import { publicSessionPattern } from './publicAccess.js';
 
 const text = (max: number) => z.string().trim().min(1).max(max);
-const uuid = z.string().uuid().transform(value => value.toLowerCase());
+const uuid = z.guid().transform(value => value.toLowerCase());
 const sourceUrl = z.string().url().max(1000).refine(value => {
   const u = new URL(value);
   return u.protocol === 'https:' && !u.username && !u.password && !u.hash &&

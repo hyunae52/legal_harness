@@ -9,7 +9,7 @@ export interface GitOpsOptions {token:string;owner:string;repo:string;baseBranch
 export async function publishReviewedPatch(options:GitOpsOptions,job:EvolutionJob,input:Patch,reviewedHead:string,client?:Octokit) {
   if(!options.token) throw new ServiceError(503,'GITHUB_NOT_CONFIGURED');
   const patch=validatePublicPatch(input);
-  z.string().uuid().parse(job.id);z.string().regex(/^[a-f0-9]{40}$/).parse(job.base_sha);
+  z.guid().parse(job.id);z.string().regex(/^[a-f0-9]{40}$/).parse(job.base_sha);
   z.string().regex(/^[a-f0-9]{40}$/).parse(reviewedHead);
   const octokit=client??new Octokit({auth:options.token,request:{timeout:15000}});
   const {owner,repo}=options,branch=`auto-fix-${job.id}`;

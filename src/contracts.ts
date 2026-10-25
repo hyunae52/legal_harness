@@ -17,7 +17,7 @@ const DraftText=z.string().min(1).max(50_000).refine(s=>s.trim().length>0,'Draft
 export const DraftSchema = z.object({
   draft_answer: DraftText,
   query: z.string().max(20_000).optional(),
-  facts: z.record(z.unknown()).default({}),
+  facts: z.record(z.string(), z.unknown()).default({}),
   gate_assessments: z.array(z.object({ gate_id: z.string().regex(/^QG-[A-Z]+-\d+$/),
     applicability: z.enum(['applicable', 'not_applicable', 'unknown']), reason: z.string().trim().min(1).max(2000),
     fact_ids: z.array(z.string().min(1).max(160)).max(40) }).strict()).max(100).default([]),
@@ -32,14 +32,14 @@ export type DraftInput = z.input<typeof DraftSchema>;
 export const AnalyzeSchema = z.object({
   query: z.string().trim().min(1).max(20_000),
   tool: z.string().regex(/^[a-zA-Z0-9_-]+$/).max(128).default('legal_research'),
-  arguments: z.record(z.unknown()).default({}),
+  arguments: z.record(z.string(), z.unknown()).default({}),
   draft_answer: DraftText.optional(),
-  facts: z.record(z.unknown()).default({}),
+  facts: z.record(z.string(), z.unknown()).default({}),
   skip_gates: z.array(z.string().max(80)).max(10).default([]),
   bypass_reason: z.string().trim().min(1).max(500).optional(),
   mode: z.enum(['strict', 'warn']).default('strict'),
   force: z.boolean().default(false),
-  event_dates: z.record(CalendarDay).default({}),
+  event_dates: z.record(z.string(), CalendarDay).default({}),
 }).strict();
 
 export interface Actor { id: string; kind: 'auth_user' | 'api_client' | 'anonymous'; userId?: string; rateLimitId?: string }

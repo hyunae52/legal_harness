@@ -36,7 +36,7 @@ export class TaxAttachmentClient {
       // Resolve identity from a fresh, official row. Do not accept caller-supplied URLs, paths or issuer metadata.
       const result = await this.source.callTool('search_tax_decisions', { type: 'audit_appeal', query: request.document_number, limit: 10 });
       controller.signal.throwIfAborted();
-      const found = z.object({ total: z.number().int().nonnegative(), items: z.array(z.record(z.unknown())).max(10) }).parse(result.result.structuredContent);
+      const found = z.object({ total: z.number().int().nonnegative(), items: z.array(z.record(z.string(), z.unknown())).max(10) }).parse(result.result.structuredContent);
       if (result.result.isError) throw parserError(502, 'ATTACHMENT_LOOKUP_FAILED');
       if (found.total > found.items.length) throw parserError(409, 'ATTACHMENT_LOOKUP_INCOMPLETE');
       const matches = found.items.filter(r => typeof r.documentNumber === 'string' && numberKey(r.documentNumber) === request.document_number);

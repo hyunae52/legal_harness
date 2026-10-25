@@ -7,7 +7,7 @@ export const ReviewVerdictSchema = z.object({
   required_changes:z.array(z.string().min(1).max(1000)).max(20),
 }).strict();
 export const ReviewContextSchema = z.object({
-  job_id:z.string().uuid(),attempt_id:z.string().uuid(),
+  job_id:z.guid(),attempt_id:z.guid(),
   base_sha:z.string().regex(/^[a-f0-9]{40}$/),head_sha:z.string().regex(/^[a-f0-9]{40}$/),
   execution_hash:z.string().regex(/^[a-f0-9]{64}$/),fixture_hash:z.string().regex(/^[a-f0-9]{64}$/),
   diff:z.string().min(1).max(80000),test_evidence:z.string().min(1).max(20000),

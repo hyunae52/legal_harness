@@ -174,7 +174,7 @@ export function createApp(options: Options) {
     const scoped = publicAccess.scope(actor, input, name === 'prepare');
     assertNoPublicSession(scoped.input);
     const service = corrections();
-    const result = name === 'status' ? await service.status(scoped.actor, z.object({ proposal_id: z.string().uuid() }).strict().parse(scoped.input).proposal_id)
+    const result = name === 'status' ? await service.status(scoped.actor, z.object({ proposal_id: z.guid() }).strict().parse(scoped.input).proposal_id)
       : await service[name](scoped.actor, scoped.input);
     const retry = scoped.token && 'retry' in result && result.retry
       ? { retry: { ...result.retry, arguments: { ...result.retry.arguments, client_session: scoped.token } } } : {};
@@ -235,7 +235,7 @@ export function createApp(options: Options) {
   app.post('/api/failures', protectedRoute(async (req, res, actor) => res.status(202).json(await work(() => submit(actor, req.body)))));
   app.get('/api/failures/:id', protectedRoute(async (req, res, actor) => {
     if (actor.kind === 'anonymous') throw new ServiceError(410, 'USE_CORRECTION_PR');
-    const id = z.string().uuid().parse(req.params.id);
+    const id = z.guid().parse(req.params.id);
     if (!options.failures) throw new ServiceError(503, 'MAINTENANCE_UNAVAILABLE');
     res.json(await work(() => options.failures!.status(actor, id)));
   }));
@@ -324,7 +324,7 @@ export function createApp(options: Options) {
   }));
   app.all('/mcp', protectedRoute(async (_req, res) => res.set('Allow', 'POST').status(405).json({ code: 'METHOD_NOT_ALLOWED' })));
   app.post('/messages', protectedRoute(async (req, res, actor) => {
-    const id = z.string().uuid().parse(req.query.sessionId);
+    const id = z.guid().parse(req.query.sessionId);
     const session = sessions.get(id);
     if (!session || session.actor.id !== actor.id) throw new ServiceError(404, 'SESSION_NOT_FOUND');
     if (Date.now() - session.touched > (options.sessionIdleMs ?? 900_000)) { await session.server.close(); sessions.delete(id); throw new ServiceError(404, 'SESSION_EXPIRED'); }
