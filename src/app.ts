@@ -13,6 +13,7 @@ import { createAuthenticator } from './auth.js';
 import { retrievalEnvelope, rawStatuteNavigation, sourceReadingGuide } from './evidence.js';
 import { type SourceVerifier } from './sourceVerifier.js';
 import { safeToolDiagnostic } from './errorDiagnostics.js';
+import { withUsageFailureCode } from './usageFailures.js';
 import { landingHeaders, landingHtml } from './landing.js';
 import { actionsSchema, antigravityConfig, desktopConfig, geminiConfig, gptInstructions, setupMarkdown } from './setup.js';
 import { type CorrectionService } from './corrections.js';
@@ -303,7 +304,7 @@ export function createApp(options: Options) {
             _meta: { ...data.result._meta, 'legal-harness/evidence': data.evidence, 'legal-harness/corrections': data.corrections } };
         });
       } catch (error) {
-        if(error instanceof LawMcpError && error.code==='MCP_TOOL_ERROR' && error.result)return {...safeToolDiagnostic(error.result,env),_meta:{'legal-harness/error':error.code}};
+        if(error instanceof LawMcpError && error.code==='MCP_TOOL_ERROR' && error.result)return withUsageFailureCode({...safeToolDiagnostic(error.result,env),_meta:{'legal-harness/error':error.code}}, error);
         return { isError: true, content: [{ type: 'text', text: JSON.stringify(errorBody(error).body) }] };
       }
     }));
