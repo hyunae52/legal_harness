@@ -15,7 +15,7 @@
         "express": "4.22.3",
         "js-yaml": "^5.4.2",
         "kordoc": "4.21.31",
-        "korean-law-mcp": "4.15.12",
+        "korean-law-mcp": "4.15.13",
         "nodemailer": "10.2.1",
         "pdfjs-dist": "4.10.38",
         "zod": "4.6.7",
@@ -4291,9 +4291,9 @@
       }
     },
     "node_modules/korean-law-mcp": {
-      "version": "4.15.12",
-      "resolved": "https://registry.npmjs.org/korean-law-mcp/-/korean-law-mcp-4.15.12.tgz",
-      "integrity": "sha512-YcWNQvNmZ6a2DIeQ9NpKUqJbC9/rfPspM/Npa0JQQKBkamxWEAOhgUU34A2VWEiqKM1i9UVfn60DZdzC/hZcLQ==",
+      "version": "4.15.13",
+      "resolved": "https://registry.npmjs.org/korean-law-mcp/-/korean-law-mcp-4.15.13.tgz",
+      "integrity": "sha512-7mwNWzHNRgn93ICRHV9uUyMA9gUL2qjzw9VWEVXV3lETd5hrZSUkQnhXf0q5FSX94Dgg6yhOiqF6J8KYRQw4oQ==",
       "license": "MIT",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.27.1",

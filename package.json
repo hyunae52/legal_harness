@@ -45,7 +45,7 @@
     "express": "4.22.3",
     "js-yaml": "^5.4.2",
     "kordoc": "4.21.31",
-    "korean-law-mcp": "4.15.12",
+    "korean-law-mcp": "4.15.13",
     "nodemailer": "10.2.1",
     "pdfjs-dist": "4.10.38",
     "zod": "4.6.7",
