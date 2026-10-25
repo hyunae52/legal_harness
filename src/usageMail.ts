@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { parse } from 'dotenv';
 import { readMorningUsage } from './usage.js';
+import { failureLabels, type FailureCategory } from './usageFailures.js';
 
 type Report = ReturnType<typeof readMorningUsage>;
 const email = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
@@ -20,20 +21,36 @@ export function prepareUsageMail(report: Report, test = false) {
     `[MCP 사용량${report.partial ? ' · 부분 집계' : ''}] ${koreanTime(report.to).slice(0, 10)} · ${mcp.calls.toLocaleString('ko-KR')}회`;
   const notice = report.no_coverage ? '새로운 06시 기준 집계가 시작되었습니다. 첫 정규 메일은 다음 오전 6시에 발송됩니다.' :
     report.partial ? `부분 집계: ${koreanTime(report.started_at)}부터 기록했습니다. 이전 시간대는 포함되지 않습니다.` : '';
+  const reasons = report.failure_reasons.filter(row => row.scope === 'mcp');
+  const categories = new Map<FailureCategory, number>();
+  const details = new Map<string, number>();
+  for (const row of reasons) {
+    categories.set(row.category, (categories.get(row.category) ?? 0) + row.failures);
+    const key = `${row.tool} / ${row.code}`;
+    details.set(key, (details.get(key) ?? 0) + row.failures);
+  }
+  const ordered = [...categories].sort((a, b) => b[1] - a[1]);
+  const detailRows = [...details].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const failures = ['실패 원인 (MCP)', ...(ordered.length ? ordered.map(([category, count]) => `- ${failureLabels[category]}: ${count}건`) : ['- 실패 없음']),
+    ...(detailRows.length ? ['', '도구별 오류 코드 (상위 10개)', ...detailRows.slice(0, 10).map(([key, count]) => `- ${key}: ${count}건`),
+      ...(detailRows.length > 10 ? [`- 나머지 ${detailRows.length - 10}개 조합: ${detailRows.slice(10).reduce((sum, row) => sum + row[1], 0)}건`] : [])] : []),
+    ...(categories.has('unrecorded') ? ['원인 기록 없음: 분류 도입 전 등 오류 코드가 남아 있지 않은 호출입니다. 원인을 추정하지 않습니다.'] : []),
+    ...(categories.has('unknown') ? ['원인 미분류: 오류 코드를 확인하지 못했거나 아직 분류하지 않은 오류입니다.'] : [])];
+  const detailLines = ['많이 사용한 도구', ...(top.length ? top.map(row => `- ${row.tool}: ${row.calls}회 (실패 ${row.failures}회)`) : ['- 호출 없음']), '',
+    ...failures, '', `REST 호출: ${report.totals.rest?.calls ?? 0}회 (별도)`,
+    `내부 자료 조회: ${report.totals.source?.calls ?? 0}회 (MCP 합계에 더하지 않음)`];
+  const notes = ['처리가 끝난 시각을 기준으로 집계합니다. 오전 6시를 넘겨 완료된 호출은 다음 메일에 포함됩니다.',
+    '자체 작업과 외부 이용을 구분하지 않으며, 호출 수는 방문자 수가 아닙니다.',
+    '실패에는 입력 오류·조회 결과 오류도 포함됩니다. 질문·응답 본문과 사용자 식별자는 수집하지 않습니다.'];
   const lines = [test ? '매일 오전 6시 사용량 메일이 설정되었습니다.' : 'TaxLab MCP 하루 사용량', '',
     `집계 구간: ${period}`, ...(notice ? [notice] : []), '',
     ...(report.no_coverage ? [] : [`MCP 도구 호출: ${mcp.calls.toLocaleString('ko-KR')}회`,
       `성공 ${mcp.successes}회 / 실패 ${mcp.failures}회 / 성공률 ${rate}`,
       `평균 응답: ${mcp.calls ? (mcp.duration_ms / mcp.calls / 1000).toFixed(2) : '0.00'}초`, '',
-      '많이 사용한 도구', ...(top.length ? top.map(row => `- ${row.tool}: ${row.calls}회 (실패 ${row.failures}회)`) : ['- 호출 없음']), '',
-      `REST 호출: ${report.totals.rest?.calls ?? 0}회 (별도)`,
-      `내부 자료 조회: ${report.totals.source?.calls ?? 0}회 (MCP 합계에 더하지 않음)`]), '',
-    '처리가 끝난 시각을 기준으로 집계합니다. 오전 6시를 넘겨 완료된 호출은 다음 메일에 포함됩니다.',
-    '자체 작업과 외부 이용을 구분하지 않으며, 호출 수는 방문자 수가 아닙니다.',
-    '실패에는 입력 오류·조회 결과 오류도 포함됩니다. 질문·응답 본문과 사용자 식별자는 수집하지 않습니다.'];
+      ...detailLines]), '', ...notes];
   const table = report.no_coverage ? '' : `<table style="width:100%;border-collapse:collapse"><tr style="background:#edf2f7"><th align="left">MCP 호출</th><th>성공</th><th>실패</th><th>성공률</th></tr><tr><td style="padding:14px;font-size:24px;font-weight:bold">${mcp.calls.toLocaleString('ko-KR')}</td><td align="center">${mcp.successes}</td><td align="center">${mcp.failures}</td><td align="center">${rate}</td></tr></table>`;
   const average = report.no_coverage ? '' : `<p>평균 응답 ${mcp.calls ? (mcp.duration_ms / mcp.calls / 1000).toFixed(2) : '0.00'}초</p>`;
-  const html = `<div style="max-width:640px;margin:auto;font-family:Arial,sans-serif;line-height:1.6;color:#172b4d"><h2>${test ? '매일 오전 6시 사용량 메일' : 'TaxLab MCP 하루 사용량'}</h2><p>${escape(period)}</p>${notice ? `<p style="background:#fff3cd;padding:12px">${escape(notice)}</p>` : ''}${table}${average}<pre style="white-space:pre-wrap;font-family:inherit;font-size:14px">${escape(lines.slice(report.no_coverage ? 5 : 8).join('\n'))}</pre></div>`;
+  const html = `<div style="max-width:640px;margin:auto;font-family:Arial,sans-serif;line-height:1.6;color:#172b4d"><h2>${test ? '매일 오전 6시 사용량 메일' : 'TaxLab MCP 하루 사용량'}</h2><p>${escape(period)}</p>${notice ? `<p style="background:#fff3cd;padding:12px">${escape(notice)}</p>` : ''}${table}${average}<pre style="white-space:pre-wrap;font-family:inherit;font-size:14px">${escape([...(report.no_coverage ? [] : detailLines), '', ...notes].join('\n'))}</pre></div>`;
   return { subject, text: lines.join('\n'), html };
 }
 

@@ -19,6 +19,8 @@ try {
       failures: item.failures, mean_ms: Math.round(item.mean_ms), max_ms: Math.round(item.max_ms) })));
     console.table(report.daily_tools.map(row => ({ day: row.day, scope: row.scope, tool: row.tool, calls: row.calls,
       failures: row.failures, mean_ms: Math.round(row.mean_ms) })));
+    console.log(`오류 코드 집계 시작: ${report.failure_started_at ?? '기록 없음'}. UNRECORDED는 원인 기록 없음입니다.`);
+    console.table(report.failure_reasons);
   }
 } catch {
   console.error('USAGE_REPORT_UNAVAILABLE: use --database ABSOLUTE_PATH --days 1..400 [--json]; the database must already exist.');

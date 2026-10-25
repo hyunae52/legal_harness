@@ -2,11 +2,12 @@ import { chmodSync, mkdirSync } from 'node:fs';
 import { dirname, isAbsolute } from 'node:path';
 import { createRequire } from 'node:module';
 import type { DatabaseSync } from 'node:sqlite';
+import { failureCategory, normalizeFailureCode, usageFailureCode } from './usageFailures.js';
 
 export type UsageScope = 'mcp' | 'rest' | 'source';
 export interface UsageRecorder {
   registerTools(names: string[]): void;
-  start(scope: UsageScope, tool: string): (success: boolean) => void;
+  start(scope: UsageScope, tool: string): (success: boolean, code?: string) => void;
   measure<T>(scope: UsageScope, tool: string, operation: () => Promise<T>): Promise<T>;
   status(): { enabled: boolean; healthy: boolean; failed_writes: number };
 }
@@ -20,7 +21,7 @@ const failed = (result: unknown): boolean => {
   return value.isError === true || value.result?.isError === true;
 };
 
-/** Aggregate-only storage. No arguments, response bodies, identities or error messages enter this API. */
+/** Aggregate-only storage. No arguments, response bodies, identities or error messages are stored. */
 export class UsageStore implements UsageRecorder {
   private readonly db: DatabaseSync;
   private readonly known = new Set<string>();
@@ -47,11 +48,18 @@ export class UsageStore implements UsageRecorder {
           calls INTEGER NOT NULL, successes INTEGER NOT NULL, failures INTEGER NOT NULL,
           duration_ms REAL NOT NULL, max_ms REAL NOT NULL,
           PRIMARY KEY(day,scope,tool)
+        ) STRICT;
+        CREATE TABLE IF NOT EXISTS usage_failures (
+          bucket TEXT NOT NULL CHECK(bucket IN ('daily','morning')), day TEXT NOT NULL,
+          scope TEXT NOT NULL CHECK(scope IN ('mcp','rest','source')), tool TEXT NOT NULL,
+          code TEXT NOT NULL, failures INTEGER NOT NULL CHECK(failures > 0),
+          PRIMARY KEY(bucket,day,scope,tool,code)
         ) STRICT;`);
       this.db.prepare('INSERT OR IGNORE INTO usage_meta VALUES (?,?)').run('started_at', new Date(now()).toISOString());
       this.db.prepare('INSERT OR IGNORE INTO usage_meta VALUES (?,?)').run('schema_version', '1');
       if (this.db.prepare("SELECT value FROM usage_meta WHERE key='schema_version'").get()?.value !== '1') throw Error('USAGE_SCHEMA_VERSION');
       this.db.prepare('INSERT OR IGNORE INTO usage_meta VALUES (?,?)').run('morning_started_at', new Date(now()).toISOString());
+      this.db.prepare('INSERT OR IGNORE INTO usage_meta VALUES (?,?)').run('failure_started_at', new Date(now()).toISOString());
     } catch (error) { this.db.close(); throw error; }
   }
   registerTools(names: string[]) {
@@ -61,7 +69,7 @@ export class UsageStore implements UsageRecorder {
   start(scope: UsageScope, tool: string) {
     const day = usageDay(this.now()), started = this.monotonic();
     let completed = false;
-    return (success: boolean) => {
+    return (success: boolean, code?: string) => {
       if (completed) return;
       completed = true;
       try {
@@ -71,6 +79,10 @@ export class UsageStore implements UsageRecorder {
         this.db.exec('BEGIN IMMEDIATE');
         if (this.prunedDay !== today) this.db.prepare('DELETE FROM usage_daily WHERE day < ?').run(usageDay(this.now() - 399 * DAY));
         if (this.prunedDay !== today) this.db.prepare('DELETE FROM usage_morning WHERE day < ?').run(usageDay(completedAt - 6 * 3_600_000 - 399 * DAY));
+        if (this.prunedDay !== today) {
+          this.db.prepare("DELETE FROM usage_failures WHERE bucket='daily' AND day < ?").run(usageDay(completedAt - 399 * DAY));
+          this.db.prepare("DELETE FROM usage_failures WHERE bucket='morning' AND day < ?").run(usageDay(completedAt - 6 * 3_600_000 - 399 * DAY));
+        }
         this.db.prepare(`INSERT INTO usage_daily VALUES (?,?,?,1,?,?,?,?)
           ON CONFLICT(day,scope,tool) DO UPDATE SET calls=calls+1, successes=successes+excluded.successes,
           failures=failures+excluded.failures, duration_ms=duration_ms+excluded.duration_ms, max_ms=max(max_ms,excluded.max_ms)`)
@@ -82,6 +94,11 @@ export class UsageStore implements UsageRecorder {
           failures=failures+excluded.failures, duration_ms=duration_ms+excluded.duration_ms, max_ms=max(max_ms,excluded.max_ms)`)
           .run(usageDay(completedAt - 6 * 3_600_000), scope, this.known.has(tool) ? tool : '_unknown',
             success ? 1 : 0, success ? 0 : 1, duration, duration);
+        if (!success) for (const [bucket, failureDay] of [['daily', day], ['morning', usageDay(completedAt - 6 * 3_600_000)]]) {
+          this.db.prepare(`INSERT INTO usage_failures VALUES (?,?,?,?,?,1)
+            ON CONFLICT(bucket,day,scope,tool,code) DO UPDATE SET failures=failures+1`)
+            .run(bucket, failureDay, scope, this.known.has(tool) ? tool : '_unknown', normalizeFailureCode(code));
+        }
         this.db.exec('COMMIT');
         this.prunedDay = today;
       } catch {
@@ -93,10 +110,29 @@ export class UsageStore implements UsageRecorder {
   }
   async measure<T>(scope: UsageScope, tool: string, operation: () => Promise<T>): Promise<T> {
     const finish = this.start(scope, tool);
-    try { const result = await operation(); finish(!failed(result)); return result; }
-    catch (error) { finish(false); throw error; }
+    try { const result = await operation(); const error = failed(result); finish(!error, error ? usageFailureCode(result) : undefined); return result; }
+    catch (error) { finish(false, usageFailureCode(error, true)); throw error; }
   }
   close() { if (!this.closed) { this.db.close(); this.closed = true; } }
+}
+
+type FailureTotal = { day: string; scope: string; tool: string; failures: number };
+function readFailures(db: DatabaseSync, bucket: 'daily' | 'morning', from: string, to: string, totals: FailureTotal[]) {
+  const present = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='usage_failures'").get();
+  const rows = present ? db.prepare('SELECT day,scope,tool,code,failures FROM usage_failures WHERE bucket=? AND day BETWEEN ? AND ? ORDER BY day,scope,tool,code')
+    .all(bucket, from, to).map(row => ({ day: String(row.day), scope: String(row.scope), tool: String(row.tool),
+      code: normalizeFailureCode(row.code), category: failureCategory(normalizeFailureCode(row.code)), failures: Number(row.failures) })) : [];
+  const key = (row: FailureTotal) => `${row.day}\0${row.scope}\0${row.tool}`;
+  const recorded = new Map<string, number>();
+  for (const row of rows) recorded.set(key(row), (recorded.get(key(row)) ?? 0) + row.failures);
+  for (const row of totals) {
+    const missing = row.failures - (recorded.get(key(row)) ?? 0);
+    if (missing < 0) throw Error('USAGE_FAILURE_TOTAL_MISMATCH');
+    // Old binaries and historical windows have no reason records. Do not guess.
+    if (missing) rows.push({ day: row.day, scope: row.scope, tool: row.tool, code: 'UNRECORDED', category: 'unrecorded', failures: missing });
+  }
+  return { failure_started_at: db.prepare("SELECT value FROM usage_meta WHERE key='failure_started_at'").get()?.value ?? null,
+    failure_reasons: rows };
 }
 
 /** Private operator report; historical midnight buckets cannot reconstruct this window. */
@@ -118,7 +154,8 @@ export function readMorningUsage(path: string, now = Date.now()) {
       total.max_ms = Math.max(total.max_ms, row.max_ms);
     }
     return { timezone: 'Asia/Seoul', basis: 'completed_at', from: new Date(start).toISOString(), to: new Date(end).toISOString(),
-      started_at: since, partial: Date.parse(since) > start, no_coverage: Date.parse(since) >= end, totals, tools: rows };
+      started_at: since, partial: Date.parse(since) > start, no_coverage: Date.parse(since) >= end, totals, tools: rows,
+      ...readFailures(db, 'morning', usageDay(start), usageDay(start), rows.map(row => ({ ...row, day: usageDay(start) }))) };
   } finally { db.close(); }
 }
 
@@ -175,6 +212,7 @@ export function readUsage(path: string, days = 7, now = Date.now()) {
     const startedAt = db.prepare("SELECT value FROM usage_meta WHERE key='started_at'").get()?.value;
     return { timezone: 'Asia/Seoul', from, to, started_at: startedAt, retention_days: 400,
       totals: Object.fromEntries([...totals].map(([scope, v]) => [scope, { ...v, mean_ms: v.calls ? v.duration_ms / v.calls : 0 }])),
-      daily_tools: rows.map(row => ({ ...row, mean_ms: Number(row.duration_ms) / Number(row.calls) })) };
+      daily_tools: rows.map(row => ({ ...row, mean_ms: Number(row.duration_ms) / Number(row.calls) })),
+      ...readFailures(db, 'daily', from, to, rows) };
   } finally { db.close(); }
 }
