@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { zodToJsonSchema, ignoreOverride } from 'zod-to-json-schema';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { calendarValue } from './dates.js';
 import { publicSessionInstructions, publicSessionSchema } from './publicAccess.js';
@@ -11,7 +10,7 @@ export { Citation } from './reasoningContracts.js';
 const text = (max: number) => z.string().min(1).max(max).refine(v => v.trim().length > 0, 'Must not be blank');
 const id = z.string().regex(/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/);
 const ids = (max: number) => z.array(id).max(max);
-const uuid = z.string().uuid();
+const uuid = z.guid();
 const unique = (values: string[]) => new Set(values).size === values.length;
 const Fact = z.object({ id, description: text(1000), status: z.enum(['provided', 'unknown', 'assumed']),
   value: text(2000).nullable(), source: z.string().max(1000) }).strict().refine(v =>
@@ -117,7 +116,7 @@ export const researchSchemas = {
   reuse_legal_evidence: z.object({ ...ref, issue_ids: ids(12).min(1), evidence_ids: z.array(uuid).min(1).max(32) }).strict(),
   answer_legal_question: z.object({ ...ref, expected_state_version: z.number().int().positive(), question_id: text(128), answer: Answer }).strict(),
   research_legal_sources: z.object({ ...ref, issue_ids: ids(12).min(1), purpose: z.enum(['support', 'counter', 'context', 'timing']),
-    tool: text(128), arguments: z.record(z.unknown()), request_id: uuid.optional(), candidate_id: text(80).optional() }).strict(),
+    tool: text(128), arguments: z.record(z.string(), z.unknown()), request_id: uuid.optional(), candidate_id: text(80).optional() }).strict(),
   run_required_legal_research: z.object({ ...ref, request_id: uuid, max_steps: z.number().int().min(1).max(4).default(4) }).strict(),
   review_legal_reasoning: z.object({ ...ref, expected_state_version: z.number().int().positive(), draft_answer: text(50_000),
     analysis: z.array(IssueAnalysis).min(1).max(12), scope_assessments: z.array(ScopeAssessment).max(64).optional(),
@@ -170,8 +169,13 @@ const descriptions: Record<ResearchTool, string> = {
 };
 const reviewInputGuide = ' 입력 작성: analysis는 등록된 모든 issue_id마다 한 항목입니다. claims 항목의 필드는 {id,text,requirements:string[],fact_ids:string[],citations:Citation[]}이며 text는 draft_answer에 그대로 들어가는 문장입니다. Citation={evidence_id,passage_id,quote,relation,reason,bridge_reason?}; quote는 해당 passage에서 복사하세요. counter_evidence={evidence_id,disposition:resolved|unresolved|irrelevant,reason,resolution_citations?:Citation[]}입니다. timing={status,reason,date_roles:string[]}, exceptions={status,reason}입니다. legal_basis.statutes 항목={citation:Citation,version,date_roles:string[],reason}; temporal_application={status,reason,citations:Citation[]}; authorities 항목={evidence_id,kind,disposition:applied|analogy|distinguished|unresolved,statute_evidence_ids:string[],law_version_relation,reason,subsequent_review:{status,reason,citations:Citation[],search_attempt_ids:string[]}}입니다. subsequent_review.search_attempt_ids에는 해당 원문의 coverage.obligations 중 purpose=subsequent에 속한 실제 attempt_ids를 모두 기록하세요. 추가 검색이 필요하면 검수 반환 coverage와 get_legal_research의 현재 상태를 확인해 계속 조사하세요. unknowns에는 요청 범위의 결론을 막는 실제 미확인점만 적으세요. 법률 정답 인증이 아니라는 일반 한계나 요청 밖 조건은 최종 답변의 범위 설명에 남기세요.';
 export const researchTools: Tool[] = (Object.keys(researchSchemas) as ResearchTool[]).map(name => {
-  const { $schema: _schema, ...inputSchema } = zodToJsonSchema(researchSchemas[name], { $refStrategy: 'none',
-    override: def => def === TestExpressionSchema._def ? { $ref: '#/$defs/TestExpression4' } : ignoreOverride });
+  const { $schema: _schema, ...inputSchema } = z.toJSONSchema(researchSchemas[name], { io: 'input',
+    override: ({ zodSchema, jsonSchema }) => {
+      if (Object.is(zodSchema, TestExpressionSchema)) {
+        for (const key of Object.keys(jsonSchema)) delete jsonSchema[key];
+        jsonSchema.$ref = '#/$defs/TestExpression4';
+      }
+    } });
   return { name, description: publicSessionInstructions + descriptions[name]
     + (['start_legal_research', 'update_legal_research', 'review_legal_reasoning'].includes(name) ? requirementInstructions + scopePromotionInstructions : '')
     + (name === 'review_legal_reasoning' ? reviewInputGuide + reasoningInstructions : '')

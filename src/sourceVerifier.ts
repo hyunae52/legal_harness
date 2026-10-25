@@ -5,7 +5,7 @@ import { CalendarDay } from './dates.js';
 
 const date=CalendarDay;
 export const SourceRequest=z.object({law_name:z.string().trim().min(1).max(120),law_id:z.string().regex(/^\d{1,12}$/),
-  article:z.string().trim().min(1).max(40).optional(),event_dates:z.record(z.enum(['contract','transfer','management_disposal','tax_period_start']),date).default({})}).strict();
+  article:z.string().trim().min(1).max(40).optional(),event_dates:z.partialRecord(z.enum(['contract','transfer','management_disposal','tax_period_start']),date).default({})}).strict();
 type SourceClient=Pick<KoreanLawClient,'callTool'|'listTools'|'close'>;
 const errorCode=(error:unknown)=>error instanceof ServiceError?error.code:'SOURCE_REFRESH_FAILED';
 function koreanDate(at:number){

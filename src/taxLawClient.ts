@@ -60,7 +60,7 @@ export function normalizeTaxLawResult(result: CallToolResult): CallToolResult {
   if (!match) return malformed();
   const label = match[1];
   let payload: Record<string, unknown>;
-  try { payload = z.record(z.unknown()).parse(JSON.parse(match[2])); } catch { return malformed(); }
+  try { payload = z.record(z.string(), z.unknown()).parse(JSON.parse(match[2])); } catch { return malformed(); }
   if (label !== 'OK') {
     const error = z.object({ code: z.string(), message: z.string() }).passthrough().safeParse(payload.error);
     if (!errorStatus[label] || payload.ok !== false || !error.success || error.data.code !== label) return malformed();
@@ -83,7 +83,7 @@ export class TaxLawClient {
     if (!taxLawToolNames.has(name)) throw new LawMcpError(400, 'MCP_UNKNOWN_TOOL', 'Unknown tax-law tool.');
     const response = await this.client.callTool(name, args);
     const result = normalizeTaxLawResult(response.result);
-    const document = z.record(z.unknown()).safeParse(result.structuredContent?.document);
+    const document = z.record(z.string(), z.unknown()).safeParse(result.structuredContent?.document);
     // lookup_tax_document does not promote get_document's bodyUnavailable marker.
     // Do not let a found metadata record masquerade as a successful body read.
     if (document.success && document.data.bodyUnavailable === true && args.include_full_text !== false

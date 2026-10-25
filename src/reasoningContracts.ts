@@ -3,7 +3,7 @@ import { z } from 'zod';
 const text = (max: number) => z.string().min(1).max(max).refine(v => v.trim().length > 0, 'Must not be blank');
 const id = z.string().regex(/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/);
 const ids = (max: number) => z.array(id).max(max);
-const uuid = z.string().uuid();
+const uuid = z.guid();
 export const Citation = z.object({ evidence_id: uuid, passage_id: text(80), quote: text(3000),
   relation: z.enum(['direct', 'analogy', 'background']), reason: text(2000), bridge_reason: text(2000).optional() }).strict();
 export type TestExpression = { test_id: string } | { all: TestExpression[] } | { any: TestExpression[] } | { not: TestExpression };

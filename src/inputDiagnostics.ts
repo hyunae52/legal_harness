@@ -7,11 +7,11 @@ const branches = (node: Schema): Schema[] => [node, ...['anyOf', 'oneOf', 'allOf
   Array.isArray(node[k]) ? node[k].filter(object).flatMap(branches) : [])];
 const resolve = (node: Schema, root: Schema): Schema => typeof node.$ref === 'string' && node.$ref.startsWith('#/$defs/')
   ? root.$defs?.[node.$ref.slice(8)] ?? node : node;
-function locate(schema: Schema, path: (string | number)[]): Schema[] {
+function locate(schema: Schema, path: PropertyKey[]): Schema[] {
   let nodes = [schema];
   for (const part of path) nodes = nodes.map(n => resolve(n, schema)).flatMap(branches).flatMap(node => {
     const child = typeof part === 'number' ? node.items
-      : object(node.properties) && Object.hasOwn(node.properties, part) ? node.properties[part] : undefined;
+      : typeof part === 'string' && object(node.properties) && Object.hasOwn(node.properties, part) ? node.properties[part] : undefined;
     return object(child) ? [child] : [];
   });
   return nodes;
@@ -30,14 +30,15 @@ export class ToolInputError extends ServiceError {
 /** Explain the contract without echoing submitted values, unknown keys, or custom error messages. */
 export function inputDiagnostics(error: ZodError, publicSchema?: unknown) {
   const schema = object(publicSchema) ? publicSchema : undefined;
-  const safePath = (path: (string | number)[]) => schema && !locate(schema, path).length
-    ? '[schema-path-unavailable]' : path.join('.').slice(0, 192);
+  const safePath = (path: PropertyKey[]) => path.some(part => typeof part === 'symbol') || (schema && !locate(schema, path).length)
+    ? '[schema-path-unavailable]' : path.map(String).join('.').slice(0, 192);
   const selected = error.issues.slice(0, 24);
   const out = { code: 'INVALID_INPUT', fields: [] as string[],
-    issues: selected.map(i => ({ path: safePath(i.path), code: i.code,
-      ...(i.code === 'invalid_enum_value' ? { allowed_values: i.options } : {}),
+    issues: selected.map(i => ({ path: safePath(i.path),
+      code: i.code === 'invalid_value' ? 'invalid_enum_value' : i.code === 'invalid_format' ? 'invalid_string' : i.code,
+      ...(i.code === 'invalid_value' ? { allowed_values: i.values } : {}),
       ...(i.code === 'invalid_type' ? { expected_type: i.expected } : {}),
-      ...(i.code === 'invalid_string' && typeof i.validation === 'string' ? { format: i.validation } : {}),
+      ...(i.code === 'invalid_format' ? { format: i.format === 'guid' ? 'uuid' : i.format } : {}),
       ...(i.code === 'too_small' ? { minimum: i.minimum, inclusive: i.inclusive } : {}),
       ...(i.code === 'too_big' ? { maximum: i.maximum, inclusive: i.inclusive } : {}),
       ...(i.code === 'unrecognized_keys' ? { hint: 'Remove fields not declared in this tool input schema.' } : {}),
