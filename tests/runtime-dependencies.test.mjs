@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFile, writeFile, unlink } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
-import { classifyAudit, runtimeAudit, verifyParseBoundary } from '../scripts/audit-runtime.mjs';
+import { classifyAudit, runtimeAudit } from '../scripts/audit-runtime.mjs';
 import { DraftSchema } from '../dist/contracts.js';
 import { researchSchemas, researchTools } from '../dist/researchContracts.js';
 import { inputDiagnostics } from '../dist/inputDiagnostics.js';
@@ -15,8 +14,9 @@ const report = () => ({ auditReportVersion: 2, metadata: { vulnerabilities: { to
   'korean-law-mcp': { severity: 'high', nodes: ['node_modules/korean-law-mcp'], via: ['kordoc'] },
 } });
 
-test('runtime audit: only the reviewed advisory in exact unused parser dependencies is eligible', () => {
-  assert.deepEqual(classifyAudit(report()).blocked, []);
+test('runtime audit: all moderate/high/critical findings block, including the retired Zod exception', () => {
+  assert.deepEqual(classifyAudit(report()).blocked.sort(), ['kordoc', 'korean-law-mcp', 'zod']);
+  assert.throws(() => runtimeAudit(report()), /RUNTIME_VULNERABILITIES/);
   const newAdvisory = report(); newAdvisory.vulnerabilities.zod.via.push({ name: 'zod', url: 'https://github.com/advisories/new' });
   assert.deepEqual(classifyAudit(newAdvisory).blocked.sort(), ['kordoc', 'korean-law-mcp', 'zod']);
   const rootValidator = report(); rootValidator.vulnerabilities.zod.nodes.push('node_modules/zod');
@@ -25,25 +25,16 @@ test('runtime audit: only the reviewed advisory in exact unused parser dependenc
   assert.ok(classifyAudit(independent).blocked.includes('kordoc'));
   const other = report(); other.vulnerabilities.express = { severity: 'moderate', nodes: ['node_modules/express'], via: ['other'] };
   other.metadata.vulnerabilities.total++;
-  assert.deepEqual(classifyAudit(other).blocked, ['express']);
+  assert.deepEqual(classifyAudit(other).blocked.sort(), ['express', 'kordoc', 'korean-law-mcp', 'zod']);
   assert.throws(() => classifyAudit({ ...report(), error: { code: 'network' } }), /AUDIT_UNAVAILABLE/);
   assert.throws(() => classifyAudit({ ...report(), vulnerabilities: {} }), /AUDIT_INCOMPLETE/);
 });
 
-test('runtime audit: installed parser bytes, resolution and consumers must retain the reviewed boundary', async () => {
-  const root = resolve('.');
-  const manifest = JSON.parse(await readFile('upstreams/kordoc-parse-audit.json', 'utf8'));
-  assert.equal((await runtimeAudit(root, report())).exception.advisory, manifest.advisory);
-  const changed = structuredClone(manifest);
-  changed.packages[0].files['node_modules/kordoc/dist/index.js'] = '0'.repeat(64);
-  await assert.rejects(verifyParseBoundary(root, changed), /PARSER_BOUNDARY_CHANGED/);
-  const file = resolve('src/audit-boundary-probe.ts');
-  await writeFile(file, "import { createFormatProfile } from 'kordoc';\n", { flag: 'wx' });
-  try {
-    await assert.rejects(verifyParseBoundary(root, manifest), /PARSER_CONSUMER_CHANGED/);
-    await writeFile(file, "const path = 'kordoc'; void import(path);\n");
-    await assert.rejects(verifyParseBoundary(root, manifest), /UNREVIEWED_COMPUTED_IMPORT/);
-  } finally { await unlink(file); }
+test('runtime audit: upgraded parsers have no nested Zod 3 and a clean report needs no exception', async () => {
+  const lock = JSON.parse(await readFile('npm-shrinkwrap.json', 'utf8'));
+  assert.deepEqual(Object.entries(lock.packages).filter(([path, item]) => /\/zod$/.test(path) && item.version.startsWith('3.')), []);
+  const clean = { auditReportVersion: 2, metadata: { vulnerabilities: { total: 0 } }, vulnerabilities: {} };
+  assert.deepEqual(runtimeAudit(clean), { status: 'pass', blocked: [], total_findings: 0 });
 });
 
 test('patched validation rejects oversized collections before visiting elements; normal input and diagnostics stay valid', () => {

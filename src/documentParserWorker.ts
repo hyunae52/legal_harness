@@ -35,8 +35,10 @@ async function extract() {
   const hwp3 = bytes.subarray(0, 17).toString('ascii') === 'HWP Document File';
   if (!pdf && !hwp && !zip && !hwp3) return failure('UNSUPPORTED_ATTACHMENT_FORMAT');
   const packageInfo = JSON.parse(readFileSync(new URL('../package.json', import.meta.resolve('kordoc')), 'utf8'));
-  // Literal matches the reviewed manifest; pin drift must fail instead of changing extraction silently.
-  if (packageInfo.version !== '4.21.31') return failure('PARSER_VERSION_MISMATCH');
+  // The tested release manifest moves with automatic dependency updates.
+  const pin = JSON.parse(readFileSync(new URL('../upstreams/document-parser.json', import.meta.url), 'utf8'));
+  if (pin.package !== 'kordoc' || packageInfo.name !== pin.package || packageInfo.version !== pin.version)
+    return failure('PARSER_VERSION_MISMATCH');
   const { parse } = await import('kordoc');
   const result = await parse(bytes, { ocr: false, formulaOcr: false, images: false,
     removeHeaderFooter: false, scriptTags: true, dedupeRunningHeaders: false, pages: '1-200' });
