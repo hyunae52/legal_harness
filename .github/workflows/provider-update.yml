@@ -28,7 +28,9 @@ jobs:
       - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c
         with:
           python-version: '3.13'
-      - name: Prepare immutable provider pins
+      - name: Install trusted updater tooling without lifecycle scripts
+        run: npm ci --ignore-scripts --omit=optional --no-audit --no-fund
+      - name: Prepare immutable provider and document parser pins
         id: prepare
         run: node scripts/prepare-provider-update.mjs prepare
       - name: Install candidate without lifecycle scripts
@@ -79,6 +81,9 @@ jobs:
         with:
           name: provider-update-${{ github.run_id }}-${{ github.run_attempt }}
           path: .runtime/candidate
+      # Install only the checked-out trusted base. Candidate files remain inert JSON.
+      - name: Install trusted publication tooling without lifecycle scripts
+        run: npm ci --ignore-scripts --omit=optional --no-audit --no-fund
       - name: Publish only validated provider files and dispatch main Review
         env:
           GH_TOKEN: ${{ github.token }}

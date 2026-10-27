@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
+import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { resolve, join } from 'node:path';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { DocumentParser, documentParserFromEnv, attachmentUrl, parserPin, attachmentByteLimit } from '../dist/documentParser.js';
@@ -20,6 +24,25 @@ const row = { documentNumber: '2024심사636', title: '합성 결정', documentT
   attachment: { fleId: '300000000001139785', fleSn: '969300', downloadUrl: url } };
 const parsed = (text = '합성 원문') => ({ ok: true, format: 'pdf', text, units: [{ index: 1, page_number: 1, start: 0, end: text.length }],
   page_count: 1, offset_unit: 'utf16_code_unit', warnings: [], completeness: 'unverified', ocr_performed: false });
+
+test('parser worker rejects an installed package that differs from the release manifest', async()=>{
+  const parent=resolve('.runtime');await mkdir(parent,{recursive:true});
+  const directory=await mkdtemp(join(parent,'parser-pin-'));
+  assert.equal(resolve(directory,'..'),parent);
+  try {
+    await mkdir(join(directory,'dist'));await mkdir(join(directory,'upstreams'));
+    await copyFile('dist/documentParserWorker.js',join(directory,'dist/documentParserWorker.js'));
+    await writeFile(join(directory,'upstreams/document-parser.json'),JSON.stringify({...parserPin,version:'0.0.0'}));
+    const child=spawn(process.execPath,[join(directory,'dist/documentParserWorker.js')],{windowsHide:true,stdio:['pipe','pipe','pipe']});
+    const chunks=[];child.stdout.on('data',chunk=>chunks.push(chunk));child.stderr.resume();
+    child.stdin.end(Buffer.from('%PDF-1.4\n'));
+    const timer=setTimeout(()=>child.kill('SIGKILL'),5000);
+    try {
+      const [code]=await once(child,'close');assert.equal(code,0);
+      assert.deepEqual(JSON.parse(Buffer.concat(chunks).toString()),{ok:false,code:'PARSER_VERSION_MISMATCH'});
+    } finally {clearTimeout(timer);}
+  } finally {await rm(directory,{recursive:true,force:true});}
+});
 function fixture({ result = parsed(), rows = [row], total = rows.length, downloader = async () => bytes, parse = async () => result } = {}) {
   const calls = [];
   const source = { callTool: async (name, args) => { calls.push({ name, args }); return { result: { structuredContent: { total, items: rows }, content: [] } }; } };

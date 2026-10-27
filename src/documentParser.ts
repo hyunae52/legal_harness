@@ -91,6 +91,7 @@ export class DocumentParser {
         '--allow-fs-read=' + parserModules,
         '--allow-fs-read=' + fileURLToPath(new URL('../dist', import.meta.url)),
         '--allow-fs-read=' + fileURLToPath(new URL('../package.json', import.meta.url)),
+        '--allow-fs-read=' + fileURLToPath(new URL('../upstreams/document-parser.json', import.meta.url)),
         '--allow-fs-read=' + this.workerPath, this.workerPath], {
         cwd: tmpdir(), env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
       });

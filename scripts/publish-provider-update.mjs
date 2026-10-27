@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { updateFiles, stableVersion, taxVersion, compareVersion } from './prepare-provider-update.mjs';
+import semver from 'semver';
+import { updateFiles, stableVersion, taxVersion, compareVersion, json, parserPin } from './prepare-provider-update.mjs';
 const repository = 'hyunae52/legal_harness';
 export async function dispatchReviewedDeployment(api, head, {sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms)), now=Date.now, budgetMs=19*60*1000}={}) {
   assert.match(head,/^[a-f0-9]{40}$/);
@@ -28,21 +29,34 @@ export async function dispatchReviewedDeployment(api, head, {sleep=ms=>new Promi
   throw Error('MAIN_REVIEW_TIMEOUT');
 }
 export function validateBundle(bundle, original) {
-  assert.equal(bundle.schema_version, 1); assert.match(bundle.base, /^[a-f0-9]{40}$/);
-  const entries = Object.entries(bundle.files); assert.ok(entries.length > 0 && entries.length <= 5);
+  assert.equal(bundle.schema_version, 2); assert.match(bundle.base, /^[a-f0-9]{40}$/);
+  const entries = Object.entries(bundle.files); assert.ok(entries.length > 0 && entries.length <= updateFiles.length);
   assert.ok(entries.every(([name, text]) => updateFiles.includes(name) && typeof text === 'string'));
   const get = name => JSON.parse(bundle.files[name] ?? original[name]);
   const oldPkg = JSON.parse(original['package.json']), pkg = get('package.json');
-  assert.ok(stableVersion.test(bundle.law));
-  assert.ok(compareVersion(bundle.law, oldPkg.dependencies['korean-law-mcp']) >= 0);
-  const expected = structuredClone(oldPkg); expected.dependencies['korean-law-mcp'] = bundle.law;
-  assert.deepEqual(pkg, expected, 'ONLY_LAW_PACKAGE_VERSION_MAY_CHANGE');
+  const expected = structuredClone(oldPkg);
+  for (const [name, version] of [['korean-law-mcp', bundle.law], ['kordoc', bundle.kordoc], ['zod', bundle.zod]]) {
+    assert.ok(stableVersion.test(version));
+    assert.ok(compareVersion(version, oldPkg.dependencies[name]) >= 0, 'DEPENDENCY_DOWNGRADE');
+    expected.dependencies[name] = version;
+  }
+  assert.deepEqual(pkg, expected, 'ONLY_PROVIDER_PACKAGE_VERSIONS_MAY_CHANGE');
   assert.equal(get('package-lock.json').lockfileVersion, 3);
   assert.deepEqual(get('package-lock.json'), get('npm-shrinkwrap.json'), 'LOCKFILES_DIFFER');
   const lock = get('npm-shrinkwrap.json');
   assert.deepEqual(lock.packages[''].dependencies, pkg.dependencies);
   assert.deepEqual(lock.packages[''].devDependencies, pkg.devDependencies);
-  assert.equal(lock.packages['node_modules/korean-law-mcp'].version, bundle.law);
+  for (const [name, version] of [['korean-law-mcp', bundle.law], ['kordoc', bundle.kordoc], ['zod', bundle.zod]])
+    assert.equal(lock.packages['node_modules/' + name]?.version, version, 'DEPENDENCY_LOCK_DRIFT');
+  const parser = get('upstreams/document-parser.json'), oldParser = JSON.parse(original['upstreams/document-parser.json']);
+  assert.equal(parser.repository, 'chrisryugj/kordoc'); assert.equal(parser.package, 'kordoc');
+  assert.equal(parser.license, 'MIT'); assert.equal(parser.version, bundle.kordoc);
+  assert.match(parser.commit, /^[a-f0-9]{40}$/);
+  assert.equal(parser.integrity, lock.packages['node_modules/kordoc'].integrity, 'PARSER_INTEGRITY_DRIFT');
+  assert.deepEqual(parser, { ...oldParser, version: bundle.kordoc, commit: parser.commit, integrity: parser.integrity }, 'ONLY_PARSER_IDENTITY_MAY_CHANGE');
+  if (parser.version === oldParser.version) assert.deepEqual(parser, oldParser, 'PARSER_VERSION_REUSED');
+  const range = lock.packages['node_modules/kordoc'].dependencies?.zod;
+  assert.ok(typeof range === 'string' && semver.validRange(range) && semver.satisfies(bundle.zod, range), 'ZOD_INCOMPATIBLE_WITH_KORDOC');
   for (const [name, item] of Object.entries(lock.packages)) {
     if (!name) continue;
     assert.ok(name.startsWith('node_modules/') && !name.split('/').includes('..'));
@@ -63,6 +77,17 @@ export function validateBundle(bundle, original) {
   for (const tool of oldSchema) assert.ok(schema.some(t => t.name === tool.name), 'TOOL_REMOVED');
   assert.equal(bundle.changed, true); return entries;
 }
+export async function verifyRegistryPins(bundle, original, request = json) {
+  const get = name => JSON.parse(bundle.files[name] ?? original[name]);
+  const lock = get('npm-shrinkwrap.json'), parser = get('upstreams/document-parser.json');
+  const metadata = await request('https://registry.npmjs.org/kordoc/' + bundle.kordoc);
+  assert.deepEqual(parserPin(metadata, parser), parser, 'PARSER_REGISTRY_MISMATCH');
+  assert.equal(lock.packages['node_modules/kordoc'].dependencies.zod, metadata.dependencies.zod, 'ZOD_RANGE_REGISTRY_MISMATCH');
+  assert.ok(semver.satisfies(bundle.zod, metadata.dependencies.zod), 'ZOD_INCOMPATIBLE_WITH_KORDOC');
+  const zod = await request('https://registry.npmjs.org/zod/' + bundle.zod);
+  assert.equal(zod.name, 'zod'); assert.equal(zod.version, bundle.zod);
+  assert.equal(zod.dist?.integrity, lock.packages['node_modules/zod'].integrity, 'ZOD_REGISTRY_MISMATCH');
+}
 async function main() {
   assert.equal(process.env.GITHUB_REPOSITORY, repository);
   const api = async (path, method = 'GET', body) => {
@@ -79,19 +104,21 @@ async function main() {
   if (bundle.changed) {
     const original = Object.fromEntries(await Promise.all(updateFiles.map(async name => [name, await readFile(name, 'utf8')])));
     const entries = validateBundle(bundle, original);
+    await verifyRegistryPins(bundle, original);
     const tree = [];
     for (const [path, content] of entries) tree.push({ path, mode: '100644', type: 'blob', sha: (await api('git/blobs', 'POST', { content, encoding: 'utf-8' })).sha });
     const parent = await api('git/commits/' + base);
     const nextTree = await api('git/trees', 'POST', { base_tree: parent.tree.sha, tree });
-    const commit = await api('git/commits', 'POST', { message: `chore: update MCP providers (law ${bundle.law}, tax ${bundle.tax.version})`, tree: nextTree.sha, parents: [base] });
+    const versions = `law ${bundle.law}, tax ${bundle.tax.version}, kordoc ${bundle.kordoc}, Zod ${bundle.zod}`;
+    const commit = await api('git/commits', 'POST', { message: `chore: update MCP providers (${versions})`, tree: nextTree.sha, parents: [base] });
     const branch = `automation/providers-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`;
     await api('git/refs', 'POST', { ref: 'refs/heads/' + branch, sha: commit.sha });
-    await api('pulls', 'POST', { base: 'main', head: branch, title: `chore: update MCP providers to ${bundle.law} / ${bundle.tax.version}`,
+    await api('pulls', 'POST', { base: 'main', head: branch, title: `chore: update MCP providers (${versions})`,
       body: `Automated provider-only update. Full review, package smoke and runtime audit passed on these exact file contents.\n\nValidation: https://github.com/${repository}/actions/runs/${process.env.GITHUB_RUN_ID}\n\nProduction retrieval checks run before activation; a failure retains/restores the previous service.` });
     // Atomic non-force FF: concurrent main changes cannot be silently overwritten.
     await api('git/refs/heads/main', 'PATCH', { sha: commit.sha, force: false });
     reviewedHead=commit.sha;
-    console.log(JSON.stringify({ published: commit.sha, law: bundle.law, tax: bundle.tax.version }));
+    console.log(JSON.stringify({ published: commit.sha, law: bundle.law, tax: bundle.tax.version, kordoc: bundle.kordoc, zod: bundle.zod }));
   }
   // GITHUB_TOKEN pushes don't trigger Review. Also retry a previous failed deployment.
   console.log(JSON.stringify(await dispatchReviewedDeployment(api,reviewedHead)));
