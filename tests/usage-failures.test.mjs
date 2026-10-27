@@ -12,6 +12,7 @@ import { usageFailureCode } from '../dist/usageFailures.js';
 import { prepareUsageMail } from '../dist/usageMail.js';
 import { createApp } from '../dist/app.js';
 import { LawMcpError } from '../dist/koreanLawClient.js';
+import { formatToolError } from '../node_modules/korean-law-mcp/build/lib/errors.js';
 
 async function fixture(t, initial='2026-10-25T21:00:00Z') {
   const root=await mkdtemp(join(tmpdir(),'usage-reasons-')), path=join(root,'usage.sqlite');
@@ -23,6 +24,19 @@ async function fixture(t, initial='2026-10-25T21:00:00Z') {
 }
 const failure=code=>({isError:true,structuredContent:{ok:false,error:{code}},content:[]});
 const total=rows=>rows.reduce((sum,row)=>sum+row.failures,0);
+
+test('provider generic exceptions retain their code without claiming an external API outage',async t=>{
+  const f=await fixture(t),store=f.open();
+  // The pinned provider uses EXTERNAL_API_ERROR even for a plain TypeError.
+  await store.measure('mcp','search_law',async()=>formatToolError(new TypeError('synthetic private exception'),'search_law'));
+  const report=readMorningUsage(f.path,Date.parse('2026-10-26T21:00:00Z'));
+  assert.equal(report.totals.mcp.failures,1);
+  assert.deepEqual(report.failure_reasons.map(row=>[row.code,row.category,row.failures]),[['EXTERNAL_API_ERROR','provider',1]]);
+  const mail=prepareUsageMail(report);
+  assert.match(mail.text,/조회 도구 오류\(원인 미확정\): 1건/);
+  assert.match(mail.text,/내부 예외/); assert.match(mail.text,/배포 점검/);
+  assert.ok(!mail.text.includes('synthetic private exception'));
+});
 
 test('reason labels inspect bounded protocol fields, never prose, arbitrary codes or getters',()=>{
   assert.equal(usageFailureCode({result:failure('NOT_FOUND')}),'NOT_FOUND');

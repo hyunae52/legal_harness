@@ -46,7 +46,14 @@ export function safeToolDiagnostic(result:CallToolResult,env:NodeJS.ProcessEnv):
     if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([key])=>!/(?:client_session|token|password|secret|headers?|authorization|cookie|stack|stderr|environment|^env$|api.?key|(?:^|_)oc$|__proto__|constructor)/i.test(key)).slice(0,20).map(([k,v])=>[cleanText(k,100,depth+1),clean(v,depth+1)]));
     return null;
   };
-  const content=result.content.filter(c=>c.type==='text').slice(0,3).map(c=>({type:'text' as const,text:cleanText(c.text,3000,0)}));
+  const content=result.content.filter(c=>c.type==='text').slice(0,3).map(c=>{
+    // The law provider prefixes ordinary diagnostic prose with a fixed code.
+    // Such a prefix is not a JSON array. Preserve only known public labels,
+    // then subject the entire body to the existing structured/secret policy.
+    const labelled=c.text.length<=24000 && /^\[(LAW_NOT_FOUND|UPSTREAM_NO_DATA|ANNEX_BODY_UNAVAILABLE|INVALID_PARAMETER|EXTERNAL_API_ERROR|RATE_LIMITED|REQUEST_TIMEOUT|PARSE_ERROR|NOT_FOUND)\](?:\s|$)/.exec(c.text);
+    const prefix=labelled ? `[${labelled[1]}] ` : '';
+    return {type:'text' as const,text:prefix+cleanText(labelled ? c.text.slice(labelled[0].length) : c.text,3000-prefix.length,0)};
+  });
   if(!content.length)content.push({type:'text',text:'Upstream tool reported an error. Check the tool arguments or source availability.'});
   const structured=clean(result.structuredContent);
   const output:CallToolResult={isError:true,content,...(structured&&typeof structured==='object'&&!Array.isArray(structured)?{structuredContent:structured as Record<string,unknown>}:{})};

@@ -2,6 +2,7 @@
 export const failureLabels = {
   input: '입력 오류', not_found: '조회 결과 없음', state: '작업 상태·검토 조건',
   access: '인증·권한', limit: '요청·용량 제한', upstream: '외부 조회·연결',
+  provider: '조회 도구 오류(원인 미확정)',
   internal: '서버 내부', unknown: '원인 미분류', unrecorded: '원인 기록 없음',
 } as const;
 export type FailureCategory = keyof typeof failureLabels;
@@ -38,7 +39,7 @@ const groups: Record<Exclude<FailureCategory, 'unrecorded'>, string> = {
     RESEARCH_BUSY RESEARCH_MANIFEST_CAPACITY RESEARCH_EVIDENCE_TOO_LARGE REVIEW_RECEIPT_CAPACITY
     REVIEW_ROUND_LIMIT SOURCE_REFRESH_CAPACITY CORRECTION_BUSY CORRECTION_DAILY_LIMIT
     CORRECTION_TOO_LARGE ATTEMPT_LIMIT BODY_TOO_LARGE PATCH_TOO_LARGE RESPONSE_TOO_LARGE`,
-  upstream: `TIMEOUT REQUEST_TIMEOUT UPSTREAM_ERROR EXTERNAL_API_ERROR UPSTREAM_TIMEOUT UPSTREAM_NO_DATA
+  upstream: `TIMEOUT REQUEST_TIMEOUT UPSTREAM_ERROR UPSTREAM_TIMEOUT UPSTREAM_NO_DATA
     ANNEX_BODY_UNAVAILABLE PARSE_ERROR DETAIL_NOT_AVAILABLE LOOKUP_INCOMPLETE
     MCP_UNAVAILABLE MCP_TIMEOUT MCP_CONNECTION_ERROR MCP_CLOSED TAXLAW_INVALID_RESPONSE
     SOURCE_REFRESH_TIMEOUT SOURCE_REFRESH_STOPPED SOURCE_VERIFIER_UNAVAILABLE CORRECTION_PR_UNAVAILABLE
@@ -46,6 +47,9 @@ const groups: Record<Exclude<FailureCategory, 'unrecorded'>, string> = {
   internal: `INTERNAL_ERROR DB_UNAVAILABLE AUTH_UNAVAILABLE RULESET_UNAVAILABLE MAINTENANCE_UNAVAILABLE
     MCP_NOT_CONFIGURED TAXLAW_NOT_CONFIGURED DOCUMENT_PARSER_NOT_CONFIGURED GITHUB_NOT_CONFIGURED
     CORRECTION_CONFIG_MISSING SHUTTING_DOWN DRAIN_TIMEOUT`,
+  // The provider also emits this label for plain Error/TypeError exceptions.
+  // Its name alone cannot establish an external API outage.
+  provider: 'EXTERNAL_API_ERROR',
   unknown: 'MCP_TOOL_ERROR UNCLASSIFIED_ERROR UNCLASSIFIED_EXCEPTION',
 };
 const categories = new Map<string, FailureCategory>();
