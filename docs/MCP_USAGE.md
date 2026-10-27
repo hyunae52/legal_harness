@@ -24,6 +24,12 @@ The database directory must be writable only by the service user and included in
 
 If writes fail (for example disk full or a database lock), requests continue, health becomes degraded and `failed_writes` counts unrecorded completions since process start. These missed records cannot be retroactively recovered. The reporter reads persisted counts only. No per-request log is emitted.
 
+## Short read bursts
+
+MCP `get_law_text` and `search_decisions` calls may wait in a shared FIFO of at most three requests for at most two seconds when all execution slots are busy. The simultaneous work limit remains three by default. Cancellation, transport closure, response timeout and shutdown remove waiting requests before source execution; work that already started retains its slot until it settles. Calls are never automatically replayed. Other tools and REST calls retain immediate admission.
+
+Queue overflow and wait expiry return `AT_CAPACITY` with `retryable: true` and `retry_after_ms: 5000`. A queued call that completes normally counts as one success, not a failure followed by a retry. Public health exposes only aggregate `queued_requests` and queue limits. Failure statistics remain bounded, aggregate-only storage under the same 400-day retention policy.
+
 ## Verification
 
 | Contract | Evidence boundary |

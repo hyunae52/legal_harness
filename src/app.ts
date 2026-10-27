@@ -26,6 +26,7 @@ import { PublicAccess, actorBudgetKey, assertNoPublicSession } from './publicAcc
 import { inputDiagnostics, ToolInputError } from './inputDiagnostics.js';
 import { reasoningInstructions, reasoningPolicy } from './reasoningContracts.js';
 import { meterSourceClient, type UsageRecorder } from './usage.js';
+import { WorkAdmission, type WorkQueueOptions } from './workAdmission.js';
 
 interface Options {
   law: Pick<KoreanLawClient, 'listTools' | 'callTool' | 'close' | 'releaseVersion'> & {
@@ -39,6 +40,7 @@ interface Options {
   sources?: SourceVerifier;
   corrections?: CorrectionService;
   maxActive?: number;
+  workQueue?: WorkQueueOptions;
   maxSessions?: number;
   sessionIdleMs?: number;
   researchOptions?: ResearchOptions;
@@ -51,6 +53,7 @@ export function createApp(options: Options) {
   const publicAccess = new PublicAccess(env);
   const budgets = new ResourceBudgets(env, options.resourceOptions);
   const maxActive = positiveLimit(options.maxActive ?? env.TAXLAB_MAX_ACTIVE, 3);
+  const admission = new WorkAdmission(maxActive, options.workQueue);
   const maxTransports = positiveLimit(options.maxSessions ?? env.TAXLAB_MAX_TRANSPORTS, 20);
   const maxTransportsPerActor = positiveLimit(env.TAXLAB_MAX_TRANSPORTS_PER_ACTOR, 5);
   const auth = options.authenticate ?? createAuthenticator(env, fetch, publicAccess);
@@ -65,7 +68,7 @@ export function createApp(options: Options) {
   app.disable('x-powered-by');
   app.use(express.json({ limit: '256kb' }));
   const sessions = new Map<string, { actor: Actor; server: Server; transport: SSEServerTransport; touched: number }>();
-  let active = 0, authActive = 0, dispatchActive = 0, stopping = false;
+  let authActive = 0, dispatchActive = 0, stopping = false;
   let transportActive = 0;
   const transportActors = new Map<string, number>();
   const admitTransport = (actor: Actor) => {
@@ -81,13 +84,10 @@ export function createApp(options: Options) {
     };
   };
   const version = law.releaseVersion ?? 'unidentified';
-  const work = async <T>(operation: () => Promise<T>): Promise<T> => {
-    if (stopping) throw new ServiceError(503, 'SHUTTING_DOWN');
-    if (active >= maxActive) throw new ServiceError(429, 'AT_CAPACITY');
-    active++;
-    try { return await operation(); } finally { active--; }
-  };
+  const work = <T>(operation: () => Promise<T>, mayWait = false, signal?: AbortSignal) => admission.run(operation, mayWait, signal);
   const errorBody = (error: unknown) => {
+    if (error instanceof ServiceError && error.code === 'AT_CAPACITY') return { status: 429,
+      body: { code: error.code, retryable: true, retry_after_ms: 5000 } };
     if (error instanceof ResearchCapacityError) return { status: error.status, body: error.publicBody() };
     if (error instanceof ServiceError && error.code === 'PUBLIC_SESSION_REQUIRED') return { status: error.status, body: {
       code: error.code, recovery: { available_actions: ['reuse_original_client_session', 'report_unrecoverable_session'], create_new_research: false,
@@ -207,14 +207,16 @@ export function createApp(options: Options) {
       } else if (error) res.destroy();
     });
   });
-  app.get('/health', (_req, res) => res.json({ status: stopping ? 'stopping' : 'ok', version: '2.5.0', active_requests: active,
+  app.get('/health', (_req, res) => res.json({ status: stopping ? 'stopping' : 'ok', version: '2.5.0', active_requests: admission.active,
+    queued_requests: admission.queued,
     usage_accounting: options.usage?.status() ?? { enabled: false, healthy: false, failed_writes: 0 },
     access_mode: publicAccess.enabled ? 'public' : 'authenticated',
     active_authentications: authActive, active_dispatches: dispatchActive, release_commit: env.TAXLAB_RELEASE_COMMIT ?? null,
     research_harness: { policy: researchPolicyVersion, tools: enabledResearchTools.length, storage: 'ephemeral',
       reasoning_review: { enabled: reasoningV2Enabled, contract: 2, policy: reasoningPolicy } },
     mcp_transport: { endpoint: '/mcp', mode: 'stateless', protocol: '2025-11-25', legacy_endpoint: '/sse',
-      active: transportActive, max_transports: maxTransports, max_per_actor: maxTransportsPerActor, max_work: maxActive, budgets: budgets.limits },
+      active: transportActive, max_transports: maxTransports, max_per_actor: maxTransportsPerActor, max_work: maxActive,
+      max_queued_reads: admission.maxQueued, read_queue_wait_ms: admission.waitMs, budgets: budgets.limits },
     mcp_release: law.releaseVersion ?? null, taxlaw_release: law.taxlawRelease ?? null, document_parser: law.documentParserRelease ?? null, rules_version: gates.version, maintenance: options.failures ? 'intake_only' : 'unavailable', correction_pr: options.corrections ? 'available' : 'unavailable' }));
   app.get('/api/tools', protectedRoute(async (_req, res) => res.json({ status: 'success', data: await work(() => law.listTools()) })));
   app.post('/api/validate', protectedRoute(async (req, res) => res.json(await work(async () => validate(req.body)))));
@@ -262,7 +264,8 @@ export function createApp(options: Options) {
   ];
   options.usage?.registerTools(custom.map(tool => tool.name));
   function mcpServer(actor: Actor, guard: RequestGuard = operation => operation()) {
-    const mcpWork = <T>(operation: () => Promise<T>) => guard(() => work(operation));
+    const mcpWork = <T>(operation: () => Promise<T>, mayWait = false, signal?: AbortSignal) =>
+      guard(() => work(() => guard(operation), mayWait, signal));
     const server = new Server({ name: 'taxlab-legal-harness', version: '2.5.0' }, { capabilities: { tools: {} },
       instructions: researchInstructions + requirementInstructions + (reasoningV2Enabled ? reasoningInstructions : '') + ' 법령 도구 결과는 조회 자료입니다. 사건 기준일·연혁·부칙·후속 해석을 확인하세요. 국세청 해석례는 search_tax_interpretations → get_tax_document로 사실관계·질의·회신을 읽고, 문서번호를 알면 lookup_tax_document를 쓰세요(도구가 제공되는 경우). 감사원 심사청구는 search_tax_decisions(type=audit_appeal)에서 첨부를 찾고 read_tax_attachment로 본문을 읽으세요(도구가 제공되는 경우). next_arguments가 있으면 이어 읽고, 스캔본·파싱 실패·부분 결과는 전체 본문 확인으로 보고하지 마세요. 법제처 일련번호와 국세청 ntstDcmId를 혼용하지 마세요. 기존 validate_legal_draft는 별도의 제한된 초안 검사입니다. ' + correctionInstructions });
     const visible = actor.kind === 'anonymous' ? custom.filter(tool => tool.name !== 'submit_failure') : custom;
@@ -302,7 +305,7 @@ export function createApp(options: Options) {
             ...(readingGuide ? [{ type: 'text' as const, text: JSON.stringify({ source_reading_guide: readingGuide }) }] : []),
             ...data.result.content, ...(data.corrections.items.length ? [{ type: 'text' as const, text: JSON.stringify({ merged_correction_notes: data.corrections }) }] : [])],
             _meta: { ...data.result._meta, 'legal-harness/evidence': data.evidence, 'legal-harness/corrections': data.corrections } };
-        });
+        }, ['get_law_text', 'search_decisions'].includes(request.params.name), extra.signal);
       } catch (error) {
         if(error instanceof LawMcpError && error.code==='MCP_TOOL_ERROR' && error.result)return withUsageFailureCode({...safeToolDiagnostic(error.result,env),_meta:{'legal-harness/error':error.code}}, error);
         return { isError: true, content: [{ type: 'text', text: JSON.stringify(errorBody(error).body) }] };
@@ -339,12 +342,13 @@ export function createApp(options: Options) {
   app.use((error: {type?: string}, _req: Request, res: Response, _next: NextFunction) => fail(res, error.type === 'entity.too.large' ? new ServiceError(413, 'BODY_TOO_LARGE') : error instanceof SyntaxError ? new ServiceError(400, 'INVALID_JSON') : error));
   const drain = async (timeoutMs = 60_000) => {
     stopping = true;
+    admission.stop();
     const until = performance.now() + timeoutMs;
-    while (active || authActive || dispatchActive) {
+    while (admission.active || authActive || dispatchActive) {
       if (performance.now() >= until) throw new ServiceError(503, 'DRAIN_TIMEOUT');
       await new Promise(resolve => setTimeout(resolve, 10));
     }
-    return { status: 'drained', active_requests: active, active_authentications: authActive, active_dispatches: dispatchActive };
+    return { status: 'drained', active_requests: admission.active, active_authentications: authActive, active_dispatches: dispatchActive };
   };
   return { app, drain, close: async () => { await drain(); clearInterval(timer); research.close(); await Promise.allSettled([...sessions.values()].map(s => s.server.close())); sessions.clear(); await Promise.allSettled([law.close(),options.sources?.close()]); } };
 }
