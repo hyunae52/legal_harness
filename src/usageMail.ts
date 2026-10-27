@@ -35,12 +35,14 @@ export function prepareUsageMail(report: Report, test = false) {
     ...(detailRows.length ? ['', '도구별 오류 코드 (상위 10개)', ...detailRows.slice(0, 10).map(([key, count]) => `- ${key}: ${count}건`),
       ...(detailRows.length > 10 ? [`- 나머지 ${detailRows.length - 10}개 조합: ${detailRows.slice(10).reduce((sum, row) => sum + row[1], 0)}건`] : [])] : []),
     ...(categories.has('unrecorded') ? ['원인 기록 없음: 분류 도입 전 등 오류 코드가 남아 있지 않은 호출입니다. 원인을 추정하지 않습니다.'] : []),
+    ...(categories.has('provider') ? ['EXTERNAL_API_ERROR는 외부 통신 오류와 조회 도구 내부 예외가 함께 사용하는 코드입니다. 외부 API 장애로 확정하지 않습니다.'] : []),
     ...(categories.has('unknown') ? ['원인 미분류: 오류 코드를 확인하지 못했거나 아직 분류하지 않은 오류입니다.'] : [])];
   const detailLines = ['많이 사용한 도구', ...(top.length ? top.map(row => `- ${row.tool}: ${row.calls}회 (실패 ${row.failures}회)`) : ['- 호출 없음']), '',
     ...failures, '', `REST 호출: ${report.totals.rest?.calls ?? 0}회 (별도)`,
     `내부 자료 조회: ${report.totals.source?.calls ?? 0}회 (MCP 합계에 더하지 않음)`];
   const notes = ['처리가 끝난 시각을 기준으로 집계합니다. 오전 6시를 넘겨 완료된 호출은 다음 메일에 포함됩니다.',
     '자체 작업과 외부 이용을 구분하지 않으며, 호출 수는 방문자 수가 아닙니다.',
+    '배포 점검에서 잘못된 입력이 거절되는지 확인한 호출도 실패 건수에 포함됩니다.',
     '실패에는 입력 오류·조회 결과 오류도 포함됩니다. 질문·응답 본문과 사용자 식별자는 수집하지 않습니다.'];
   const lines = [test ? '매일 오전 6시 사용량 메일이 설정되었습니다.' : 'TaxLab MCP 하루 사용량', '',
     `집계 구간: ${period}`, ...(notice ? [notice] : []), '',
