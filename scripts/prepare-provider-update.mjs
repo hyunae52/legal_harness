@@ -34,6 +34,20 @@ export function npm(args, options = {}) {
   return execFileSync(cli ? process.execPath : 'npm', cli ? [cli, ...args] : args,
     { encoding: 'utf8', timeout: 120000, maxBuffer: 2 * 1024 * 1024, windowsHide: true, ...options });
 }
+export async function refreshRuntimeTransport({ cwd = process.cwd(), runNpm = npm } = {}) {
+  const manifest = await readFile(join(cwd, 'package.json'), 'utf8');
+  const lockPath = join(cwd, 'npm-shrinkwrap.json');
+  const before = await readFile(lockPath, 'utf8');
+  // Installing a new provider preserves satisfying transitive pins, including
+  // vulnerable ones. Refresh the SDK's transport adapter within its declared
+  // ranges, without overrides, forced upgrades or changes to direct packages.
+  runNpm(['update', '@hono/node-server', '--package-lock-only', '--ignore-scripts',
+    '--omit=optional', '--no-audit', '--no-fund'], { cwd, stdio: 'inherit' });
+  assert.equal(await readFile(join(cwd, 'package.json'), 'utf8'), manifest, 'RUNTIME_REFRESH_CHANGED_MANIFEST');
+  const after = await readFile(lockPath, 'utf8');
+  await copyFile(lockPath, join(cwd, 'package-lock.json'));
+  return after !== before;
+}
 export function parserPin(metadata, current) {
   assert.equal(metadata.name, 'kordoc'); assert.ok(stableVersion.test(metadata.version));
   assert.equal(metadata.repository?.url, 'git+https://github.com/chrisryugj/kordoc.git');
@@ -110,12 +124,12 @@ async function prepare() {
     npm(['install', 'korean-law-mcp@' + (law || pkg.dependencies['korean-law-mcp']),
       'kordoc@' + documents.kordoc, 'zod@' + documents.zod,
       '--save-exact', '--package-lock-only', '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund'], { stdio: 'inherit' });
-    await copyFile('npm-shrinkwrap.json', 'package-lock.json');
   }
+  const runtimeChanged = await refreshRuntimeTransport();
   if (documents.kordoc !== currentParser.version)
     await writeFile('upstreams/document-parser.json', JSON.stringify(documents.parser, null, 2) + '\n');
   const plan = { schema_version: 2, base: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
-    changed: Boolean(law || tax || documents.changed), tax_changed: Boolean(tax),
+    changed: Boolean(law || tax || documents.changed || runtimeChanged), tax_changed: Boolean(tax),
     law: law || pkg.dependencies['korean-law-mcp'], tax: tax || currentTax,
     kordoc: documents.kordoc, zod: documents.zod };
   await mkdir('.runtime', { recursive: true }); await writeFile('.runtime/provider-update.json', JSON.stringify(plan, null, 2) + '\n');
