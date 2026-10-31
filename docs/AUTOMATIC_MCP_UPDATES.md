@@ -18,12 +18,18 @@ GitHub 예약 실행은 지연될 수 있다. 앞 단계가 늦으면 다음 날
 `.postN`을 올리고 태그는 덮어쓰지 않는다. 원본 비공개·조회 실패·라이선스 변경·로컬 패치
 충돌·테스트 실패는 기존 배포본을 유지한다. 원본 main을 GCE에서 직접 pull하지 않는다.
 
-서버 갱신 PR에는 law 버전, npm 잠금 파일, tax 고정 커밋·아카이브 SHA-256·도구 스키마만
+서버 갱신 PR에는 law·kordoc 버전, kordoc 호환 Zod, npm 잠금 파일, parser 고정 정보,
+tax 고정 커밋·아카이브 SHA-256·도구 스키마만
 들어간다. 후보 시험 job은 쓰기 권한과 운영 비밀이 없다. 별도 게시 job이 파일 범위와
 메타데이터를 재검사하고 main이 그대로일 때만 검증 커밋을 fast-forward한다.
 GITHUB_TOKEN push로 Review가 실행되지 않는 점을 고려해 main Review를 명시적으로 dispatch한다.
 그 실행의 성공을 기다린 뒤 정확한 검수 실행 ID·시도 번호로 Deploy도 명시적으로 요청한다.
 토큰으로 시작한 Review의 후속 workflow_run만으로 배포가 이어진다고 가정하지 않는다.
+
+MCP SDK의 간접 의존성 `@hono/node-server`도 상위 패키지가 선언한 호환 범위 안에서
+잠금 파일을 갱신한다. provider 버전이 그대로여도 이 잠금 정보가 바뀌면 전체 통합 검사와
+배포 대상으로 처리한다. 직접 의존성·스크립트 변경, 강제 버전 override, 보안 검사 우회는
+허용하지 않는다. 호환되는 수정 버전이 없거나 보안 검사에 계속 걸리면 배포를 중단한다.
 
 고정 GCE 배포기는 MCP 버전 변경만 허용하도록 설정한다. DB migration이나 배포기 변경은
 계속 수동 운영 작업이다. 앱별 provider manifest/env 파일로 앱·law·tax를 함께 선택하며,
