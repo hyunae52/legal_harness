@@ -14,8 +14,8 @@
         "dotenv": "^16.4.5",
         "express": "4.22.3",
         "js-yaml": "^5.4.2",
-        "kordoc": "4.24.16",
-        "korean-law-mcp": "4.15.14",
+        "kordoc": "4.24.33",
+        "korean-law-mcp": "4.15.20",
         "nodemailer": "10.2.1",
         "pdfjs-dist": "4.10.38",
         "zod": "4.6.7",
@@ -3516,9 +3516,9 @@
       "license": "(MIT AND Zlib)"
     },
     "node_modules/kordoc": {
-      "version": "4.24.16",
-      "resolved": "https://registry.npmjs.org/kordoc/-/kordoc-4.24.16.tgz",
-      "integrity": "sha512-9M9QbzVs23rPZVsJ+BYSJ7AI2G3u8mKhX1jnLpNEy2nm+4PO2soUM/mtW1pLIPbUa83djlK75u9CvrAozh2XWA==",
+      "version": "4.24.33",
+      "resolved": "https://registry.npmjs.org/kordoc/-/kordoc-4.24.33.tgz",
+      "integrity": "sha512-o3EDPG5nYhOhssemtJeBPqVOYPvkX66cfMKK8cKapnyG653TxKkRxzZxdVsirA3+anRbx6oWsfprC9AsoQCOSg==",
       "license": "MIT",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.29.0",
@@ -3562,9 +3562,9 @@
       }
     },
     "node_modules/korean-law-mcp": {
-      "version": "4.15.14",
-      "resolved": "https://registry.npmjs.org/korean-law-mcp/-/korean-law-mcp-4.15.14.tgz",
-      "integrity": "sha512-FnPspMGtsKi+ybZ8cQp3sATfgsvTt3bGRaO9DuSCXnEXRz4gkci1IoHa+r/PBnX1gGTKKvIxmXmgYibqCsLHaA==",
+      "version": "4.15.20",
+      "resolved": "https://registry.npmjs.org/korean-law-mcp/-/korean-law-mcp-4.15.20.tgz",
+      "integrity": "sha512-uEuwnJ3Fskutjk2RRYU6AxAgrorglArNrB6iMqMQpY/PAH6xNXniA77L6lRk6NzFcGS5lgl1qdb6ZRiIgi2MNQ==",
       "license": "MIT",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.27.1",
@@ -3572,7 +3572,8 @@
         "commander": "^14.0.3",
         "dotenv": "^17.3.1",
         "express": "^5.2.1",
-        "kordoc": "4.24.8",
+        "jszip": "3.10.2",
+        "kordoc": "4.24.25",
         "pdfjs-dist": "4.10.38",
         "zod": "^4.6.7"
       },
@@ -3784,9 +3785,9 @@
       }
     },
     "node_modules/korean-law-mcp/node_modules/kordoc": {
-      "version": "4.24.8",
-      "resolved": "https://registry.npmjs.org/kordoc/-/kordoc-4.24.8.tgz",
-      "integrity": "sha512-CF5WczRAVzjwS4KFOWYECvOtzbxjq1+DnVSp3eU6tEX3e71LWHzwptj3KMOZL/uz25Vj1zflqLyqzZySZoSLaQ==",
+      "version": "4.24.25",
+      "resolved": "https://registry.npmjs.org/kordoc/-/kordoc-4.24.25.tgz",
+      "integrity": "sha512-Gz5VzlKNH0Lrhn3tlT1AjlklUNJN4ffiuw/PkMoedXNPhMKlP+vLl5u7/lpgQKVXsui2//fpI4x7fZ2CaggA9Q==",
       "license": "MIT",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.29.0",
