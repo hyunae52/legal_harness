@@ -1,10 +1,10 @@
 {
   "repository": "chrisryugj/kordoc",
   "package": "kordoc",
-  "version": "4.24.39",
-  "commit": "60324c982784fc299c68dec56ddc3bb31320f556",
+  "version": "4.24.41",
+  "commit": "265c41aa6eb4c858dad042246f95aef1930039a8",
   "license": "MIT",
-  "integrity": "sha512-LE51tqwgwk5ifW+CC8yrZ+azHqw25DLTGYdDfrJpETHdWBEmRnNlvV02CFaetjNKCGkeKsemIvEtO6g5dR9/eQ==",
+  "integrity": "sha512-Qcux6PjstqYBpHzbMX9rUEBUHKJAsosN9XLsrxZT3vYZQn8qKZQLdA2IUDp4ZixPXAOzxfyttczxfaRezlS9YQ==",
   "pdf_engine": {
     "package": "pdfjs-dist",
     "version": "4.10.38"
