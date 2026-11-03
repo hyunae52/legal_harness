@@ -6,7 +6,7 @@
 
 ## 현재 운영 예약
 
-- `/etc/cron.d/legal-harness-upstream-check`: 매일 18:30 UTC, 한국시간 다음 날 03:30. 설치 전에 서버 시간대가 `Etc/UTC`인지 확인한다.
+- `/etc/cron.d/legal-harness-upstream-check`: 매일 21:00 UTC, 한국시간 다음 날 06:00. 설치 전에 서버 시간대가 `Etc/UTC`인지 확인한다.
 - 실행 코드: `/usr/local/lib/legal-harness/check-upstreams.mjs` (`scripts/check-upstreams.mjs`의 검증한 사본).
 - 최신 결과: `/home/cta/.local/state/legal-harness-upstreams/latest.json`.
 - 실행 로그: 같은 디렉터리의 `check.log`. 로그는 주 단위 또는 1 MiB 초과 시 회전하고 4개를 보관한다.
@@ -26,7 +26,7 @@
 - `partial`: 비공개 전환, 삭제, API 한도, 응답 형식 오류, 통신 실패 등으로 일부 출처를 확인하지 못했다. 마지막 정상 확인값과 시각을 보존하되 `unavailable`로 표시한다. 다른 출처의 확인은 계속한다.
 - `check_failed`: 실행 중인 설치본이나 상태 파일을 읽지 못했다. 직전 결과 파일은 유지하고 로그에 실패 시각을 남긴다.
 
-예약 작업은 **변경 감지만** 한다. 후보 다운로드·설치, 호환성 시험, AI 검수, PR 생성, merge, 운영 버전 전환을 자동 수행하지 않는다. 변경 후보는 별도 검증·검수 후 승인한 앱/규칙/upstream 묶음으로 배포한다. 특히 Hyunae 검토 포크 제공자는 앱에 기록한 commit/version pin과 실제 설치본이 같아야 한다.
+이 GCE 예약 작업은 **변경 감지와 메일 발송만** 한다. 후보 설치·검증·PR 반영·운영 전환은 별도의 [GitHub 자동 갱신 절차](AUTOMATIC_MCP_UPDATES.md)가 담당한다. 특히 Hyunae 검토 포크 제공자는 앱에 기록한 commit/version pin과 실제 설치본이 같아야 한다.
 
 `flock`으로 겹친 실행을 건너뛰고 전체 실행을 120초, 각 HTTP 조회를 15초·512 KiB로 제한한다. redirect와 raw 원격 오류 본문을 받지 않으며 상태 파일은 atomic rename으로 저장한다. 저장소 접근 실패가 운영 프로세스를 중단하거나 설치본을 제거하는 경로는 없다.
 
@@ -34,7 +34,7 @@
 
 ```sh
 flock --nonblock --conflict-exit-code 0 /home/cta/.local/state/legal-harness-upstreams/check.lock \
-  timeout --kill-after=5s 160s /usr/bin/node --max-old-space-size=96 \
+  timeout --kill-after=5s 210s /usr/bin/node --max-old-space-size=96 \
   /usr/local/lib/legal-harness/run-upstream-watch.mjs \
   --service legal-harness-a.service \
   --state-dir /home/cta/.local/state/legal-harness-upstreams \

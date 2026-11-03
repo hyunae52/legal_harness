@@ -1,7 +1,7 @@
 name: Automatic MCP update
 on:
   schedule:
-    - cron: '40 17 * * *' # 02:40 KST, after the fork sync; email remains 03:30 KST.
+    - cron: '40 17 * * *' # 02:40 KST, after the fork sync; email is 06:00 KST.
   workflow_dispatch:
 permissions:
   contents: read
