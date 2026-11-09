@@ -80,6 +80,7 @@ test('O01–O05/O12/O14: raw HTTP → real NTS parser → MCP/REST/research; dis
         research_id: defaultState.research_id, expected_revision: defaultState.revision, request_id: randomUUID(),
         issue_ids: ['case'], purpose: 'support', tool: name, arguments: { query, type } });
       const attempt = researched.attempts.at(-1);
+      assert.equal(attempt.status, status === 'empty_confirmed' ? 'empty' : 'completed');
       assert.equal(attempt.search.status, 'complete'); assert.equal(attempt.search.page_size, 10);
       assert.equal(attempt.search.total, result.structuredContent.total);
       assert.equal(attempt.search.hits.length, result.structuredContent.items.length);
