@@ -6,10 +6,13 @@ import { SourceVerifier } from './sourceVerifier.js';
 import { configuredCorrectionService } from './correctionGitHub.js';
 import { createLegalRetrievalClient } from './taxLawClient.js';
 import { configuredUsage, meterSourceClient } from './usage.js';
+import { OutcomeRecorder } from './outcomeStore.js';
+import { outcomeEnabled } from './retrievalOutcome.js';
 dotenv.config();
 const corrections = configuredCorrectionService(process.env);
 const usage = configuredUsage(process.env);
-const runtime = createApp({ law: createLegalRetrievalClient(createKoreanLawClient()), failures: configuredFailureService(process.env), sources:new SourceVerifier(()=>meterSourceClient(createKoreanLawClient(), usage)), corrections, usage });
+const outcomes = outcomeEnabled(process.env) && process.env.TAXLAB_USAGE_DB ? new OutcomeRecorder(process.env.TAXLAB_USAGE_DB + '.outcomes.sqlite') : undefined;
+const runtime = createApp({ law: createLegalRetrievalClient(createKoreanLawClient(), process.env, event => outcomes?.record(event)), failures: configuredFailureService(process.env), sources:new SourceVerifier(()=>meterSourceClient(createKoreanLawClient(), usage)), corrections, usage });
 const host = process.env.HOST || '127.0.0.1';
 if (!['127.0.0.1', '::1'].includes(host)) throw new Error('Use a local HTTPS tunnel; HOST must be loopback.');
 const server = runtime.app.listen(Number(process.env.PORT || 3000), host, () => console.error('Legal Harness listening on loopback.'));
@@ -26,6 +29,7 @@ async function shutdown() {
     await runtime.close();
     await new Promise<void>(resolve => server.close(() => resolve()));
     usage?.close();
+    outcomes?.close();
   } catch {
     // Keep ingress closed; do not interrupt an in-flight public PR publication.
     // The operator must investigate a drain timeout instead of declaring readiness.

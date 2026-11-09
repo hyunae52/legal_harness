@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { KoreanLawClient, LawMcpError, type LawMcpOptions } from './koreanLawClient.js';
 import { documentParserFromEnv, parserPin } from './documentParser.js';
 import { attachmentTool, TaxAttachmentClient } from './taxAttachment.js';
+import { classifyRetrieval, outcomeEnabled, supportsNtsProof, OUTCOME_VERSION, type OutcomeEvent, type ProviderIdentity } from './retrievalOutcome.js';
 
 const pin = JSON.parse(readFileSync(new URL('../upstreams/korean-taxlaw-mcp.json', import.meta.url), 'utf8')) as { commit: string; version: string };
 // Input schemas and descriptions come from the pinned server's real tools/list.
@@ -33,7 +34,8 @@ export function taxLawOptionsFromEnv(env: NodeJS.ProcessEnv = process.env): LawM
       // Never forward Express credentials, proxy configuration, or Python path injection.
       env: { PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', FASTMCP_LOG_LEVEL: 'WARNING', DO_NOT_TRACK: '1',
         TAXLAW_TIMEOUT_MS: '12000', TAXLAW_RETRIES: '1', TAXLAW_RATE_PER_MIN: '60', TAXLAW_RATE_BURST: '5',
-        TAXLAW_BODY_LIMIT: '30000', TAXLAW_CACHE_MAX: '64' },
+        TAXLAW_BODY_LIMIT: '30000', TAXLAW_CACHE_MAX: '64',
+        ...(outcomeEnabled(env) && supportsNtsProof(pin) ? { TAXLAW_SEARCH_PROOF_V1: '1' } : {}) },
     },
     connectTimeoutMs: timeout.parse(env.TAXLAW_MCP_CONNECT_TIMEOUT_MS || 15_000),
     requestTimeoutMs: timeout.parse(env.TAXLAW_MCP_TIMEOUT_MS || 45_000),
@@ -76,12 +78,18 @@ export function normalizeTaxLawResult(result: CallToolResult): CallToolResult {
 type ManagedClient = Pick<KoreanLawClient, 'listTools' | 'callTool' | 'close' | 'releaseVersion'>;
 export class TaxLawClient {
   readonly commit = pin.commit;
-  constructor(private readonly client: ManagedClient) {}
+  constructor(private readonly client: ManagedClient, private readonly normalizeThrown = false) {}
   get releaseVersion() { return this.client.releaseVersion; }
   async listTools() { return { server: { name: 'korean-taxlaw', version: pin.version }, tools: taxLawTools }; }
   async callTool(name: string, args: Record<string, unknown>) {
     if (!taxLawToolNames.has(name)) throw new LawMcpError(400, 'MCP_UNKNOWN_TOOL', 'Unknown tax-law tool.');
-    const response = await this.client.callTool(name, args);
+    let response;
+    try { response = await this.client.callTool(name, args); }
+    catch (error) {
+      // Some transports throw isError before the tax string envelope is decoded.
+      if (this.normalizeThrown && error instanceof LawMcpError && error.result) normalizeTaxLawResult(error.result);
+      throw error;
+    }
     const result = normalizeTaxLawResult(response.result);
     const document = z.record(z.string(), z.unknown()).safeParse(result.structuredContent?.document);
     // lookup_tax_document does not promote get_document's bodyUnavailable marker.
@@ -109,15 +117,39 @@ export class TaxLawClient {
 }
 
 export class LegalRetrievalClient {
-  constructor(private readonly law: ManagedClient, private readonly taxlaw?: TaxLawClient, private readonly attachments?: TaxAttachmentClient) {}
+  constructor(private readonly law: ManagedClient, private readonly taxlaw?: TaxLawClient, private readonly attachments?: TaxAttachmentClient,
+    private readonly outcomes: { enabled?: boolean; record?: (event: OutcomeEvent) => void } = {}) {}
   get releaseVersion() { return this.law.releaseVersion; }
   get taxlawRelease() { return this.taxlaw ? { version: this.taxlaw.releaseVersion, commit: this.taxlaw.commit } : null; }
+  get retrievalOutcomeMode() { return { enabled: this.outcomes.enabled === true, contract: OUTCOME_VERSION,
+    nts_supported: !!this.taxlaw && supportsNtsProof({ version: this.taxlaw.releaseVersion, commit: this.taxlaw.commit }) }; }
   get documentParserRelease() { return this.attachments ? { name: parserPin.package, version: parserPin.version, commit: parserPin.commit } : null; }
   async listTools() {
     const base = await this.law.listTools();
     return { ...base, tools: [...base.tools, ...(this.taxlaw ? taxLawTools : []), ...(this.attachments ? [attachmentTool] : [])] };
   }
   async callTool(name: string, args: Record<string, unknown>) {
+    if (!this.outcomes.enabled) return this.dispatch(name, args);
+    const native = taxLawToolNames.has(name) || (name === 'get_decision_text' && args.domain === 'nts' && !!this.taxlaw);
+    const provider: ProviderIdentity = name === attachmentTool.name ? { name: 'attachment' }
+      : native ? { name: 'nts', version: this.taxlaw?.releaseVersion, commit: this.taxlaw?.commit }
+        : { name: 'law', version: this.law.releaseVersion };
+    const record = (event?: OutcomeEvent) => { if (event) try { this.outcomes.record?.(event); } catch { /* Observation cannot change retrieval. */ } };
+    try {
+      const response = await this.dispatch(name, args);
+      const decision = classifyRetrieval(name, args, provider, response.result);
+      record(decision.event);
+      return { ...response, result: decision.result ?? response.result };
+    } catch (error) {
+      const decision = classifyRetrieval(name, args, provider, error instanceof LawMcpError ? error.result : undefined, error);
+      record(decision.event);
+      if (decision.recovered && decision.result) return { kind: 'retrieval' as const, tool: name,
+        server: { name: 'korean-taxlaw', version: provider.version ?? '' }, retrieved_at: new Date().toISOString(), result: decision.result };
+      if (error instanceof LawMcpError && decision.result) throw new LawMcpError(error.status, error.code, error.message, decision.result);
+      throw error;
+    }
+  }
+  private async dispatch(name: string, args: Record<string, unknown>) {
     if (name === attachmentTool.name) {
       if (!this.attachments) throw new LawMcpError(503, 'DOCUMENT_PARSER_NOT_CONFIGURED', 'Enable the document parser and install the pinned tax-law provider first.');
       return this.attachments.callTool(args);
@@ -140,9 +172,10 @@ export class LegalRetrievalClient {
   async close() { await Promise.allSettled([this.attachments?.close(), this.law.close(), this.taxlaw?.close()]); }
 }
 
-export function createLegalRetrievalClient(law: ManagedClient, env: NodeJS.ProcessEnv = process.env) {
+export function createLegalRetrievalClient(law: ManagedClient, env: NodeJS.ProcessEnv = process.env, record?: (event: OutcomeEvent) => void) {
   const options = taxLawOptionsFromEnv(env);
-  const taxlaw = options ? new TaxLawClient(new KoreanLawClient(options)) : undefined;
+  const taxlaw = options ? new TaxLawClient(new KoreanLawClient(options), outcomeEnabled(env) && supportsNtsProof(pin)) : undefined;
   const parser = documentParserFromEnv(env);
-  return new LegalRetrievalClient(law, taxlaw, taxlaw && parser ? new TaxAttachmentClient(taxlaw, parser) : undefined);
+  return new LegalRetrievalClient(law, taxlaw, taxlaw && parser ? new TaxAttachmentClient(taxlaw, parser) : undefined,
+    { enabled: outcomeEnabled(env), record });
 }

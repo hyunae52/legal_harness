@@ -1,5 +1,6 @@
 import { digest } from './contracts.js';
 import { object, short, contents, identityFromDocument, documentKey, type SourceIdentity } from './researchIdentity.js';
+import { OUTCOME_META, OUTCOME_VERSION } from './retrievalOutcome.js';
 
 export type SearchFamily = 'court' | 'administrative' | 'adjudication' | 'statute';
 export interface SearchHit { key: string; identity: SourceIdentity; title: string; related_laws: string; source_url: string | null;
@@ -27,6 +28,8 @@ export function normalizedSearch(tool: string, args: Record<string, unknown>) {
 }
 export function observeSearch(tool: string, args: Record<string, unknown>, response: unknown): SearchObservation {
   const wrapper = object(response), result = object(wrapper.result), data = object(result.structuredContent);
+  const outcome = object(object(result._meta)[OUTCOME_META]);
+  const verifiedMode = outcome.version === OUTCOME_VERSION;
   const tax = tool.startsWith('search_tax_'), local = tool.startsWith('search_local_tax_');
   const obs: SearchObservation = { ...normalizedSearch(tool, args), family: searchFamily(tool, args), namespace: tax ? 'nts' : local ? 'olta' : 'moleg',
     status: 'partial', error_code: 'SEARCH_SCOPE_UNOBSERVED', total: null, has_more: null, hits: [],
@@ -42,7 +45,7 @@ export function observeSearch(tool: string, args: Record<string, unknown>, respo
   if (result.isError === true) {
     // Pinned NTS tools use NOT_FOUND only after a successfully parsed search; never apply to lookup/compound tools.
     const error = object(data.error);
-    if (tax && error.code === 'NOT_FOUND' && data.ok === false && obs.page === 1) {
+    if (!verifiedMode && tax && error.code === 'NOT_FOUND' && data.ok === false && obs.page === 1) {
       obs.total = 0; obs.has_more = false; obs.status = 'complete'; delete obs.error_code; return obs;
     }
     if (error.code === 'RATE_LIMITED') {
@@ -86,6 +89,9 @@ export function observeSearch(tool: string, args: Record<string, unknown>, respo
     }
     if (object(args.options).court && obs.hits.some(h => h.identity.agency !== object(args.options).court)) return obs;
   } else return obs;
+  // Retain candidates from partial responses, but never discharge page/scope obligations.
+  // A v1 marker is written at the retrieval boundary, never read from request arguments.
+  if (verifiedMode && (tax || local) && outcome.status !== 'found' && outcome.status !== 'empty_confirmed') return obs;
   const expected = Math.min(obs.page_size, Math.max(0, obs.total! - (obs.page - 1) * obs.page_size));
   if (obs.hits.length !== expected || new Set(obs.hits.map(h => h.key)).size !== obs.hits.length) return obs;
   obs.has_more = obs.page * obs.page_size < obs.total!;

@@ -6,13 +6,14 @@ import { createRequire } from 'node:module';
 import { parse } from 'dotenv';
 import { readMorningUsage } from './usage.js';
 import { failureLabels, type FailureCategory } from './usageFailures.js';
+import { readOutcomeReport, type OutcomeReport } from './outcomeStore.js';
 
 type Report = ReturnType<typeof readMorningUsage>;
 const email = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 const escape = (value: string) => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]!));
 const koreanTime = (iso: string) => new Date(Date.parse(iso) + 9 * 3600000).toISOString().slice(0, 16).replace('T', ' ');
 
-export function prepareUsageMail(report: Report, test = false) {
+export function prepareUsageMail(report: Report, test = false, outcomeReport?: OutcomeReport) {
   const mcp = report.totals.mcp ?? { calls: 0, successes: 0, failures: 0, duration_ms: 0, max_ms: 0 };
   const rate = mcp.calls ? `${(100 * mcp.successes / mcp.calls).toFixed(1)}%` : '—';
   const period = `${koreanTime(report.from)} ~ ${koreanTime(report.to)} (한국시간)`;
@@ -40,6 +41,17 @@ export function prepareUsageMail(report: Report, test = false) {
   const detailLines = ['많이 사용한 도구', ...(top.length ? top.map(row => `- ${row.tool}: ${row.calls}회 (실패 ${row.failures}회)`) : ['- 호출 없음']), '',
     ...failures, '', `REST 호출: ${report.totals.rest?.calls ?? 0}회 (별도)`,
     `내부 자료 조회: ${report.totals.source?.calls ?? 0}회 (MCP 합계에 더하지 않음)`];
+  if (outcomeReport) {
+    const labels = { found: '자료 확보(후보/본문 구분은 작업 종류 참조)', empty_confirmed: '정상 검색 0건', page_out_of_range: '페이지 범위 초과',
+      document_unresolved: '지정 문서 미확보', body_unavailable: '본문 미확보', partial: '부분 결과', failed: '확인된 실행 실패', unclassified: '판정 근거 미확인' };
+    detailLines.push('', '자료 조회 결과 (내부 source 호출, MCP 합계와 별도)',
+      `분류 계약: ${outcomeReport.contract} / ${outcomeReport.state === 'collected' ? '집계됨' : outcomeReport.state === 'partial' ? '부분 집계' : '미수집'}`,
+      `대상 ${outcomeReport.expected}회 / 기록 ${outcomeReport.recorded}회 / 누락 ${outcomeReport.missing}회`,
+      ...(outcomeReport.started_at ? [`수집 시작: ${koreanTime(outcomeReport.started_at)}`] : []),
+      ...outcomeReport.rows.sort((a, b) => b.calls - a.calls).map(row => `- ${row.tool} / ${row.operation} / ${labels[row.outcome]}: ${row.calls}회 (${row.provider_version}, 원래 코드 ${row.code})`),
+      '정상 0건은 검증된 국세청 일반 검색에만 적용합니다. 법제처 search_decisions 등 미지원 응답은 자동 정상화하지 않습니다.',
+      '수집 누락은 정상 0건이 아닙니다. 성공률 변화는 응답 분류 변경을 포함하며 검색 적중률 향상을 뜻하지 않습니다.');
+  }
   const notes = ['처리가 끝난 시각을 기준으로 집계합니다. 오전 6시를 넘겨 완료된 호출은 다음 메일에 포함됩니다.',
     '자체 작업과 외부 이용을 구분하지 않으며, 호출 수는 방문자 수가 아닙니다.',
     '배포 점검에서 잘못된 입력이 거절되는지 확인한 호출도 실패 건수에 포함됩니다.',
@@ -63,7 +75,7 @@ export async function sendUsageMail(options: MailOptions) {
   if (![options.database, options.config, options.state].every(isAbsolute) || !email.test(options.to)) throw Error('USAGE_MAIL_INPUT');
   const report = readMorningUsage(options.database, options.now);
   if (report.no_coverage && !options.test) return { sent: false, reason: 'collection_started_after_window' };
-  const prepared = prepareUsageMail(report, options.test);
+  const prepared = prepareUsageMail(report, options.test, readOutcomeReport(options.database + '.outcomes.sqlite', report));
   const metadata = await stat(options.config);
   if (!metadata.isFile() || metadata.size > 8192 || (process.platform !== 'win32' &&
     ((metadata.mode & 0o077) !== 0 || metadata.uid !== process.geteuid?.()))) throw Error('USAGE_MAIL_CONFIG_PERMISSIONS');
