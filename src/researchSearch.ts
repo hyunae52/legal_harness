@@ -1,6 +1,6 @@
 import { digest } from './contracts.js';
 import { object, short, contents, identityFromDocument, documentKey, type SourceIdentity } from './researchIdentity.js';
-import { OUTCOME_META, OUTCOME_VERSION } from './retrievalOutcome.js';
+import { OUTCOME_META, OUTCOME_VERSION, ordinaryNtsList } from './retrievalOutcome.js';
 
 export type SearchFamily = 'court' | 'administrative' | 'adjudication' | 'statute';
 export interface SearchHit { key: string; identity: SourceIdentity; title: string; related_laws: string; source_url: string | null;
@@ -91,7 +91,7 @@ export function observeSearch(tool: string, args: Record<string, unknown>, respo
   } else return obs;
   // Retain candidates from partial responses, but never discharge page/scope obligations.
   // A v1 marker is written at the retrieval boundary, never read from request arguments.
-  if (verifiedMode && (tax || local) && outcome.status !== 'found' && outcome.status !== 'empty_confirmed') return obs;
+  if (verifiedMode && ordinaryNtsList(tool, args) && outcome.status !== 'found' && outcome.status !== 'empty_confirmed') return obs;
   const expected = Math.min(obs.page_size, Math.max(0, obs.total! - (obs.page - 1) * obs.page_size));
   if (obs.hits.length !== expected || new Set(obs.hits.map(h => h.key)).size !== obs.hits.length) return obs;
   obs.has_more = obs.page * obs.page_size < obs.total!;

@@ -30,6 +30,35 @@ test('O01/O06: verified zero and overflow have distinct normalized results', () 
   assert.equal(classify(proof({ page: 2 }), { ...args, page: 2 }).recovered, false);
 });
 
+test('H-01: omitted limit uses the pinned public tool default, without changing arguments', () => {
+  for (const name of ['search_tax_interpretations', 'search_tax_decisions']) {
+    const input = { query: 'public synthetic default', type: 'all' };
+    const empty = classifyRetrieval(name, input, provider, failure(proof({ limit: 10 })));
+    assert.equal(empty.event.outcome, 'empty_confirmed'); assert.equal(empty.result.structuredContent.limit, 10);
+    const data = { total: 1, page: 1, limit: 10, items: [{ ntstDcmId: '200000000000000001' }],
+      searchProof: proof({ limit: 10, total: 1, returned: 1, status: 'found' }) };
+    const found = classifyRetrieval(name, input, provider, { content: [], structuredContent: data });
+    assert.equal(found.event.outcome, 'found'); assert.strictEqual(found.result.structuredContent, data);
+    assert.deepEqual(input, { query: 'public synthetic default', type: 'all' });
+  }
+});
+
+test('H-02: excluded local and special positive lists preserve their existing research observation', () => {
+  for (const [tool, type] of [['search_local_tax_interpretations', 'all'], ['search_tax_interpretations', 'curated_issue']]) {
+    const input = { query: 'public synthetic local', type, page: 1, limit: 10 };
+    const result = { content: [], structuredContent: { total: 1, page: 1, limit: 10,
+      items: [{ id: 'public-local-1', title: 'Public synthetic document' }] } };
+    const baseline = observeSearch(tool, input, { result });
+    assert.equal(baseline.status, 'complete');
+    const classified = classifyRetrieval(tool, input, provider, result);
+    assert.equal(classified.event.outcome, 'unclassified');
+    assert.deepEqual(observeSearch(tool, input, { result: classified.result }), baseline);
+    const missed = classifyRetrieval(tool, input, provider, failure());
+    assert.equal(missed.recovered, false);
+    assert.equal(observeSearch(tool, input, { result: missed.result }).status, 'failed');
+  }
+});
+
 test('O03/O04/O05/O10: malformed or mismatched proof cannot turn a failure into zero', () => {
   for (const bad of [undefined, {}, proof({ total: -1 }), proof({ total: '0' }), proof({ total: 1 }), proof({ returned: 1 }),
     proof({ page: 2 }), proof({ limit: 10 }), proof({ schema: 'unknown' }), proof({ contract: 'future' }),

@@ -18,6 +18,10 @@ may normalize a verified legacy NOT_FOUND into `isError: false`. Exact-number
 options, special modules, local tax and compound tools remain excluded. The
 classifier does not call a source, retry a request, widen a query or change limits.
 Existing successful content, IDs, order and provenance remain intact.
+Omitted list limits are compared with the pinned public default of 10 without
+adding or changing outbound arguments. Research's new positive-page proof gate
+uses the same ordinary NTS scope; excluded local/special successful pages keep
+their existing structural, count and duplicate checks.
 
 **Law-provider `search_decisions` is not normalized in this release.** Its pinned
 output does not expose sufficient raw-response proof; automatic query/date
@@ -82,7 +86,11 @@ not evidence of improved search recall. Historical failures are not relabeled.
   test before exporting a deployable main package.
 
 Deploy only after external code review and exact-candidate CI. Enable the NTS
-route only after production health reports the reviewed package and pin. Live
+route with the reviewed candidate under the existing deployment ingress fence;
+the deployment gate verifies package/pin identity and existing provider smoke
+before resuming public traffic. Independently verify the enabled contract and
+new search behavior after activation. Preserve the prior absent/disabled flag
+configuration for rollback. Live
 smoke uses public synthetic queries, not replayed user traffic. No live source
 call is added to the classifier or collector.
 

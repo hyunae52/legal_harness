@@ -25,10 +25,14 @@ def handler(request):
         return httpx.Response(200, text="<html>Maintenance</html>")
     if "__missing__" in query:
         payload = {}
-    elif "__positive__" in query or "__overflow__" in query or "__contradiction__" in query:
+    elif any(marker in query for marker in ("__positive__", "__overflow__", "__contradiction__", "__facet_conflict__")):
         payload = fixture("search_written")
-        payload["body"] = payload["body"][:1] if "__positive__" in query else []
-        payload["top"][0]["categoryMap"]["SUB_ID_CATEGORY"] = [{"name": "001_02", "count": "1" if "__positive__" in query else "12"}]
+        positive = "__positive__" in query or "__facet_conflict__" in query
+        payload["body"] = payload["body"][:1] if positive else []
+        category = param["dcmClCdCtl"][0]
+        if positive:
+            payload["body"][0]["dcm"]["NTST_DCM_CL_CD"] = category.split("_")[-1]
+        payload["top"][0]["categoryMap"]["SUB_ID_CATEGORY"] = [{"name": "001_02" if "__facet_conflict__" in query else category, "count": "1" if positive else "12"}]
     else:
         payload = fixture("search_empty_question_v1")["data"][action]
     return httpx.Response(200, json={"status": "SUCCESS", "data": {action: payload}})

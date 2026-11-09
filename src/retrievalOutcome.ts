@@ -40,6 +40,14 @@ export function retrievalOperation(name: string, args: Record<string, unknown>):
   if (name === 'search_decisions' && object(args.options).caseNumber) return 'exact_lookup';
   return 'list_search';
 }
+/** The opt-in proof contract covers only these ordinary NTS list arguments. */
+export function ordinaryNtsList(name: string, args: Record<string, unknown>): boolean {
+  const allowed = new Set(['query', 'type', 'law', 'article', 'match', 'exclude', 'tax_type', 'date_from', 'date_to', 'sort', 'page', 'limit',
+    ...(name === 'search_tax_interpretations' ? ['document_number'] : ['case_number', 'result', 'attribution_year', 'attachment_status'])]);
+  return retrievalOperation(name, args) === 'list_search' && Object.keys(args).every(key => allowed.has(key))
+    && ((name === 'search_tax_interpretations' && ['all', 'advance', 'written', 'advisory', 'notice_written'].includes(String(args.type ?? 'all')))
+      || (name === 'search_tax_decisions' && ['all', 'pre_assessment', 'objection', 'review', 'tribunal', 'court', 'constitutional'].includes(String(args.type ?? 'all'))));
+}
 export interface OutcomeEvent {
   tool: string; operation: RetrievalOperation; outcome: RetrievalOutcome;
   provider: ProviderIdentity['name']; provider_version: string; code: string;
@@ -63,14 +71,10 @@ export function classifyRetrieval(name: string, args: Record<string, unknown>, p
     if (documentScope === 'provided') outcome = 'found';
     if (documentScope === 'partial' || documentScope === 'unavailable') outcome = 'partial';
   }
-  const allowed = new Set(['query', 'type', 'law', 'article', 'match', 'exclude', 'tax_type', 'date_from', 'date_to', 'sort', 'page', 'limit',
-    ...(name === 'search_tax_interpretations' ? ['document_number'] : ['case_number', 'result', 'attribution_year', 'attachment_status'])]);
-  const ordinary = operation === 'list_search' && Object.keys(args).every(key => allowed.has(key))
-    && provider.name === 'nts' && supportsNtsProof(provider)
-    && ((name === 'search_tax_interpretations' && ['all', 'advance', 'written', 'advisory', 'notice_written'].includes(String(args.type ?? 'all')))
-      || (name === 'search_tax_decisions' && ['all', 'pre_assessment', 'objection', 'review', 'tribunal', 'court', 'constitutional'].includes(String(args.type ?? 'all'))));
+  const ordinary = ordinaryNtsList(name, args) && provider.name === 'nts' && supportsNtsProof(provider);
   const proof = object(failed ? object(object(data.error).detail).searchProof : data.searchProof);
-  const page = args.page ?? 1, limit = args.limit ?? 20;
+  // Match the pinned public tools' default without changing transmitted arguments.
+  const page = args.page ?? 1, limit = args.limit ?? 10;
   const valid = ordinary && proof.contract === contracts.nts.contract && proof.schema === contracts.nts.schema
     && proof.operation === 'list_search' && Number.isSafeInteger(page) && Number(page) > 0
     && Number.isSafeInteger(limit) && Number(limit) > 0 && Number(limit) <= 100

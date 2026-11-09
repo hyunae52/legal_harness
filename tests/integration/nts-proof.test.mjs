@@ -63,6 +63,18 @@ test('O01–O05/O12/O14: raw HTTP → real NTS parser → MCP/REST/research; dis
   } finally { service.close(); }
   assert.equal(events.length, 11);
   assert.equal(events.filter(e => e.outcome === 'empty_confirmed').length, 3);
+  for (const [name, type] of [['search_tax_interpretations', 'written'], ['search_tax_decisions', 'court']]) {
+    for (const [query, status] of [['__zero__', 'empty_confirmed'], ['__positive__', 'found']]) {
+      const result = await mcp.callTool({ name, arguments: { query, type } });
+      assert.equal(result.isError, false);
+      assert.equal(result._meta[OUTCOME_META].status, status);
+      assert.equal(result.structuredContent.limit, 10);
+    }
+  }
+  const facetConflict = await mcp.callTool({ name: 'search_tax_interpretations', arguments: { query: '__facet_conflict__', type: 'all', limit: 2 } });
+  assert.equal(facetConflict.isError, true); assert.equal(facetConflict._meta[OUTCOME_META].status, 'failed');
+  assert.equal(events.at(-1).code, 'PARSE_ERROR');
+  assert.equal(events.length, 16);
   const legacy = makeClient(false);
   try { await assert.rejects(legacy.callTool('search_tax_interpretations', input), error => error.result.structuredContent.error.code === 'NOT_FOUND'); }
   finally { await legacy.close(); }

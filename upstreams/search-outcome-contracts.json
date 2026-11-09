@@ -1,7 +1,7 @@
 {
   "nts": {
     "version": "2.1.0.post2",
-    "commit": "08309292d7ee919194f253db8fe86fdaa19900ff",
+    "commit": "99539cc6561df324914452dce93cb1af119e1e09",
     "contract": "nts-document-list-v1",
     "schema": "ASIPDI002PR01/sparse-facets-v1"
   }
