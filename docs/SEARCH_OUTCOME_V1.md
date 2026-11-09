@@ -18,8 +18,10 @@ may normalize a verified legacy NOT_FOUND into `isError: false`. Exact-number
 options, special modules, local tax and compound tools remain excluded. The
 classifier does not call a source, retry a request, widen a query or change limits.
 Existing successful content, IDs, order and provenance remain intact.
-Omitted list limits are compared with the pinned public default of 10 without
-adding or changing outbound arguments. Research's new positive-page proof gate
+Omitted list limits use the pinned public default of 10 in both classification
+and enabled research page/signature observation, without adding or changing
+outbound arguments. Disabled observation and explicit recipe limits are unchanged.
+Research's new positive-page proof gate
 uses the same ordinary NTS scope; excluded local/special successful pages keep
 their existing structural, count and duplicate checks.
 

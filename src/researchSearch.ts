@@ -1,6 +1,6 @@
 import { digest } from './contracts.js';
 import { object, short, contents, identityFromDocument, documentKey, type SourceIdentity } from './researchIdentity.js';
-import { OUTCOME_META, OUTCOME_VERSION, ordinaryNtsList } from './retrievalOutcome.js';
+import { OUTCOME_META, OUTCOME_VERSION, ordinaryNtsList, NTS_LIST_DEFAULT_LIMIT } from './retrievalOutcome.js';
 
 export type SearchFamily = 'court' | 'administrative' | 'adjudication' | 'statute';
 export interface SearchHit { key: string; identity: SourceIdentity; title: string; related_laws: string; source_url: string | null;
@@ -20,18 +20,19 @@ export function searchFamily(tool: string, args: Record<string, unknown>): Searc
   return 'unknown';
 }
 export const normalizeQuery = (v: unknown) => typeof v === 'string' ? v.normalize('NFKC').trim().replace(/\s+/g, ' ') : '';
-export function normalizedSearch(tool: string, args: Record<string, unknown>) {
+export function normalizedSearch(tool: string, args: Record<string, unknown>, defaultPageSize = 20) {
   const keys = ['domain', 'type', 'law', 'article', 'match', 'exclude', 'tax_type', 'date_from', 'date_to', 'sort', 'options'];
   const filters = Object.fromEntries(keys.filter(k => args[k] !== undefined && args[k] !== null).map(k => [k, args[k]]));
-  const query = normalizeQuery(args.query), page = Number(args.page ?? 1), pageSize = Number(args.limit ?? args.display ?? 20);
+  const query = normalizeQuery(args.query), page = Number(args.page ?? 1), pageSize = Number(args.limit ?? args.display ?? defaultPageSize);
   return { query, filters, page, page_size: pageSize, signature: digest({ tool, query, filters, page, pageSize }) };
 }
 export function observeSearch(tool: string, args: Record<string, unknown>, response: unknown): SearchObservation {
   const wrapper = object(response), result = object(wrapper.result), data = object(result.structuredContent);
   const outcome = object(object(result._meta)[OUTCOME_META]);
   const verifiedMode = outcome.version === OUTCOME_VERSION;
+  const requiresNtsProof = verifiedMode && ordinaryNtsList(tool, args);
   const tax = tool.startsWith('search_tax_'), local = tool.startsWith('search_local_tax_');
-  const obs: SearchObservation = { ...normalizedSearch(tool, args), family: searchFamily(tool, args), namespace: tax ? 'nts' : local ? 'olta' : 'moleg',
+  const obs: SearchObservation = { ...normalizedSearch(tool, args, requiresNtsProof ? NTS_LIST_DEFAULT_LIMIT : 20), family: searchFamily(tool, args), namespace: tax ? 'nts' : local ? 'olta' : 'moleg',
     status: 'partial', error_code: 'SEARCH_SCOPE_UNOBSERVED', total: null, has_more: null, hits: [],
     indexed_scope: tax ? '국세법령정보시스템 수록 자료; 전체 법원 판결 수록 보증 아님' : local ? '지방세법령정보시스템 수록 자료' : '국가법령정보센터 수록 자료', provider_internal_calls: 'unobserved' };
   const fail = (code: string) => { obs.status = 'failed'; obs.error_code = code; return obs; };
@@ -91,7 +92,7 @@ export function observeSearch(tool: string, args: Record<string, unknown>, respo
   } else return obs;
   // Retain candidates from partial responses, but never discharge page/scope obligations.
   // A v1 marker is written at the retrieval boundary, never read from request arguments.
-  if (verifiedMode && ordinaryNtsList(tool, args) && outcome.status !== 'found' && outcome.status !== 'empty_confirmed') return obs;
+  if (requiresNtsProof && outcome.status !== 'found' && outcome.status !== 'empty_confirmed') return obs;
   const expected = Math.min(obs.page_size, Math.max(0, obs.total! - (obs.page - 1) * obs.page_size));
   if (obs.hits.length !== expected || new Set(obs.hits.map(h => h.key)).size !== obs.hits.length) return obs;
   obs.has_more = obs.page * obs.page_size < obs.total!;

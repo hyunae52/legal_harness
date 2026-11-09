@@ -4,6 +4,7 @@ import { usageFailureCode } from './usageFailures.js';
 
 export const OUTCOME_META = 'legal-harness/retrieval-outcome';
 export const OUTCOME_VERSION = 'retrieval-outcome-v1';
+export const NTS_LIST_DEFAULT_LIMIT = 10;
 const trustedMetadata = new WeakMap<object, Record<string, unknown>>();
 /** Only metadata created at our retrieval boundary may cross error sanitization. */
 export const retrievalOutcomeMetadata = (result: object) => trustedMetadata.get(result) ?? {};
@@ -74,7 +75,7 @@ export function classifyRetrieval(name: string, args: Record<string, unknown>, p
   const ordinary = ordinaryNtsList(name, args) && provider.name === 'nts' && supportsNtsProof(provider);
   const proof = object(failed ? object(object(data.error).detail).searchProof : data.searchProof);
   // Match the pinned public tools' default without changing transmitted arguments.
-  const page = args.page ?? 1, limit = args.limit ?? 10;
+  const page = args.page ?? 1, limit = args.limit ?? NTS_LIST_DEFAULT_LIMIT;
   const valid = ordinary && proof.contract === contracts.nts.contract && proof.schema === contracts.nts.schema
     && proof.operation === 'list_search' && Number.isSafeInteger(page) && Number(page) > 0
     && Number.isSafeInteger(limit) && Number(limit) > 0 && Number(limit) <= 100

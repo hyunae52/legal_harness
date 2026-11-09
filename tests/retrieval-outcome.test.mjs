@@ -31,15 +31,22 @@ test('O01/O06: verified zero and overflow have distinct normalized results', () 
 });
 
 test('H-01: omitted limit uses the pinned public tool default, without changing arguments', () => {
-  for (const name of ['search_tax_interpretations', 'search_tax_decisions']) {
-    const input = { query: 'public synthetic default', type: 'all' };
+  for (const [name, type] of [['search_tax_interpretations', 'written'], ['search_tax_decisions', 'court']]) {
+    const input = { query: 'public synthetic default', type };
     const empty = classifyRetrieval(name, input, provider, failure(proof({ limit: 10 })));
     assert.equal(empty.event.outcome, 'empty_confirmed'); assert.equal(empty.result.structuredContent.limit, 10);
     const data = { total: 1, page: 1, limit: 10, items: [{ ntstDcmId: '200000000000000001' }],
       searchProof: proof({ limit: 10, total: 1, returned: 1, status: 'found' }) };
     const found = classifyRetrieval(name, input, provider, { content: [], structuredContent: data });
     assert.equal(found.event.outcome, 'found'); assert.strictEqual(found.result.structuredContent, data);
-    assert.deepEqual(input, { query: 'public synthetic default', type: 'all' });
+    for (const result of [empty.result, found.result]) {
+      const observed = observeSearch(name, input, { result });
+      assert.equal(observed.status, 'complete'); assert.equal(observed.page_size, 10);
+      assert.deepEqual(observed, observeSearch(name, { ...input, limit: 10 }, { result }));
+    }
+    const legacy = observeSearch(name, input, { result: { structuredContent: { total: 0, page: 1, limit: 20, items: [] } } });
+    assert.equal(legacy.status, 'complete'); assert.equal(legacy.page_size, 20);
+    assert.deepEqual(input, { query: 'public synthetic default', type });
   }
 });
 
