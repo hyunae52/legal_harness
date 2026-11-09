@@ -34,6 +34,10 @@ jobs:
         run: npm run review
       - name: npm run review:package
         run: npm run review:package
+      - name: Install pinned search provider for offline contract tests
+        run: python3 scripts/install-taxlaw-mcp.py --dev
+      - name: Real provider search contract across MCP REST and research
+        run: npm run review:search
       - name: Export tested deployment package
         if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         run: node scripts/export-deploy-package.mjs

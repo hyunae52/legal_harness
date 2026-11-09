@@ -5,6 +5,7 @@ import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { CallToolRequestSchema, ListToolsRequestSchema, type Tool } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { LawMcpError, type KoreanLawClient } from './koreanLawClient.js';
+import { retrievalOutcomeMetadata, preserveOutcomeMetadata } from './retrievalOutcome.js';
 import { type Actor, AnalyzeSchema, DraftSchema, type FailureService, ServiceError } from './contracts.js';
 import { ResearchCapacityError } from './researchRecovery.js';
 import { presentResearch } from './researchPresentation.js';
@@ -32,6 +33,7 @@ interface Options {
   law: Pick<KoreanLawClient, 'listTools' | 'callTool' | 'close' | 'releaseVersion'> & {
     taxlawRelease?: { version?: string; commit: string } | null;
     documentParserRelease?: { name: string; version: string; commit: string } | null;
+    retrievalOutcomeMode?: { enabled: boolean; nts_supported: boolean; contract: string };
   };
   env?: NodeJS.ProcessEnv;
   authenticate?: (request: Request) => Promise<Actor>;
@@ -94,7 +96,7 @@ export function createApp(options: Options) {
         note: '같은 대화의 최초 연구/PR 준비 응답에 있는 client_session을 후속 도구 인수에 그대로 넣으세요. 빠진 인수만 수정해 기존 작업을 이어가세요. 핸들을 복구할 수 없으면 결과 불명을 알리고 작업을 자동 재생성하지 마세요. 사용자에게 키를 발급받으라고 하지 마세요.' } } };
     if (error instanceof ToolInputError) return { status: 400, body: error.body };
     if (error instanceof z.ZodError) return { status: 400, body: inputDiagnostics(error) };
-    if (error instanceof LawMcpError && error.code==='MCP_TOOL_ERROR' && error.result) return {status:error.status,body:{code:error.code,result:safeToolDiagnostic(error.result,env)}};
+    if (error instanceof LawMcpError && error.code==='MCP_TOOL_ERROR' && error.result) return {status:error.status,body:{code:error.code,result:preserveOutcomeMetadata(safeToolDiagnostic(error.result,env),error.result)}};
     if (error instanceof ServiceError || error instanceof LawMcpError) return { status: error.status, body: { code: error.code } };
     return { status: 500, body: { code: 'INTERNAL_ERROR' } };
   };
@@ -210,6 +212,7 @@ export function createApp(options: Options) {
   app.get('/health', (_req, res) => res.json({ status: stopping ? 'stopping' : 'ok', version: '2.5.0', active_requests: admission.active,
     queued_requests: admission.queued,
     usage_accounting: options.usage?.status() ?? { enabled: false, healthy: false, failed_writes: 0 },
+    retrieval_outcomes: law.retrievalOutcomeMode ?? { enabled: false },
     access_mode: publicAccess.enabled ? 'public' : 'authenticated',
     active_authentications: authActive, active_dispatches: dispatchActive, release_commit: env.TAXLAB_RELEASE_COMMIT ?? null,
     research_harness: { policy: researchPolicyVersion, tools: enabledResearchTools.length, storage: 'ephemeral',
@@ -307,7 +310,7 @@ export function createApp(options: Options) {
             _meta: { ...data.result._meta, 'legal-harness/evidence': data.evidence, 'legal-harness/corrections': data.corrections } };
         }, ['get_law_text', 'search_decisions'].includes(request.params.name), extra.signal);
       } catch (error) {
-        if(error instanceof LawMcpError && error.code==='MCP_TOOL_ERROR' && error.result)return withUsageFailureCode({...safeToolDiagnostic(error.result,env),_meta:{'legal-harness/error':error.code}}, error);
+        if(error instanceof LawMcpError && error.code==='MCP_TOOL_ERROR' && error.result)return withUsageFailureCode({...safeToolDiagnostic(error.result,env),_meta:{'legal-harness/error':error.code,...retrievalOutcomeMetadata(error.result)}}, error);
         return { isError: true, content: [{ type: 'text', text: JSON.stringify(errorBody(error).body) }] };
       }
     }));
