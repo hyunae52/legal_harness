@@ -14,7 +14,7 @@
         "dotenv": "^16.4.5",
         "express": "4.22.3",
         "js-yaml": "^5.4.2",
-        "kordoc": "4.24.59",
+        "kordoc": "4.24.61",
         "korean-law-mcp": "4.15.23",
         "nodemailer": "10.2.1",
         "pdfjs-dist": "4.10.38",
@@ -3523,13 +3523,12 @@
       "license": "(MIT AND Zlib)"
     },
     "node_modules/kordoc": {
-      "version": "4.24.59",
-      "resolved": "https://registry.npmjs.org/kordoc/-/kordoc-4.24.59.tgz",
-      "integrity": "sha512-NsBe0ttIcSGNkk+SsBCKw75JhjyVWlm0JB1emJ6BvenNvpk9HSUFPHX1v1t+8/SM8B0L/TM78q0832YhotRVqA==",
+      "version": "4.24.61",
+      "resolved": "https://registry.npmjs.org/kordoc/-/kordoc-4.24.61.tgz",
+      "integrity": "sha512-QqVZdWGFiDpS52yi9yMp3LUodX1XxVCjN90Eq5oy2ITm4bCOOTV+gA5kdH9fr6vCON/LjCyNjlBnm5R/bONm+g==",
       "license": "MIT",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.32.0",
-        "@xmldom/xmldom": "^0.9.12",
         "cfb": "1.2.2",
         "commander": "^13.0.0",
         "jszip": "^3.10.1",
