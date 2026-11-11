@@ -45,7 +45,7 @@
     "dotenv": "^16.4.5",
     "express": "4.22.3",
     "js-yaml": "^5.4.2",
-    "kordoc": "4.24.61",
+    "kordoc": "4.24.65",
     "korean-law-mcp": "4.15.23",
     "nodemailer": "10.2.1",
     "pdfjs-dist": "4.10.38",
