@@ -14,7 +14,7 @@
         "dotenv": "^16.4.5",
         "express": "4.22.3",
         "js-yaml": "^5.4.2",
-        "kordoc": "4.24.65",
+        "kordoc": "4.24.70",
         "korean-law-mcp": "4.15.23",
         "nodemailer": "10.2.1",
         "pdfjs-dist": "4.10.38",
@@ -57,9 +57,9 @@
       }
     },
     "node_modules/@hono/node-server": {
-      "version": "2.1.7",
-      "resolved": "https://registry.npmjs.org/@hono/node-server/-/node-server-2.1.7.tgz",
-      "integrity": "sha512-Wr0E6S+v2Bw9FkpGNP5BQ5QbJvclUa06UVehd65WFZe6XeJwbrKQQ5wPDevc0IC+QyzbO7v3Llh5uo45IZcSnA==",
+      "version": "2.1.8",
+      "resolved": "https://registry.npmjs.org/@hono/node-server/-/node-server-2.1.8.tgz",
+      "integrity": "sha512-jdf7FHh6A1lzjpHHQUgxsg2GeER2vMetnAOfeActzcoli6jamlK+NAwL6Dsr5Fl3BS3tYUQzCdtZjU8Qxv7bEA==",
       "license": "MIT",
       "engines": {
         "node": ">=20"
@@ -3523,9 +3523,9 @@
       "license": "(MIT AND Zlib)"
     },
     "node_modules/kordoc": {
-      "version": "4.24.65",
-      "resolved": "https://registry.npmjs.org/kordoc/-/kordoc-4.24.65.tgz",
-      "integrity": "sha512-VoOOEbeMGNvRHqgquYWBU5/XHRDwBnCw3MyR6/joM9Wo5IW+2pVsXQJslSDCEAHy0Pmf94F1A1CaKfD6lnCCWg==",
+      "version": "4.24.70",
+      "resolved": "https://registry.npmjs.org/kordoc/-/kordoc-4.24.70.tgz",
+      "integrity": "sha512-Rckh45426JtOWOR7Y68ledcnPJ7X3lRnImTinNw+PmjwiPOhqsu/jxiRTy7PpyU9+7uqjxi3lplfAK+Vj3TKUg==",
       "license": "MIT",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.32.0",
