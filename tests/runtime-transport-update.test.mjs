@@ -16,19 +16,20 @@ async function fixture(t) {
   return { cwd, original };
 }
 
-test('transport-only refresh is a publishable change with matching locks and unchanged provider pins', async t => {
+for (const name of ['@hono/node-server', 'hono']) test(`${name}-only refresh is a publishable change with matching locks and unchanged provider pins`, async t => {
   const { cwd, original } = await fixture(t);
   const lock = JSON.parse(original['npm-shrinkwrap.json']);
-  const adapter = lock.packages['node_modules/@hono/node-server'];
-  const parts = adapter.version.split('.').map(Number); parts[2]++;
-  adapter.version = parts.join('.');
-  adapter.resolved = 'https://registry.npmjs.org/@hono/node-server/-/node-server-' + adapter.version + '.tgz';
-  adapter.integrity = 'sha512-YWJjZA==';
+  const dependency = lock.packages['node_modules/' + name];
+  const parts = dependency.version.split('.').map(Number); parts[2]++;
+  dependency.version = parts.join('.');
+  dependency.resolved = `https://registry.npmjs.org/${name}/-/${name.split('/').at(-1)}-${dependency.version}.tgz`;
+  dependency.integrity = 'sha512-YWJjZA==';
   const changed = await refreshRuntimeTransport({ cwd, runNpm: (args, options) => {
-    assert.deepEqual(args.slice(0, 2), ['update', '@hono/node-server']);
+    assert.equal(args[0], 'update');
     assert.ok(args.includes('--ignore-scripts') && args.includes('--package-lock-only'));
     assert.ok(!args.includes('--force')); assert.equal(options.cwd, cwd);
-    writeFileSync(join(cwd, 'npm-shrinkwrap.json'), JSON.stringify(lock, null, 2) + '\n');
+    // Model npm preserving satisfying transitive pins unless explicitly refreshed.
+    if (args.includes(name)) writeFileSync(join(cwd, 'npm-shrinkwrap.json'), JSON.stringify(lock, null, 2) + '\n');
   } });
   assert.equal(changed, true);
   assert.equal(await readFile(join(cwd, 'package.json'), 'utf8'), original['package.json']);

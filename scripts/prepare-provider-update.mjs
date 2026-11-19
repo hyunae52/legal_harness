@@ -39,9 +39,10 @@ export async function refreshRuntimeTransport({ cwd = process.cwd(), runNpm = np
   const lockPath = join(cwd, 'npm-shrinkwrap.json');
   const before = await readFile(lockPath, 'utf8');
   // Installing a new provider preserves satisfying transitive pins, including
-  // vulnerable ones. Refresh the SDK's transport adapter within its declared
-  // ranges, without overrides, forced upgrades or changes to direct packages.
-  runNpm(['update', '@hono/node-server', '--package-lock-only', '--ignore-scripts',
+  // vulnerable ones. Refresh both the SDK's Hono runtime and transport adapter
+  // within their declared ranges, without overrides, forced upgrades or changes
+  // to direct packages.
+  runNpm(['update', '@hono/node-server', 'hono', '--package-lock-only', '--ignore-scripts',
     '--omit=optional', '--no-audit', '--no-fund'], { cwd, stdio: 'inherit' });
   assert.equal(await readFile(join(cwd, 'package.json'), 'utf8'), manifest, 'RUNTIME_REFRESH_CHANGED_MANIFEST');
   const after = await readFile(lockPath, 'utf8');
